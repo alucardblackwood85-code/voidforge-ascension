@@ -327,6 +327,14 @@ func _minimap(r: Rect2, full: bool = false) -> void:
 			canvas.draw_circle(tf.call(e.plane_pos), 3.5 if not full else 6.0, Color("ffb84a"))
 		elif e.plane_pos.distance_to(sector.player.plane_pos) < 900.0:
 			canvas.draw_circle(tf.call(e.plane_pos), 2.0 if not full else 3.0, Color("ff4a4a"))
+	for pt in sector.points:
+		if not is_instance_valid(pt) or (pt.done and pt.kind != "convoy"):
+			continue
+		var known: bool = pt.is_objective() or sector.cells.get(sector.cell_of(pt.plane_pos), {}).get("visited", false)
+		if known:
+			var pc: Vector2 = tf.call(pt.plane_pos)
+			var s := 4.0 if not full else 7.0
+			canvas.draw_rect(Rect2(pc - Vector2(s, s), Vector2(s, s) * 2.0), ObjPoint.COLORS[pt.kind], pt.kind in ["cofre", "pecio", "veta"])
 	canvas.draw_circle(tf.call(sector.player.plane_pos), 4.0 if not full else 7.0, Color.WHITE)
 
 

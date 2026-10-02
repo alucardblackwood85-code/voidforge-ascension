@@ -28,6 +28,8 @@ func _ready() -> void:
 		if GameData.BIOMES[id].get("locked", false):
 			locked.append(GameData.BIOMES[id]["name"])
 	add_child(UiTheme.label("Próximamente: " + ", ".join(locked), 13, UiTheme.MUTED))
+	var wm := Prog.weekly_mod()
+	add_child(UiTheme.label("Modificador semanal — %s: %s" % [wm["name"], wm["desc"]], 15, UiTheme.WARN))
 	# Detalle y lanzamiento
 	var b_sel: Dictionary = GameData.BIOMES[sel]
 	var panel := W.card(Color(0.04, 0.06, 0.11, 0.94), Color(0.2, 0.35, 0.5), 14)

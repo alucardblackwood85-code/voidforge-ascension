@@ -89,6 +89,22 @@ var commanders: Array = []               # enemigos con afijo Comandante (aura d
 var boss: Enemy = null                   # M6: jefe del sector
 var boss_dead := false
 var run_modules: Array = []              # módulos encontrados en cajas legendarias / jefe
+var initial_killed := 0
+var commander: Enemy = null              # M5: objetivo "comandante"
+var points: Array = []                   # M5/M19: balizas, socorro, convoy y puntos de interés
+var mod: Dictionary = {}                 # M18: modificador semanal
+# Contadores para misiones y logros (M4, M13)
+var run_elites := 0
+var run_boxes := 0
+var run_pois := 0
+var run_events := 0
+var run_legendary := 0
+# M19: eventos aleatorios
+var event_t := 150.0
+var event := ""
+var event_time := 0.0
+var event_tick := 0.0
+var convoy_left := 0
 var zoom_level := 1.15
 var auto_fire := false
 
@@ -107,6 +123,9 @@ func _ready() -> void:
 	asc = int(params.get("asc", 0))
 	asc_reward = pow(1.75, asc)
 	xp_mult *= asc_reward
+	mod = Prog.weekly_mod() if not (demo or showcase) else {}
+	xp_mult *= float(mod.get("xp", 1.0))
+	event_t = rng.randf_range(100.0, 160.0)
 	run_ammo = GameState.data["ammo"].duplicate()
 	run_items = GameState.data["items"].duplicate()
 	auto_fire = Controls.is_touch and GameState.data["settings"].get("auto_fire_touch", true)
@@ -182,18 +201,40 @@ func _generate() -> void:
 	bounds = Rect2(Vector2.ZERO, Vector2(map_w, map_h) * CHUNK)
 	gate_pos = cell_center(start_cell)
 
-	objective = "limpieza" if rng.randf() < 0.5 else "nidos"
+	# M5: seis tipos de objetivo (escolta y comandante desde el nivel 3).
+	var kinds := ["limpieza", "nidos", "baliza", "socorro"]
+	if level >= 3:
+		kinds += ["comandante", "escolta"]
+	objective = params.get("objective", kinds[rng.randi() % kinds.size()])
 	var far_cells: Array = cells.keys()
 	far_cells.erase(start_cell)
 	far_cells.sort_custom(func(a, b): return Vector2(a - start_cell).length() > Vector2(b - start_cell).length())
 
-	if objective == "nidos":
-		objective_target = clampi(3 + level / 4, 3, 6)
-		for i in objective_target:
-			var c: Vector2i = far_cells[i % far_cells.size()]
-			var nest := spawn_enemy("nest", _free_point_in(c, 0.5), level, "base")
-			nests_alive += 1
-			nest.set_meta("nest", true)
+	match objective:
+		"nidos":
+			objective_target = clampi(3 + level / 4, 3, 6)
+			for i in objective_target:
+				var c: Vector2i = far_cells[i % far_cells.size()]
+				var nest := spawn_enemy("nest", _free_point_in(c, 0.5), level, "base")
+				nests_alive += 1
+				nest.set_meta("nest", true)
+		"baliza":
+			objective_target = 3
+			var picks := far_cells.slice(0, mini(far_cells.size(), 6))
+			picks.shuffle()
+			for i in objective_target:
+				_add_point("baliza", _free_point_in(picks[i % picks.size()], 0.5))
+		"socorro":
+			objective_target = 1
+			_add_point("socorro", _free_point_in(far_cells[far_cells.size() / 3], 0.4))
+		"escolta":
+			objective_target = 1
+			var cv := _add_point("convoy", gate_pos + Vector2(420, -280))
+			var c_end: Vector2i = far_cells[0]
+			var mid := Vector2i((start_cell.x + c_end.x) / 2, (start_cell.y + c_end.y + 1) / 2)
+			cv.route = [cell_center(Vector2i(1, start_cell.y)), cell_center(mid), _free_point_in(c_end, 0.3)]
+		"comandante":
+			objective_target = 1
 
 	for c in cells.keys():
 		_populate_cell(c, c == start_cell)
@@ -206,8 +247,32 @@ func _generate() -> void:
 		el.make_boss()
 		boss = el
 
+	if objective == "comandante":
+		var cid: String = biome["elites"][1] if biome["elites"].size() > 1 else elite_id
+		var cpos := _free_point_in(far_cells[mini(2, far_cells.size() - 1)], 0.4)
+		commander = spawn_enemy(cid, cpos, level, "mega" if level >= 3 else "boss")
+		commander.add_affix("comandante")
+		commander.add_affix("blindado")
+		commander.set_meta("objective", true)
+		spawn_group_at(cpos + Vector2(120, 80), 4 + level / 8, level, true)
 	if objective == "limpieza":
-		objective_target = 70
+		objective_target = 40
+
+	# M19: puntos de interés repartidos (alijos, pecios y vetas minerales).
+	var pool: Array = cells.keys()
+	pool.erase(start_cell)
+	pool.shuffle()
+	var n_poi := clampi(2 + map_w * map_h / 5, 3, 8)
+	for i in mini(n_poi, pool.size()):
+		var kind: String = ["cofre", "pecio", "veta"][rng.randi() % 3]
+		var pos := _free_point_in(pool[i], 0.7)
+		_add_point(kind, pos)
+		if kind == "veta":
+			var ore: String = biome["resources"].keys().back()
+			for k in 5:
+				var ap := pos + Vector2.from_angle(TAU * k / 5.0 + rng.randf()) * rng.randf_range(110.0, 220.0)
+				if not is_blocked(ap, 60.0):
+					_add_asteroid(pool[i], ap, rng.randf_range(38.0, 52.0), ore)
 
 
 func cell_center(c: Vector2i) -> Vector2:
@@ -251,6 +316,8 @@ func _populate_cell(c: Vector2i, is_start: bool) -> void:
 		return
 	# Densidad acotada: más grupos y algo mayores con el nivel, pero con tope (el mapa también crece).
 	var groups := rng.randi_range(1, 2) if level < 6 else rng.randi_range(2, 3)
+	if rng.randf() < float(mod.get("spawn", 1.0)) - 1.0:
+		groups += 1
 	for g in groups:
 		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 3) + mini(level / 10, 3), level, true)
 
@@ -276,7 +343,7 @@ func _weighted(table: Dictionary) -> String:
 
 func _roll_variant() -> String:
 	var a := floorf(alert)
-	var r := rng.randf()
+	var r := rng.randf() / float(mod.get("elites", 1.0))
 	# M9: Ultra desde el nivel 20 y Uber desde el 40 (más frecuentes con alerta y Ascensión).
 	if level >= 40 and r < 0.004 + 0.002 * a + 0.002 * asc:
 		return "uber"
@@ -340,6 +407,7 @@ func _process(delta: float) -> void:
 	if cells.has(c) and not cells[c]["visited"]:
 		cells[c]["visited"] = true
 	_update_loot(delta)
+	_update_events(delta)
 	if is_instance_valid(boss) and boss.aggro and boss.plane_pos.distance_to(player.plane_pos) < 1600.0:
 		Music.play("boss")
 	Sfx.listener_pos = player.plane_pos
@@ -815,29 +883,42 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		nests_alive -= 1
 		objective_progress += 1
 		hud.toast("Nido destruido (%d/%d)" % [objective_progress, objective_target], 2.0, UiTheme.GOOD)
-	elif counted and objective == "limpieza":
-		objective_progress += 1
+	if counted:
+		initial_killed += 1
+	if e.has_meta("convoy"):
+		convoy_left -= 1
+	if e == commander:
+		commander = null
+		if objective == "comandante":
+			objective_progress += 1
 	if not by_player:
+		_check_objective()
 		return
 	kills += 1
 	var v: Dictionary = GameData.VARIANTS[e.variant]
 	var rmult: float = float(v["reward"]) * asc_reward * (1.0 + 0.5 * e.affixes.size())
+	if e.is_elite:
+		run_elites += 1
+		if mod.has("elites"):
+			rmult *= 1.25
+	if e.has_meta("convoy"):
+		rmult *= 3.0
 	if e.is_boss:
 		rmult *= 4.0
 	if not e.is_nest:
 		kills_by[e.id] = int(kills_by.get(e.id, 0)) + 1
 	_award_xp(GameData.enemy_xp(float(e.def["hp"]), level, rmult))
 	# Créditos y Nexo se acreditan al instante; los materiales quedan en una caja de botín.
-	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult * GameData.CREDIT_MULT)
+	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult * GameData.CREDIT_MULT * float(mod.get("credits", 1.0)))
 	_gain("credits", credits)
-	var nexo_chance: float = float(e.def["nexo"]) * rmult
+	var nexo_chance: float = float(e.def["nexo"]) * rmult * float(mod.get("nexo", 1.0))
 	if e.variant != "base":
 		nexo_chance += 0.12 * (rmult - 1.0)
 	if rng.randf() < nexo_chance:
 		_gain("nexo", maxi(1, int(rmult) - 1))
 	var contents := {}
 	for mat in e.def["drops"].keys():
-		var q: float = GameData.level_reward(float(e.def["drops"][mat]), level) * rmult
+		var q: float = GameData.level_reward(float(e.def["drops"][mat]), level) * rmult * float(mod.get("mats", 1.0))
 		var rare: bool = GameData.MATERIALS.get(mat, {}).get("rarity", 0) >= 2
 		var n := int(ceil(q)) if rare else int(round(q))
 		if n > 0:
@@ -872,17 +953,117 @@ func _on_boss_killed(_e: Enemy) -> void:
 	Music.play(biome_id)
 
 
+# --- M5/M19: puntos de objetivo e interés, eventos aleatorios -------------------------------
+func _add_point(kind: String, pos: Vector2) -> ObjPoint:
+	var pt := ObjPoint.new()
+	pt.setup(self, kind, pos)
+	world.add_child(pt)
+	points.append(pt)
+	return pt
+
+
+func on_poi(pt: ObjPoint, text: String) -> void:
+	run_pois += 1
+	hud.toast(text, 6.0 if pt.kind == "pecio" else 3.0, ObjPoint.COLORS[pt.kind])
+	Sfx.play("pickup_rare", null, -6.0)
+	_award_xp(GameData.level_kill_xp(level) * 2)
+
+
+func on_point_done(pt: ObjPoint) -> void:
+	objective_progress += 1
+	if pt.kind == "convoy":
+		_gain("credits", int(GameData.level_reward(4000.0, level) * GameData.CREDIT_MULT * asc_reward))
+	if objective_progress < objective_target:
+		hud.toast("%s completada (%d/%d)" % [pt.label(), objective_progress, objective_target], 2.5, UiTheme.GOOD)
+	_check_objective()
+
+
+func on_objective_failed(text: String) -> void:
+	if objective_done:
+		return
+	hud.toast(text + " — nuevo objetivo: limpieza del sector", 4.0, UiTheme.BAD)
+	objective = "fallido"
+	objective_target = 40
+	Sfx.play("ui_error")
+	_check_objective()
+
+
+func _update_events(delta: float) -> void:
+	if showcase or demo and not bot:
+		return
+	if event == "":
+		event_t -= delta
+		if event_t <= 0.0:
+			_start_event("lluvia" if rng.randf() < 0.5 else "convoy")
+		return
+	event_time -= delta
+	match event:
+		"lluvia":
+			event_tick -= delta
+			if event_tick <= 0.0:
+				event_tick = 0.6
+				var p := player.plane_pos + player.velocity * 0.8 + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.0, 380.0)
+				telegraph_circle(p, 90.0, 1.1, GameData.level_dmg(160.0, level), Color("ff9a4a"))
+			if event_time <= 0.0:
+				_end_event(player.alive, "Lluvia de meteoritos superada")
+		"convoy":
+			if convoy_left <= 0:
+				_end_event(true, "Convoy enemigo destruido")
+			elif event_time <= 0.0:
+				_end_event(false, "El convoy enemigo ha escapado")
+
+
+func _start_event(kind: String) -> void:
+	event = kind
+	match kind:
+		"lluvia":
+			event_time = 20.0
+			hud.toast("EVENTO: ¡lluvia de meteoritos! Esquiva las zonas marcadas", 4.0, Color("ff9a4a"))
+		"convoy":
+			event_time = 75.0
+			# Convoy de cargueros enemigos que cruza el mapa: mucho botín si lo destruyes a tiempo.
+			var from := constrain(player.plane_pos + Vector2.from_angle(rng.randf() * TAU) * 1100.0, 80.0)
+			var to := Vector2(bounds.end.x - from.x, bounds.end.y - from.y)
+			var ids: Array = biome["enemies"].keys()
+			ids.sort_custom(func(a, b): return float(GameData.ENEMIES[a]["hp"]) > float(GameData.ENEMIES[b]["hp"]))
+			convoy_left = 4
+			for i in convoy_left:
+				var e := spawn_enemy(ids[i % 2], from + Vector2(i * 70.0, i * 40.0), level, "boss")
+				e.home = to
+				e.speed *= 1.6
+				e.set_meta("convoy", true)
+			hud.toast("EVENTO: un convoy enemigo cruza el sector. ¡Destrúyelo antes de que escape!", 4.0, UiTheme.WARN)
+	Sfx.play("alert", null, -8.0)
+
+
+func _end_event(ok: bool, text: String) -> void:
+	if ok:
+		run_events += 1
+		hud.toast(text + " · +XP", 3.0, UiTheme.GOOD)
+		_award_xp(GameData.level_kill_xp(level) * 5)
+	else:
+		hud.toast(text, 3.0, UiTheme.WARN)
+	if event == "convoy":
+		for e in enemies.duplicate():
+			if e.has_meta("convoy") and e.alive and not e.aggro:
+				e.alive = false
+				enemies.erase(e)
+				e.queue_free()
+	event = ""
+	event_t = rng.randf_range(130.0, 200.0)
+
+
 func _clear_percent() -> int:
 	if initial_enemies.is_empty():
 		return 100
-	return int(100.0 * objective_progress / initial_enemies.size())
+	return int(100.0 * initial_killed / initial_enemies.size())
 
 
 func _check_objective() -> void:
 	if objective_done:
 		return
 	var done := false
-	if objective == "limpieza":
+	if objective in ["limpieza", "fallido"]:
 		done = _clear_percent() >= objective_target
 	else:
 		done = objective_progress >= objective_target
@@ -895,9 +1076,32 @@ func _check_objective() -> void:
 
 
 func _objective_text() -> String:
-	if objective == "limpieza":
-		return "Limpieza: %d%% / %d%%" % [_clear_percent(), objective_target]
-	return "Destruir nidos: %d / %d" % [objective_progress, objective_target]
+	match objective:
+		"limpieza":
+			return "Limpieza: %d%% / %d%%" % [_clear_percent(), objective_target]
+		"nidos":
+			return "Destruir nidos: %d / %d" % [objective_progress, objective_target]
+		"baliza":
+			var cur := ""
+			for pt in points:
+				if pt.kind == "baliza" and pt.started and not pt.done:
+					cur = "  (activando %d%%)" % int(pt.progress * 100.0)
+			return "Activar balizas: %d / %d%s" % [objective_progress, objective_target, cur]
+		"socorro":
+			for pt in points:
+				if pt.kind == "socorro" and pt.started and not pt.done:
+					return "Resiste junto a la señal: %d%%" % int(pt.progress * 100.0)
+			return "Responde a la señal de socorro"
+		"escolta":
+			for pt in points:
+				if pt.kind == "convoy":
+					return "Escolta el convoy: %d%% · casco %d%%" % [int(pt.progress * 100.0), int(100.0 * maxf(0.0, pt.hp) / pt.hp_max)]
+			return "Escolta el convoy"
+		"comandante":
+			return "Elimina al comandante enemigo"
+		"fallido":
+			return "Objetivo fallido — limpia el sector: %d%% / %d%%" % [_clear_percent(), objective_target]
+	return ""
 
 
 func objective_text() -> String:
@@ -981,6 +1185,11 @@ func cargo_capacity() -> int:
 
 ## Pasa a la bodega todo lo que quepa (primero lo más valioso). Lo demás se queda en la caja.
 func collect_box(b: LootBox) -> void:
+	if not b.counted:
+		b.counted = true
+		run_boxes += 1
+		if b.tier == "legendary":
+			run_legendary += 1
 	_claim_box_extra(b)
 	var keys: Array = b.contents.keys()
 	keys.sort_custom(func(x, y): return GameData.MATERIALS.get(x, {}).get("rarity", 0) > GameData.MATERIALS.get(y, {}).get("rarity", 0))
@@ -1175,7 +1384,8 @@ func _finish(outcome: String) -> void:
 		"objective_done": objective_done and outcome != "death", "time": elapsed,
 		"xp": run_xp, "kills_by": kills_by, "biome": biome_id, "asc": asc,
 		"modules": run_modules if outcome != "death" or params.get("insured", false) else [],
-		"boss_killed": boss_dead,
+		"boss_killed": boss_dead, "elites": run_elites, "boxes": run_boxes, "pois": run_pois,
+		"events": run_events, "legendary": run_legendary,
 	}
 	if outcome == "extract":
 		hud.show_result(result)

@@ -29,7 +29,9 @@ func _ready() -> void:
 			cv.add_child(W.pic(SpriteLib.get_tex("enemies", eid), Vector2(0, 110)))
 			cv.add_child(UiTheme.label(e["name"], 16, (e["accent"] as Color).lerp(Color.WHITE, 0.4)))
 			cv.add_child(UiTheme.label("%s · HP %d · DMG %d · VEL %d" % [ARCH_NAMES.get(e["arch"], e["arch"]), e["hp"], e["dmg"], e["vel"]], 12, UiTheme.MUTED))
-			cv.add_child(UiTheme.label("Derrotados: %d" % int(GameState.data["kills_by"].get(eid, 0)), 12, UiTheme.WARN))
+			var nk := int(GameState.data["kills_by"].get(eid, 0))
+			var ms := "  ·  ★ Maestría: +%d%% daño" % int(Prog.MASTERY_DMG * 100) if nk >= Prog.MASTERY_KILLS else "  ·  maestría %d/%d" % [nk, Prog.MASTERY_KILLS]
+			cv.add_child(UiTheme.label("Derrotados: %d%s" % [nk, ms], 12, UiTheme.GOOD if nk >= Prog.MASTERY_KILLS else UiTheme.WARN))
 			g.add_child(c)
 		list.add_child(g)
 	add_child(W.scroll(list))

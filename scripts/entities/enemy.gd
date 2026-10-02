@@ -93,6 +93,7 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 		hp_max *= pow(2.0, sector.asc)
 		hp = hp_max
 		dmg *= pow(1.55, sector.asc)
+	dmg *= float(sector.mod.get("enemy_dmg", 1.0))
 	# Alcance de disparo propio de cada especie (arquetipo ± pequeña variación estable por especie).
 	attack_range = float(def.get("range", GameData.ARCH_RANGE.get(def["arch"], 450.0))) * (0.92 + 0.16 * float(abs(hash(id)) % 100) / 100.0)
 	speed = float(def["vel"]) * GameData.SPEED_UNIT * 0.75
@@ -653,7 +654,7 @@ func _setup_shield() -> void:
 		frac = 0.25
 	if frac <= 0.0:
 		return
-	shield_max = hp_max * frac
+	shield_max = hp_max * frac * float(sector.mod.get("shield", 1.0))
 	shield = shield_max
 	shield_armor = 18.0 * GameData.level_dmg(1.0, level) * (1.3 if frac >= 0.4 else 1.0)
 

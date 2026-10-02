@@ -7,6 +7,7 @@ extends Entity
 var contents: Dictionary = {}
 var rare := false
 var tier := "normal"                  # M10: normal, rare, gold, legendary
+var counted := false                 # ya contada para misiones
 var extra: Dictionary = {}            # nexo / módulo / premio gordo (se cobra al abrir)
 var life := GameData.LOOT_BOX_LIFE
 var bob := 0.0

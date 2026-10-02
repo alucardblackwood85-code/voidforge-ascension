@@ -7,7 +7,7 @@ signal launch_requested(params: Dictionary)
 
 const PAGES := [
 	["hangar", "HANGAR"], ["equip", "EQUIPAMIENTO"], ["shop", "TIENDA"], ["craft", "CRAFTEO"],
-	["stats", "ESTADÍSTICAS"], ["codex", "CÓDEX"], ["settings", "AJUSTES"],
+	["missions", "MISIONES"], ["stats", "ESTADÍSTICAS"], ["codex", "CÓDEX"], ["settings", "AJUSTES"],
 ]
 
 var page_id := "hangar"
@@ -64,6 +64,8 @@ func _ready() -> void:
 	state["level"] = int(GameState.data["sector_max"])
 	GameState.changed.connect(_on_changed)
 	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--tab="):
+			state["missions_tab"] = arg.get_slice("=", 1)
 		if arg.begins_with("--page="):
 			page_id = arg.get_slice("=", 1)
 	refresh()
@@ -104,6 +106,8 @@ func refresh() -> void:
 			page = PageShop.new()
 		"craft":
 			page = PageCraft.new()
+		"missions":
+			page = PageMissions.new()
 		"stats":
 			page = PageStats.new()
 		"codex":
@@ -154,6 +158,11 @@ func _build_nav() -> void:
 	for p in PAGES:
 		var b := Button.new()
 		b.text = "  %s  " % p[1]
+		if p[0] == "missions":
+			var pend := Prog.unclaimed_count() + maxi(0, Prog.season_tier() - int(GameState.data["season"]["claimed"]))
+			if pend > 0:
+				b.text = "  MISIONES (%d)  " % pend
+				b.add_theme_color_override("font_color", UiTheme.GOOD)
 		b.focus_mode = Control.FOCUS_NONE
 		b.custom_minimum_size.y = 36
 		var active: bool = p[0] == page_id
@@ -171,18 +180,22 @@ func launch(params: Dictionary) -> void:
 	launch_requested.emit(params)
 
 
-## M3: al volver al INICIO muestra los ascensos pendientes y lo que se recibió en cada uno.
+## M3/M13: al volver al INICIO muestra los ascensos y logros pendientes con sus recompensas.
 func _show_rank_rewards() -> void:
 	var log: Array = GameState.data.get("rank_log", [])
-	if log.is_empty():
+	var ach: Array = GameState.data.get("ach_log", [])
+	if log.is_empty() and ach.is_empty():
 		return
 	var txt := ""
 	for e in log:
 		txt += "%s (nivel %d): %s\n" % [GameState.rank_name(int(e["level"])), int(e["level"]), ", ".join(e["rewards"])]
+	for a in ach:
+		txt += "🏆 Logro: %s\n" % a
 	GameState.data["rank_log"] = []
+	GameState.data["ach_log"] = []
 	GameState.save_game()
 	var dlg := AcceptDialog.new()
-	dlg.title = "¡Ascenso!"
+	dlg.title = "¡Ascenso!" if not log.is_empty() else "¡Logro desbloqueado!"
 	dlg.dialog_text = txt.strip_edges()
 	add_child(dlg)
 	dlg.popup_centered()

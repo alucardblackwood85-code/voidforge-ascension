@@ -68,6 +68,7 @@ func new_profile() -> Dictionary:
 	lo["gens"][0] = data["gens"][0]["uid"]
 	lo["gens"][1] = data["gens"][1]["uid"]
 	lo["hotbar"] = default_hotbar()
+	Prog.ensure()
 	return data
 
 
@@ -109,6 +110,7 @@ func load_game() -> void:
 	_migrate()
 	_fix_json_types()
 	claim_rank_rewards()
+	Prog.ensure()
 	save_game()
 
 
@@ -718,6 +720,7 @@ func apply_run_result(result: Dictionary) -> void:
 		if lvl >= GameData.ASC_UNLOCK_LEVEL:
 			data["asc_max"] = mini(GameData.ASC_MAX, maxi(int(data["asc_max"]), int(result.get("asc", 0)) + 1))
 	# La experiencia ya se fue sumando durante la incursión (ascensos en tiempo real).
+	Prog.on_run(result)
 	last_result = result
 	save_game()
 	changed.emit()

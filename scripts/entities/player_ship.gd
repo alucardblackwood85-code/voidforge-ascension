@@ -200,6 +200,9 @@ func _shoot_laser(i: int, l: Dictionary) -> void:
 		dmg *= 1.3
 	if target is Enemy and (target as Enemy).is_elite:
 		dmg *= 1.0 + float(stats["elite_dmg"])
+	# M13: maestría del códex (100 bajas de la especie): +2% de daño contra ella.
+	if target is Enemy and Prog.has_mastery((target as Enemy).id):
+		dmg *= 1.0 + Prog.MASTERY_DMG
 	if marked == target and marked_time > 0.0:
 		dmg *= 1.03
 	# Refinado de láser: cada disparo de cada láser consume una carga con su bonificación.
