@@ -24,6 +24,7 @@ var mode_time := 0.0
 var fetch_box: LootBox = null
 var attack_len := 5.0
 var pet_lvl := 1
+var guard_t := 0.3
 
 
 func setup(p_sector: Sector, p_role: String) -> void:
@@ -102,6 +103,7 @@ func _process(delta: float) -> void:
 	if not p.alive:
 		return
 	_think(delta, p)
+	_guard(delta, p)
 	var to := waypoint - plane_pos
 	var dist := to.length()
 	var top := 560.0 if mode in ["attack", "fetch"] else maxf(320.0, p.velocity.length() * 1.3)
@@ -135,6 +137,8 @@ func _fire(p: PlayerShip) -> void:
 					info["crit"] = true
 			"chain":
 				info["effect"] = "chain"
+			"pet_ion":
+				info["effect"] = "pet_ion"
 			"marker":
 				p.marked = p.target
 				p.marked_time = 3.0
@@ -166,3 +170,22 @@ func _draw() -> void:
 	else:
 		var pts := [Vector2(1.0, 0), Vector2(-0.6, 0.7), Vector2(-0.3, 0), Vector2(-0.6, -0.7)]
 		Shapes.draw_hull(self, pts, 12.0, heading, height, Color("2a6a5a"), Color("5affc8"), Color("ffffff"))
+
+
+## Pet-Guard: cada 0,3 s, 5% de destruir cada proyectil enemigo cerca de la nave.
+func _guard(delta: float, p: PlayerShip) -> void:
+	guard_t -= delta
+	if guard_t > 0.0:
+		return
+	guard_t = 0.3
+	var has := false
+	for l in lasers:
+		if l["def"]["effect"] == "guard":
+			has = true
+	if not has:
+		return
+	for b in get_tree().get_nodes_in_group("enemy_bullets"):
+		var pr := b as Projectile
+		if pr.hostile and pr.plane_pos.distance_to(p.plane_pos) < 260.0 and randf() < 0.05:
+			sector.fx_spark(pr.plane_pos, Color("e8e8f0"))
+			pr.queue_free()

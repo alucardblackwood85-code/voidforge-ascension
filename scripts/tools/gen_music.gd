@@ -50,6 +50,13 @@ const TRACKS := {
 		"drums": {"kick": [0, 6, 8], "snare": [], "hat": [], "toms": [10, 14]},
 		"form": [[4, ["pad", "bass"]], [8, ["pad", "bass", "drums", "arp", "glide"]], [4, ["pad", "glide"]], [4, ["pad", "bass", "drums", "arp", "lead"]]],
 	},
+	"boss": {
+		"bpm": 138, "root": 40, "scale": "phrygian", "prog": [0, 1, 0, 6],
+		"pad": {"wave": "saw", "cut": 1200.0, "vol": 0.18}, "bass": {"wave": "saw", "cut": 800.0, "vol": 0.36, "pat": [1,0,1,0, 1,0,1,1, 1,0,1,0, 1,1,0,1]},
+		"arp": {"wave": "square", "vol": 0.08, "step": 1, "oct": 2, "cut": 2800.0},
+		"drums": {"kick": [0, 3, 6, 8, 11, 14], "snare": [4, 12], "hat": [0,2,4,6,8,10,12,14], "metal": true},
+		"form": [[4, ["pad", "bass", "drums"]], [8, ["pad", "bass", "drums", "arp"]], [8, ["pad", "bass", "drums", "arp", "lead"]]],
+	},
 	"menu": {
 		"bpm": 92, "root": 48, "scale": "dorian", "prog": [0, 3, 6, 4],
 		"pad": {"wave": "saw", "cut": 1500.0, "vol": 0.20, "vib": 3.0, "vd": 0.004}, "bass": {"wave": "sine", "cut": 0.0, "vol": 0.32, "pat": [1,0,0,0, 0,0,1,0, 0,0,0,0, 1,0,0,0]},

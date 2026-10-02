@@ -50,13 +50,22 @@ func _ready() -> void:
 		insure.text = "Seguro de carga: %s créditos (al morir conservas el 50%%)" % GameData.format_num(GameData.insurance_cost(int(spin.value)))
 	update_insure.call()
 	spin.value_changed.connect(func(_v): update_insure.call())
+	# M9: Ascensión (se desbloquea al limpiar el nivel 50): vida x2^A, daño x1,55^A, recompensas x1,75^A.
+	var asc_spin := SpinBox.new()
+	asc_spin.min_value = 0
+	asc_spin.max_value = int(GameState.data.get("asc_max", 0))
+	asc_spin.value = mini(int(menu.state.get("asc", 0)), int(asc_spin.max_value))
+	asc_spin.prefix = "Ascensión"
+	asc_spin.tooltip_text = "Vida enemiga x2, daño x1,55 y recompensas x1,75 por nivel de Ascensión."
+	asc_spin.visible = asc_spin.max_value > 0
+	lv_row.add_child(asc_spin)
 	var do_launch := func():
 		var lvl := int(spin.value)
 		var insured := insure.button_pressed
 		if insured and not GameState.pay({"credits": GameData.insurance_cost(lvl)}):
 			Sfx.play("ui_error")
 			return
-		menu.launch({"level": lvl, "seed": randi(), "biome": sel, "insured": insured})
+		menu.launch({"level": lvl, "seed": randi(), "biome": sel, "insured": insured, "asc": int(asc_spin.value)})
 	var on_launch := func():
 		# M7: aviso fuerte si tu poder queda muy por debajo del recomendado.
 		var ratio := power_index() / recommended_power(int(spin.value))
@@ -83,8 +92,10 @@ func _ready() -> void:
 	pv.add_child(details)
 	var update := func():
 		menu.state["level"] = int(spin.value)
-		details.text = _details(sel, int(spin.value))
+		menu.state["asc"] = int(asc_spin.value)
+		details.text = _details(sel, int(spin.value), int(asc_spin.value))
 	spin.value_changed.connect(func(_v): update.call())
+	asc_spin.value_changed.connect(func(_v): update.call())
 	update.call()
 	add_child(panel)
 
@@ -135,7 +146,7 @@ func recommended_power(level: int) -> float:
 	return 1000.0 * pow(GameData.level_hp(1.0, level) / GameData.level_hp(1.0, 1), 0.9) * pow(GameData.level_dmg(1.0, level) / GameData.level_dmg(1.0, 1), 0.5)
 
 
-func _details(id: String, level: int) -> String:
+func _details(id: String, level: int, asc: int = 0) -> String:
 	var b: Dictionary = GameData.BIOMES[id]
 	var mine := power_index()
 	var rec := recommended_power(level)
@@ -146,7 +157,12 @@ func _details(id: String, level: int) -> String:
 	var s := "[b]%s[/b] — %s  Peligros: %s\nRecursos frecuentes: %s.\n\n" % [b["name"], b["desc"], b["hazards"], ", ".join(res)]
 	s += "Poder recomendado: [b]%s[/b]   ·   Tu poder: [color=#%s][b]%s[/b][/color]   ·   Nave: [b]%s[/b]\n" % [GameData.format_num(rec), col, GameData.format_num(mine), GameData.SHIPS[GameState.data["current_ship"]]["name"]]
 	s += "Vida enemiga x%.2f · Daño enemigo x%.2f · Recompensas x%.2f\n" % [GameData.level_hp(1.0, level), GameData.level_dmg(1.0, level), GameData.level_reward(1.0, level)]
-	s += "Objetivo procedural: Limpieza o Destruir nidos. Variantes élite: Boss%s.\n" % (", Mega" if level >= 3 else "")
+	if asc > 0:
+		s += "[color=#ff4fd8]Ascensión %d: vida x%.0f · daño x%.2f · recompensas x%.2f[/color]\n" % [asc, pow(2.0, asc), pow(1.55, asc), pow(1.75, asc)]
+	var vs := "Boss" + (", Mega" if level >= 3 else "") + (", Ultra" if level >= 20 else "") + (", Uber" if level >= 40 else "")
+	s += "Objetivo procedural: Limpieza o Destruir nidos. Variantes élite: %s.%s\n" % [vs, " Jefe con 3 fases." if level >= 4 else ""]
+	if level >= 20 or id in ["prismaticos", "vacio"]:
+		s += "[color=#4ab8ff]Enemigos con escudo blindado: usa munición alta o láseres Ion.[/color]\n"
 	if GameState.data["sector_cleared"].has(level):
 		s += "[color=#7d8aa3]Primera limpieza de este nivel ya obtenida.[/color]"
 	else:

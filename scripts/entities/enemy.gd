@@ -42,6 +42,23 @@ var reflecting := 0.0      # defensor: ventana de reflejo visible
 var draining := false      # drenador: haz conectado al jugador
 var drain_tick := 0.0
 var aim_point := Vector2.ZERO
+# M8: escudo enemigo (regenera; su blindaje plano por impacto hace que la munición x3-x6 importe)
+var shield := 0.0
+var shield_max := 0.0
+var shield_armor := 0.0
+var since_hit := 99.0
+# M9: afijos de élite
+var affixes: Array = []
+var atk_mult := 1.0
+var dmg_taken_mult := 1.0
+var affix_timer := 4.0
+var swarmed := false
+# M6: jefe con fases
+var is_boss := false
+var boss_phase := 1
+var boss_spiral := 3.0
+var boss_zone := 5.0
+var boss_summon := 8.0
 
 # Estados aplicados por el jugador
 var burn_dps := 0.0
@@ -71,6 +88,11 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	hp_max = GameData.level_hp(float(def["hp"]), level) * float(v["hp"]) * GameData.ENEMY_HP_MULT
 	hp = hp_max
 	dmg = GameData.level_dmg(float(def["dmg"]), level) * float(v["dmg"]) * GameData.ENEMY_DMG_MULT
+	# M9: Ascensión (vida x2^A, daño x1,55^A).
+	if sector.asc > 0:
+		hp_max *= pow(2.0, sector.asc)
+		hp = hp_max
+		dmg *= pow(1.55, sector.asc)
 	# Alcance de disparo propio de cada especie (arquetipo ± pequeña variación estable por especie).
 	attack_range = float(def.get("range", GameData.ARCH_RANGE.get(def["arch"], 450.0))) * (0.92 + 0.16 * float(abs(hash(id)) % 100) / 100.0)
 	speed = float(def["vel"]) * GameData.SPEED_UNIT * 0.75
@@ -83,6 +105,8 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	heading = randf() * TAU
 	anim = randf() * 10.0
 	shot_sfx = "e_shot_swarm" if arch == "swarm" else FACTION_SHOT.get(sector.biome_id, "e_shot_light")
+	_setup_shield()
+	_roll_affixes({"boss": 1, "mega": 2, "ultra": randi_range(2, 3), "uber": 3}.get(variant, 0))
 	sync_screen()
 
 
@@ -120,6 +144,11 @@ func _process(delta: float) -> void:
 	flash = maxf(0.0, flash - delta * 4.0)
 	reflecting = maxf(0.0, reflecting - delta)
 	_statuses(delta)
+	if not alive:
+		return
+	_affix_tick(delta, p, dist)
+	if is_boss and aggro and p.alive:
+		_boss_tick(delta, p, dist)
 	if not aggro and not sector.showcase and (dist < 700.0 or sector.alert >= 3.0):
 		set_aggro()
 	var move := Vector2.ZERO
@@ -161,7 +190,7 @@ func _statuses(delta: float) -> void:
 
 
 func out_dmg() -> float:
-	return dmg * (0.9 if weaken_time > 0.0 else 1.0)
+	return dmg * (0.9 if weaken_time > 0.0 else 1.0) * _aura_mult()
 
 
 func _wander(_delta: float) -> Vector2:
@@ -187,6 +216,8 @@ func _shoot_at(p: PlayerShip, bullet_speed: float, size: float, mult: float = 1.
 	sector.spawn_enemy_bullet(plane_pos + aim_dir * radius * 0.9, dir, bullet_speed, out_dmg() * mult, size, def["accent"], height, attack_range * 1.35 / bullet_speed)
 	if sound:
 		sfx(shot_sfx, -4.0)
+	if affixes.has("vampirico"):
+		hp = minf(hp_max, hp + out_dmg() * mult * 0.5)
 
 
 func _set_state(s: String) -> void:
@@ -195,7 +226,7 @@ func _set_state(s: String) -> void:
 
 
 func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
-	attack_timer -= delta
+	attack_timer -= delta * atk_mult
 	ability_timer -= delta
 	state_time += delta
 	match arch:
@@ -313,7 +344,7 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 				sector.fx_ring(plane_pos, 460.0, def["accent"])
 				sfx("e_pulse")
 				if dist < 460.0:
-					p.buffs["slowed"] = 2.5
+					p.apply_slow(2.5)
 					p.external_pull += (plane_pos - p.plane_pos).normalized() * 260.0
 			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 2.0
@@ -452,6 +483,8 @@ func take_hit(amount: float, info: Dictionary) -> void:
 	if not alive:
 		return
 	set_aggro()
+	since_hit = 0.0
+	amount *= dmg_taken_mult
 	if phased:
 		amount *= 0.25
 	if reflecting > 0.0:
@@ -475,6 +508,11 @@ func take_hit(amount: float, info: Dictionary) -> void:
 		"pierce_armor":
 			if arch in ["tank", "defender"]:
 				amount *= 1.12
+	amount = _absorb(amount, info)
+	if amount <= 0.0:
+		flash = 0.6
+		if randf() < 0.3:
+			sector.fx_spark(plane_pos, Color("4ab8ff"))
 	_apply_damage(amount, info.get("crit", false))
 	if info.has("explode"):
 		sector.player_explosion(plane_pos, 150.0, info["explode"])
@@ -498,6 +536,12 @@ func die(by_player: bool) -> void:
 	if not alive:
 		return
 	alive = false
+	sector.commanders.erase(self)
+	if affixes.has("volatil"):
+		sector.telegraph_circle(plane_pos, 170.0, 0.9, dmg * 1.5, AFFIX_COLORS["volatil"])
+	if affixes.has("enjambrador"):
+		spawned = 0
+		_spawn_children(4)
 	sector.on_enemy_killed(self, by_player)
 	queue_free()
 
@@ -571,4 +615,189 @@ func _draw() -> void:
 			bar_col = v["color"]
 		elif is_elite:
 			bar_col = Color("ffb84a")
-		draw_bar(top, maxf(40.0, radius * 1.6), hp / hp_max, bar_col)
+		var w := maxf(40.0, radius * 1.6)
+		draw_bar(top, w, hp / hp_max, bar_col)
+		if shield_max > 0.0:
+			draw_bar(top - 7.0, w, shield / shield_max, Color("4ab8ff"))
+		# Afijos: una gema de color por afijo sobre las barras.
+		for i in affixes.size():
+			var x := -w * 0.5 + 5.0 + i * 11.0
+			draw_circle(Vector2(x, top - (16.0 if shield_max > 0.0 else 9.0)), 4.0, AFFIX_COLORS[affixes[i]])
+	if shield > 0.0 and flash > 0.0:
+		draw_ring(radius * 1.25, Color(0.3, 0.7, 1.0, 0.6 * flash), 3.0, height)
+	if is_boss:
+		draw_ring(radius * 1.6, Color(1, 0.2, 0.3, 0.35 + 0.25 * sin(anim * 3.0)), 4.0, height)
+
+
+# --- M8: escudos enemigos ---------------------------------------------------------------------
+const AFFIX_NAMES := {
+	"blindado": "Blindado", "frenetico": "Frenético", "regenerador": "Regenerador", "reflexivo": "Reflexivo",
+	"volatil": "Volátil", "comandante": "Comandante", "vampirico": "Vampírico", "fasico": "Fásico",
+	"gravitatorio": "Gravitatorio", "enjambrador": "Enjambrador",
+}
+const AFFIX_COLORS := {
+	"blindado": Color("a0a8b8"), "frenetico": Color("ff6a3a"), "regenerador": Color("5ad16a"), "reflexivo": Color("9ad8ff"),
+	"volatil": Color("ffb84a"), "comandante": Color("ffd84a"), "vampirico": Color("d03a5a"), "fasico": Color("b88aff"),
+	"gravitatorio": Color("8a4aff"), "enjambrador": Color("c8ff6a"),
+}
+
+
+## Prismáticos y Vacío llevan escudo siempre; el resto a partir del nivel 20 (M7/M8).
+func _setup_shield() -> void:
+	if is_nest:
+		return
+	var frac := 0.0
+	if sector.biome_id in ["prismaticos", "vacio"]:
+		frac = 0.4
+	elif level >= 20:
+		frac = 0.25
+	if frac <= 0.0:
+		return
+	shield_max = hp_max * frac
+	shield = shield_max
+	shield_armor = 18.0 * GameData.level_dmg(1.0, level) * (1.3 if frac >= 0.4 else 1.0)
+
+
+## Daño de un impacto contra el escudo y el casco (devuelve el daño que llega al casco).
+func _absorb(amount: float, info: Dictionary) -> float:
+	var effect: String = info.get("effect", "")
+	if shield <= 0.0:
+		return amount * (0.85 if effect == "ion" else 1.0)
+	if effect == "phase" and randf() < 0.08:
+		return amount
+	var vs_shield := amount
+	if effect == "ion":
+		vs_shield *= 1.45
+	elif effect == "pet_ion":
+		vs_shield *= 1.35
+	vs_shield *= 1.0 + float(info.get("shield_break", 0.0))
+	var armor := shield_armor * (1.0 - clampf(float(info.get("pierce", 0.0)), 0.0, 0.9))
+	var eff := maxf(vs_shield * 0.15, vs_shield - armor)
+	if eff <= shield:
+		shield -= eff
+		return 0.0
+	# El sobrante atraviesa al casco en proporción.
+	var rest := (eff - shield) / eff * amount
+	shield = 0.0
+	sector.fx_ring(plane_pos, radius * 1.4, Color("4ab8ff"))
+	return rest
+
+
+# --- M9: afijos de élite -----------------------------------------------------------------------
+func _roll_affixes(n: int) -> void:
+	if n <= 0 or is_nest:
+		return
+	var pool: Array = AFFIX_NAMES.keys()
+	pool.shuffle()
+	for i in mini(n, pool.size()):
+		add_affix(pool[i])
+
+
+func add_affix(a: String) -> void:
+	if affixes.has(a):
+		return
+	affixes.append(a)
+	if a == "comandante":
+		sector.commanders.append(self)
+	match a:
+		"blindado":
+			dmg_taken_mult *= 0.7
+			speed *= 0.8
+		"frenetico":
+			atk_mult *= 1.4
+			speed *= 1.25
+			hp_max *= 0.75
+			hp = minf(hp, hp_max)
+	is_elite = true
+
+
+func affix_text() -> String:
+	var parts: PackedStringArray = []
+	for a in affixes:
+		parts.append(AFFIX_NAMES[a])
+	return " · ".join(parts)
+
+
+func _affix_tick(delta: float, p: PlayerShip, dist: float) -> void:
+	since_hit += delta
+	if shield_max > 0.0 and since_hit > 3.0 and shield < shield_max:
+		shield = minf(shield_max, shield + shield_max * 0.08 * delta)
+	if affixes.is_empty() or not aggro:
+		return
+	if affixes.has("regenerador") and since_hit > 3.0:
+		hp = minf(hp_max, hp + hp_max * 0.02 * delta)
+	affix_timer -= delta
+	if affix_timer > 0.0:
+		return
+	affix_timer = 6.0
+	if affixes.has("reflexivo"):
+		reflecting = 1.4
+		sfx("e_reflect", -4.0)
+	if affixes.has("fasico") and not phased:
+		phased = true
+		get_tree().create_timer(1.5).timeout.connect(func(): phased = false)
+		sfx("e_phase", -4.0)
+	if affixes.has("gravitatorio") and dist < 520.0:
+		p.external_pull += (plane_pos - p.plane_pos).normalized() * 280.0
+		sector.fx_ring(p.plane_pos, 120.0, AFFIX_COLORS["gravitatorio"])
+		sfx("e_pulse", -6.0)
+
+
+## Multiplicador de daño por aura de Comandante cercano (lo calcula el sector una vez por fotograma).
+func _aura_mult() -> float:
+	return 1.2 if sector.commander_near(self) else 1.0
+
+
+# --- M6: jefe con fases ------------------------------------------------------------------------
+func make_boss() -> void:
+	is_boss = true
+	is_elite = true
+	hp_max *= 6.0
+	hp = hp_max
+	shield_max *= 6.0
+	shield = shield_max
+	radius *= 1.4
+	speed *= 0.8
+	_roll_affixes(2)
+
+
+func boss_name() -> String:
+	return "%s — Jefe del sector" % def["name"]
+
+
+func _boss_tick(delta: float, p: PlayerShip, dist: float) -> void:
+	var frac := hp / hp_max
+	var phase := 1 if frac > 0.66 else (2 if frac > 0.33 else 3)
+	if phase != boss_phase:
+		boss_phase = phase
+		sector.hud.toast("¡%s entra en la FASE %d!" % [def["name"], phase], 3.0, UiTheme.BAD)
+		sfx("e_nova")
+		sector.fx_ring(plane_pos, radius * 3.0, def["accent"])
+	boss_spiral -= delta
+	boss_zone -= delta
+	boss_summon -= delta
+	if dist > 1300.0:
+		return
+	# Espiral radial: más balas y más frecuente en cada fase.
+	if boss_spiral <= 0.0:
+		boss_spiral = 4.2 - boss_phase * 0.9
+		var n := 10 + 4 * boss_phase
+		var rot := anim * 0.7
+		for i in n:
+			var dir := Vector2.from_angle(rot + TAU * i / n)
+			sector.spawn_enemy_bullet(plane_pos + dir * radius, dir, 300.0, out_dmg() * 0.55, 8.0, def["accent"], height, 3.0)
+		sfx("e_heavy", -2.0)
+	if boss_phase >= 2 and boss_zone <= 0.0:
+		boss_zone = 5.0
+		sector.telegraph_circle(p.plane_pos, 130.0, 1.2, out_dmg() * 1.4, def["accent"])
+		for k in 2:
+			sector.telegraph_circle(p.plane_pos + Vector2.from_angle(randf() * TAU) * 220.0, 110.0, 1.4, out_dmg(), def["accent"])
+		sfx("e_launch", -2.0)
+	if boss_phase >= 2 and boss_summon <= 0.0:
+		boss_summon = 9.0
+		spawned = 0
+		_spawn_children(3)
+	if boss_phase == 3 and attack_timer <= 0.0 and dist < attack_range:
+		attack_timer = 1.4
+		for k in 3:
+			_shoot_at(p, 520.0, 8.0, 0.7, 0.18, k == 0)

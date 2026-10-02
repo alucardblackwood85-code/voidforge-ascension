@@ -49,6 +49,7 @@ func new_profile() -> Dictionary:
 		"unlocks": {"modules": false, "pet": false},
 		"loadouts": {},
 		"sector_max": 1,
+		"asc_max": 0,
 		"sector_cleared": [],
 		"kills_by": {},
 		"pity": {"since_relic": 0, "since_exotic": 0, "opened": 0},
@@ -114,7 +115,7 @@ func load_game() -> void:
 ## Actualiza perfiles antiguos añadiendo los campos nuevos sin perder el progreso.
 func _migrate() -> void:
 	var defaults := {
-		"xp": 0, "modules": [], "drone_lasers": [], "kills_by": {},
+		"xp": 0, "modules": [], "drone_lasers": [], "kills_by": {}, "asc_max": 0,
 		"pet": {"xp": 0}, "perma": {"dmg": 0.0, "hull": 0.0, "shield": 0.0}, "rank_claimed": 1, "rank_log": [],
 		"unlocks": {"modules": int(data.get("xp", 0)) >= GameData.xp_for_level(5), "pet": int(data.get("stats", {}).get("runs", 0)) >= 2},
 		"pity": {"since_relic": 0, "since_exotic": 0, "opened": 0},
@@ -148,7 +149,7 @@ func _migrate() -> void:
 func _fix_json_types() -> void:
 	data["rank_claimed"] = int(data.get("rank_claimed", 1))
 	data["pet"]["xp"] = int(data["pet"].get("xp", 0))
-	for k in ["next_uid", "credits", "nexo", "seals", "sector_max", "xp"]:
+	for k in ["next_uid", "credits", "nexo", "seals", "sector_max", "xp", "asc_max"]:
 		data[k] = int(data[k])
 	for dict_key in ["materials", "ammo", "items", "stats", "kills_by", "pity"]:
 		var d: Dictionary = data[dict_key]
@@ -571,7 +572,9 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 	var ship: Dictionary = GameData.SHIPS[ship_id]
 	var lo := ensure_loadout(ship_id)
 	var bonus := {"hull": 0.0, "shield": 0.0, "speed": 0.0, "dmg": 0.0, "recharge": 0.0, "shield_regen": 0.0, "boost_cd": 0.0,
-		"accel": 0.0, "turn": 0.0, "crit": 0.0, "elite_dmg": 0.0, "hull_regen": 0.0, "recharge_delay": 0.0}
+		"accel": 0.0, "turn": 0.0, "crit": 0.0, "elite_dmg": 0.0, "hull_regen": 0.0, "recharge_delay": 0.0,
+		"repair_bonus": 0.0, "collision_res": 0.0, "shield_break": 0.0, "pierce": 0.0}
+	var traits: Array = []
 	for uid in lo["gens"]:
 		if int(uid) < 0:
 			continue
@@ -579,6 +582,8 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 		if it.is_empty():
 			continue
 		var g: Dictionary = GameData.GENERATORS[it["id"]]
+		if not traits.has(it["id"]):
+			traits.append(it["id"])
 		var mult := GameData.component_mult(int(it["level"]))
 		for k in g["stats"].keys():
 			var v: float = g["stats"][k]
@@ -627,6 +632,11 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 		"turn": 1.0 + bonus["turn"],
 		"crit": bonus["crit"],
 		"elite_dmg": bonus["elite_dmg"],
+		"repair_bonus": bonus["repair_bonus"],
+		"collision_res": minf(0.5, bonus["collision_res"]),
+		"shield_break": bonus["shield_break"],
+		"pierce": minf(0.9, bonus["pierce"] * 3.0),
+		"traits": traits,
 		"bonus": bonus,
 	}
 
@@ -686,6 +696,8 @@ func apply_run_result(result: Dictionary) -> void:
 	stats["kills"] = int(stats["kills"]) + int(result.get("kills", 0))
 	stats["time"] = int(stats["time"]) + int(result.get("time", 0))
 	stats["credits_earned"] = int(stats["credits_earned"]) + int(loot.get("credits", 0))
+	for m in result.get("modules", []):
+		data["modules"].append(m)
 	var kb: Dictionary = result.get("kills_by", {})
 	for id in kb.keys():
 		data["kills_by"][id] = int(data["kills_by"].get(id, 0)) + int(kb[id])
@@ -702,6 +714,9 @@ func apply_run_result(result: Dictionary) -> void:
 			result["first_clear_nexo"] = first_nexo
 			add_xp(GameData.level_kill_xp(lvl) * GameData.FIRST_CLEAR_XP_KILLS)
 		data["sector_max"] = maxi(int(data["sector_max"]), lvl + 1)
+		# M9: limpiar el nivel 50 abre la Ascensión (y cada Ascensión superada, la siguiente).
+		if lvl >= GameData.ASC_UNLOCK_LEVEL:
+			data["asc_max"] = mini(GameData.ASC_MAX, maxi(int(data["asc_max"]), int(result.get("asc", 0)) + 1))
 	# La experiencia ya se fue sumando durante la incursión (ascensos en tiempo real).
 	last_result = result
 	save_game()

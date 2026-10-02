@@ -41,6 +41,12 @@ func _process(delta: float) -> void:
 	if hostile:
 		var p := sector.player
 		if p.alive and plane_pos.distance_to(p.plane_pos) < p.radius + size:
+			if p.try_reflect(damage):
+				hostile = false
+				homing = 0.0
+				dir = -dir
+				sector.fx_spark(plane_pos, Color("9ad8ff"))
+				return
 			p.take_damage(damage)
 			sector.fx_spark(plane_pos, color)
 			queue_free()

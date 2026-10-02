@@ -62,6 +62,10 @@ func max_speed() -> float:
 		s *= 1.4
 	if buffs.has("anchor"):
 		s *= 0.65
+	if buffs.has("overdrive"):
+		s *= 1.06
+	if buffs.has("horizon"):
+		s *= 1.12
 	if buffs.has("slowed"):
 		s *= 0.6
 	return s
@@ -205,6 +209,10 @@ func _shoot_laser(i: int, l: Dictionary) -> void:
 		l["stack"] = 0
 		l["last_target"] = target
 	var info := {"effect": def["effect"], "color": def["color"]}
+	if float(stats["pierce"]) > 0.0:
+		info["pierce"] = stats["pierce"]
+	if float(stats["shield_break"]) > 0.0:
+		info["shield_break"] = stats["shield_break"]
 	if randf() < float(stats["crit"]):
 		dmg *= 2.0
 		info["crit"] = true
@@ -248,6 +256,9 @@ func try_boost() -> void:
 	energy -= 35.0
 	boost_time = 0.35
 	boost_cd = 2.5 * float(stats["boost_cd"])
+	if has_trait("vg_overdrive") and not buffs.has("cd_overdrive"):
+		buffs["overdrive"] = 2.0
+		buffs["cd_overdrive"] = 8.0
 	Sfx.play("boost")
 	sector.fx_ring(plane_pos, 50.0, Color(0.5, 0.9, 1.0, 0.8))
 
@@ -279,17 +290,28 @@ func pickup_radius() -> float:
 func take_damage(amount: float) -> void:
 	if not alive or invulnerable:
 		return
+	amount *= 1.0 - float(stats["collision_res"])
+	# SG-Quantum: 10% de reducir el impacto un 35% (CD 5 s).
+	if has_trait("sg_quantum") and not buffs.has("cd_quantum") and randf() < 0.1:
+		amount *= 0.65
+		buffs["cd_quantum"] = 5.0
+		sector.fx_ring(plane_pos, radius * 1.3, Color("e0a8ff"))
 	sector.stat_damage_taken += amount
 	since_damage = 0.0
 	var s := minf(shield, amount)
 	shield -= s
 	var rest := amount - s
+	if s > 0.0 and shield <= 0.0 and has_trait("sg_pulse") and not buffs.has("cd_pulse"):
+		_shield_pulse()
 	if rest > 0.0:
 		hull -= rest
 		sector.hud.flash_damage()
 		Sfx.play("hit_hull", null, -3.0)
 	else:
 		Sfx.play("hit_shield", null, -6.0)
+	if hull > 0.0 and hull < hull_max * 0.25 and has_trait("vg_horizon") and not buffs.has("cd_horizon"):
+		buffs["horizon"] = 4.0
+		buffs["cd_horizon"] = 25.0
 	if hull <= 0.0:
 		hull = 0.0
 		alive = false
@@ -299,7 +321,7 @@ func take_damage(amount: float) -> void:
 
 
 func repair(frac: float) -> void:
-	hull = minf(hull_max, hull + hull_max * frac)
+	hull = minf(hull_max, hull + hull_max * frac * (1.0 + float(stats["repair_bonus"])))
 
 
 func _draw() -> void:
@@ -331,3 +353,32 @@ func _draw() -> void:
 		draw_ring(radius * 1.25, Color(0.3, 0.8, 1.0, a + 0.1), 2.0, height)
 	if buffs.has("anchor"):
 		draw_ring(radius * 1.5, Color(0.4, 0.8, 1.0, 0.7), 3.0, height)
+
+
+# --- Rasgos de generadores (M8) ----------------------------------------------------------
+func has_trait(gen_id: String) -> bool:
+	return stats.get("traits", []).has(gen_id)
+
+
+## SG-Pulse: al romperse el escudo, onda que empuja a los enemigos cercanos (CD 30 s).
+func _shield_pulse() -> void:
+	buffs["cd_pulse"] = 30.0
+	sector.fx_ring(plane_pos, 300.0, Color("3aa0ff"))
+	Sfx.play("e_pulse", null, -4.0)
+	for e in sector.enemies:
+		if e.alive and not e.is_nest and e.plane_pos.distance_to(plane_pos) < 300.0:
+			e.pull_vel = (e.plane_pos - plane_pos).normalized() * 420.0
+
+
+## Ralentización enemiga: SG-Null acorta un 8% y VG-Phase tiene 5% de ignorarla.
+func apply_slow(t: float) -> void:
+	if has_trait("vg_phase") and randf() < 0.05:
+		return
+	if has_trait("sg_null"):
+		t *= 0.92
+	buffs["slowed"] = maxf(float(buffs.get("slowed", 0.0)), t)
+
+
+## SG-Reflect: 3% de devolver un proyectil ligero.
+func try_reflect(dmg_amount: float) -> bool:
+	return has_trait("sg_reflect") and dmg_amount < hull_max * 0.08 and randf() < 0.03

@@ -77,6 +77,7 @@ func sounds() -> Dictionary:
 		"item_use": {"layers": [L("sine", 600, 900, 0.15, 0.5), L("sine", 900, 1350, 0.15, 0.4, {"t": 0.08})]},
 		"deploy": {"layers": [L("square", 300, 150, 0.12, 0.5, {"lp": 1500}), L("square", 900, 900, 0.05, 0.3, {"t": 0.15})]},
 		"alert": {"layers": [L("square", 700, 700, 0.25, 0.35, {"lp": 2500, "k": 0.5}), L("square", 520, 520, 0.25, 0.35, {"t": 0.27, "lp": 2500, "k": 0.5}), L("square", 700, 700, 0.25, 0.35, {"t": 0.54, "lp": 2500, "k": 0.5})]},
+		"jackpot": {"layers": [L("sine", 784, 784, 0.08, 0.45), L("sine", 1046, 1046, 0.08, 0.45, {"t": 0.06}), L("sine", 1318, 1318, 0.08, 0.45, {"t": 0.12}), L("sine", 1568, 1568, 0.08, 0.45, {"t": 0.18}), L("sine", 2093, 2093, 0.5, 0.5, {"t": 0.24, "k": 2.0}), L("tri", 1046, 2093, 0.6, 0.25, {"t": 0.24})]},
 		"objective": {"layers": [L("tri", 523, 523, 0.15, 0.5), L("tri", 659, 659, 0.15, 0.5, {"t": 0.13}), L("tri", 784, 784, 0.15, 0.5, {"t": 0.26}), L("tri", 1046, 1046, 0.45, 0.5, {"t": 0.39, "k": 2.0})]},
 		"warp": {"layers": [L("sine", 200, 2000, 1.0, 0.5, {"a": 0.6, "k": 0.8}), L("noise", 500, 6000, 1.0, 0.3, {"lp": 5000, "a": 0.6, "k": 0.8})]},
 		"ui_click": {"layers": [L("square", 1800, 1200, 0.03, 0.25, {"lp": 6000, "k": 8.0})]},
@@ -92,7 +93,10 @@ func sounds() -> Dictionary:
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	var all := sounds()
+	var only := OS.get_cmdline_user_args()
 	for name in all.keys():
+		if not only.is_empty() and not only.has(name):
+			continue
 		var samples := render(all[name])
 		save_wav(OUT_DIR + name + ".wav", samples)
 	print("SFX generados: %d" % all.size())

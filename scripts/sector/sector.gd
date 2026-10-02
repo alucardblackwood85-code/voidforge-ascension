@@ -83,6 +83,12 @@ var loot_version := 0                  # cambia cuando varía la bodega (refresc
 var xp_mult := 1.0                       # multiplicador de XP (eventos, Ascensión)
 var shield_buff := {"pct": 0.0, "time": 0.0}
 var laser_buff := {"pct": 0.0, "charges": 0}
+var asc := 0                             # M9: nivel de Ascensión de la incursión
+var asc_reward := 1.0
+var commanders: Array = []               # enemigos con afijo Comandante (aura de daño)
+var boss: Enemy = null                   # M6: jefe del sector
+var boss_dead := false
+var run_modules: Array = []              # módulos encontrados en cajas legendarias / jefe
 var zoom_level := 1.15
 var auto_fire := false
 
@@ -98,6 +104,9 @@ func _ready() -> void:
 	aimtest = params.get("aimtest", false)
 	biome_id = params.get("biome", "ferron")
 	biome = GameData.BIOMES[biome_id]
+	asc = int(params.get("asc", 0))
+	asc_reward = pow(1.75, asc)
+	xp_mult *= asc_reward
 	run_ammo = GameState.data["ammo"].duplicate()
 	run_items = GameState.data["items"].duplicate()
 	auto_fire = Controls.is_touch and GameState.data["settings"].get("auto_fire_touch", true)
@@ -190,9 +199,12 @@ func _generate() -> void:
 		_populate_cell(c, c == start_cell)
 
 	# Élite del sector: nodriza en la celda más lejana.
+	# M6: desde el nivel 4 es un jefe con tres fases y barra propia.
 	var elite_id: String = biome["elites"][0]
-	var ev := "boss" if level >= 4 else "base"
-	spawn_enemy(elite_id, _free_point_in(far_cells[0], 0.4), level, ev)
+	var el := spawn_enemy(elite_id, _free_point_in(far_cells[0], 0.4), level, "base")
+	if level >= 4:
+		el.make_boss()
+		boss = el
 
 	if objective == "limpieza":
 		objective_target = 70
@@ -265,6 +277,11 @@ func _weighted(table: Dictionary) -> String:
 func _roll_variant() -> String:
 	var a := floorf(alert)
 	var r := rng.randf()
+	# M9: Ultra desde el nivel 20 y Uber desde el 40 (más frecuentes con alerta y Ascensión).
+	if level >= 40 and r < 0.004 + 0.002 * a + 0.002 * asc:
+		return "uber"
+	if level >= 20 and r < 0.01 + 0.003 * a + 0.003 * asc:
+		return "ultra"
 	if level >= 3 and r < 0.01 + 0.004 * a:
 		return "mega"
 	if r < 0.05 + 0.012 * a:
@@ -323,6 +340,8 @@ func _process(delta: float) -> void:
 	if cells.has(c) and not cells[c]["visited"]:
 		cells[c]["visited"] = true
 	_update_loot(delta)
+	if is_instance_valid(boss) and boss.aggro and boss.plane_pos.distance_to(player.plane_pos) < 1600.0:
+		Music.play("boss")
 	Sfx.listener_pos = player.plane_pos
 	Sfx.has_listener = true
 	camera.position = player.position + Vector2(0, -20)
@@ -685,6 +704,7 @@ func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, s
 	b.homing = GameData.ENEMY_BULLET_TURN
 	b.lift_h = h
 	b.position = Iso.to_screen(origin)
+	b.add_to_group("enemy_bullets")
 	fx_top.add_child(b)
 
 
@@ -766,6 +786,14 @@ func telegraph_circle(p: Vector2, r: float, t: float, dmg: float, color: Color) 
 	fx_ground.add_child(f)
 
 
+## Aura de Comandante: +20% de daño a aliados en 400 u.
+func commander_near(e: Enemy) -> bool:
+	for c in commanders:
+		if c != e and c.plane_pos.distance_squared_to(e.plane_pos) < 160000.0:
+			return true
+	return false
+
+
 func gravity_well(p: Vector2, r: float, dur: float) -> void:
 	for e in enemies:
 		if e.alive and not e.is_nest and e.plane_pos.distance_to(p) < r:
@@ -793,7 +821,9 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		return
 	kills += 1
 	var v: Dictionary = GameData.VARIANTS[e.variant]
-	var rmult: float = float(v["reward"])
+	var rmult: float = float(v["reward"]) * asc_reward * (1.0 + 0.5 * e.affixes.size())
+	if e.is_boss:
+		rmult *= 4.0
 	if not e.is_nest:
 		kills_by[e.id] = int(kills_by.get(e.id, 0)) + 1
 	_award_xp(GameData.enemy_xp(float(e.def["hp"]), level, rmult))
@@ -812,8 +842,34 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		var n := int(ceil(q)) if rare else int(round(q))
 		if n > 0:
 			contents[mat] = n
-	spawn_box(contents, e.plane_pos, e.is_elite or e.variant != "base")
+	spawn_box(contents, e.plane_pos, e.is_elite or e.variant != "base", _box_tier(e))
+	if e.is_boss:
+		_on_boss_killed(e)
 	_check_objective()
+
+
+## M10: niveles de caja. Oro 4%; legendaria 0,5% (5% élites, siempre el jefe).
+func _box_tier(e: Enemy) -> String:
+	if e.is_boss:
+		return "legendary"
+	var r := rng.randf()
+	if r < (0.05 if e.is_elite else 0.005):
+		return "legendary"
+	if r < (0.15 if e.is_elite else 0.045):
+		return "gold"
+	return "rare" if e.is_elite else "normal"
+
+
+## M6: el jefe garantiza un módulo Reliquia (o mejor) y Nexo extra.
+func _on_boss_killed(_e: Enemy) -> void:
+	boss = null
+	boss_dead = true
+	var m := GameState.roll_module(4 if rng.randf() < 0.15 else 3)
+	run_modules.append(m)
+	hud.toast("¡JEFE DERROTADO! Módulo obtenido: %s" % GameState.module_label(m), 5.0, UiTheme.WARN)
+	_gain("nexo", 5 + level / 4)
+	Sfx.play("objective")
+	Music.play(biome_id)
 
 
 func _clear_percent() -> int:
@@ -869,11 +925,30 @@ func _gain(item: String, amount: int) -> void:
 	Sfx.play("pickup_rare" if item == "nexo" else "pickup", null, -10.0)
 
 
-func spawn_box(contents: Dictionary, p: Vector2, rare: bool) -> void:
-	if contents.is_empty():
+func spawn_box(contents: Dictionary, p: Vector2, rare: bool, tier: String = "") -> void:
+	if tier == "":
+		tier = "rare" if rare else "normal"
+	var extra := {}
+	if tier == "gold":
+		for k in contents.keys():
+			contents[k] = int(contents[k]) * 2
+		extra["nexo"] = 1
+	elif tier == "legendary":
+		for k in contents.keys():
+			contents[k] = int(contents[k]) * 3
+		extra["nexo"] = 3 + level / 5
+		extra["module"] = 2 if rng.randf() < 0.7 else 3
+	# 5% de premio gordo: contenido x5.
+	if tier != "normal" and rng.randf() < 0.05:
+		for k in contents.keys():
+			contents[k] = int(contents[k]) * 5
+		extra["jackpot"] = true
+	if contents.is_empty() and extra.is_empty():
 		return
 	var b := LootBox.new()
-	b.setup(self, contents, p + Vector2(rng.randf_range(-12, 12), rng.randf_range(-12, 12)), rare)
+	b.setup(self, contents, p + Vector2(rng.randf_range(-12, 12), rng.randf_range(-12, 12)), rare or tier != "normal")
+	b.tier = tier
+	b.extra = extra
 	world.add_child(b)
 	boxes.append(b)
 
@@ -906,6 +981,7 @@ func cargo_capacity() -> int:
 
 ## Pasa a la bodega todo lo que quepa (primero lo más valioso). Lo demás se queda en la caja.
 func collect_box(b: LootBox) -> void:
+	_claim_box_extra(b)
 	var keys: Array = b.contents.keys()
 	keys.sort_custom(func(x, y): return GameData.MATERIALS.get(x, {}).get("rarity", 0) > GameData.MATERIALS.get(y, {}).get("rarity", 0))
 	var got := 0
@@ -931,6 +1007,22 @@ func collect_box(b: LootBox) -> void:
 		collect_target = null
 	if b.contents.is_empty():
 		remove_box(b)
+
+
+## Nexo y módulo de las cajas de oro / legendarias (no ocupan bodega, se cobran al abrirlas).
+func _claim_box_extra(b: LootBox) -> void:
+	if b.extra.is_empty():
+		return
+	if b.extra.get("jackpot", false):
+		hud.toast("¡PREMIO GORDO! Contenido x5", 3.0, UiTheme.WARN)
+		Sfx.play("jackpot")
+	_gain("nexo", int(b.extra.get("nexo", 0)))
+	if b.extra.has("module"):
+		var m := GameState.roll_module(int(b.extra["module"]))
+		run_modules.append(m)
+		hud.toast("Caja legendaria: %s" % GameState.module_label(m), 4.0, Color("ff8a2a"))
+		Sfx.play("pickup_rare")
+	b.extra = {}
 
 
 ## Recogida remota (imán, compresor, dron recolector, tecla F): cajas en un radio.
@@ -1081,7 +1173,9 @@ func _finish(outcome: String) -> void:
 		"outcome": outcome, "level": level, "loot": final_loot, "raw_loot": loot,
 		"ammo_used": ammo_used, "items_used": items_used, "kills": kills,
 		"objective_done": objective_done and outcome != "death", "time": elapsed,
-		"xp": run_xp, "kills_by": kills_by, "biome": biome_id,
+		"xp": run_xp, "kills_by": kills_by, "biome": biome_id, "asc": asc,
+		"modules": run_modules if outcome != "death" or params.get("insured", false) else [],
+		"boss_killed": boss_dead,
 	}
 	if outcome == "extract":
 		hud.show_result(result)

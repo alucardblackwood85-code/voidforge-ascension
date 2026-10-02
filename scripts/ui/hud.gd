@@ -217,8 +217,26 @@ func _draw_canvas() -> void:
 		_text(Vector2(cx - 200, 92), nm, 16, UiTheme.TEXT, HORIZONTAL_ALIGNMENT_CENTER, 400)
 		canvas.draw_rect(Rect2(cx - 140, 98, 280, 10), Color(0, 0, 0, 0.6))
 		canvas.draw_rect(Rect2(cx - 140, 98, 280 * frac, 10), Color("ff4a4a"))
+		if t is Enemy and t.shield_max > 0.0:
+			canvas.draw_rect(Rect2(cx - 140, 110, 280 * t.shield / t.shield_max, 5), Color("4ab8ff"))
+		if t is Enemy and not t.affixes.is_empty():
+			_text(Vector2(cx - 300, 112 if in_range else 110), t.affix_text(), 13, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 600)
 		if not in_range:
 			_text(Vector2(cx - 200, 126), "Fuera de alcance", 14, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 400)
+
+	# M6: barra del jefe (cuando está cerca o en combate)
+	var boss: Enemy = sector.boss
+	if is_instance_valid(boss) and boss.alive and boss.aggro and boss.plane_pos.distance_to(p.plane_pos) < 1600.0:
+		var bw := minf(720.0, vs.x - 560.0)
+		var by := vs.y - 150.0
+		canvas.draw_rect(Rect2(cx - bw * 0.5 - 6, by - 26, bw + 12, 50), panel_bg)
+		_text(Vector2(cx - bw * 0.5, by - 8), "%s · FASE %d" % [boss.boss_name(), boss.boss_phase], 16, UiTheme.BAD, HORIZONTAL_ALIGNMENT_CENTER, bw)
+		canvas.draw_rect(Rect2(cx - bw * 0.5, by, bw, 14), Color(0, 0, 0, 0.7))
+		canvas.draw_rect(Rect2(cx - bw * 0.5, by, bw * boss.hp / boss.hp_max, 14), Color("d02a3a"))
+		for k in [0.33, 0.66]:
+			canvas.draw_line(Vector2(cx - bw * 0.5 + bw * k, by), Vector2(cx - bw * 0.5 + bw * k, by + 14), Color.BLACK, 2.0)
+		if boss.shield_max > 0.0:
+			canvas.draw_rect(Rect2(cx - bw * 0.5, by + 16, bw * boss.shield / boss.shield_max, 4), Color("4ab8ff"))
 
 	# Botín y bodega
 	var rx := vs.x - 236.0

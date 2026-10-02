@@ -15,6 +15,8 @@ const VOLLEY_INTERVAL := 1.2          # la nave dispara una andanada con todos s
 const ENEMY_DMG_MULT := 1.3           # con disparos teledirigidos (casi siempre aciertan) el daño efectivo ya es ~3x el de v0.3
 const ENEMY_HP_MULT := 1.2
 const ENEMY_BULLET_TURN := 2.0        # rad/s: persiguen a la nave; un impulso o un giro cerrado aún los esquiva
+const ASC_UNLOCK_LEVEL := 50          # M9: limpiar este nivel abre la Ascensión
+const ASC_MAX := 10
 const NEXO_RATE := 587.0              # créditos equivalentes a 1 Cristal Nexo (Specter-X: 246.4K créditos o 420 Nexo)
 const LOOT_BOX_LIFE := 120.0          # segundos que permanece una caja de botín
 const MAX_ENEMIES := 160               # tope de enemigos vivos (rendimiento: más allá cae la tasa de fotogramas)
@@ -446,7 +448,7 @@ static func insurance_cost(level: int) -> int:
 const DRONE_LASERS := {
 	"pet_pulse": {"name": "Pet-Pulse", "dmg": 0.55, "color": Color("d8ffd0"), "effect": "", "desc": "Disparo estable, bajo consumo.", "cost": {"credits": 3000}},
 	"pet_stinger": {"name": "Pet-Stinger", "dmg": 0.50, "color": Color("ffe86a"), "effect": "stinger", "desc": "Cada 5 impactos aplica un golpe 2x.", "cost": {"credits": 15000, "cobalto": 20}},
-	"pet_ion": {"name": "Pet-Ion", "dmg": 0.50, "color": Color("6aa8ff"), "effect": "", "desc": "+35% daño a escudos.", "cost": {"credits": 18000, "paladio": 4}},
+	"pet_ion": {"name": "Pet-Ion", "dmg": 0.50, "color": Color("6aa8ff"), "effect": "pet_ion", "desc": "+35% daño a escudos.", "cost": {"credits": 18000, "paladio": 4}},
 	"pet_arc": {"name": "Pet-Arc", "dmg": 0.45, "color": Color("8ad8ff"), "effect": "chain", "desc": "Puede saltar a un segundo enemigo.", "cost": {"credits": 30000, "iridio": 6}},
 	"pet_guard": {"name": "Pet-Guard", "dmg": 0.30, "color": Color("e8e8f0"), "effect": "guard", "desc": "Daño bajo; 5% de destruir proyectiles cercanos.", "cost": {"credits": 25000, "titanio": 30}},
 	"pet_marker": {"name": "Pet-Marker", "dmg": 0.35, "color": Color("ff6a6a"), "effect": "marker", "desc": "Marca al objetivo: la nave inflige +3% de daño 3 s.", "cost": {"credits": 28000, "xenocristal": 8}},

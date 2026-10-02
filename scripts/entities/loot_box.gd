@@ -6,6 +6,8 @@ extends Entity
 
 var contents: Dictionary = {}
 var rare := false
+var tier := "normal"                  # M10: normal, rare, gold, legendary
+var extra: Dictionary = {}            # nexo / módulo / premio gordo (se cobra al abrir)
 var life := GameData.LOOT_BOX_LIFE
 var bob := 0.0
 
@@ -36,7 +38,7 @@ func tooltip() -> String:
 
 func _process(delta: float) -> void:
 	life -= delta
-	if life <= 0.0 or contents.is_empty():
+	if life <= 0.0 or (contents.is_empty() and extra.is_empty()):
 		sector.remove_box(self)
 		return
 	bob += delta * 2.5
@@ -45,16 +47,29 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+const TIER_COLOR := {"normal": Color("4affff"), "rare": Color("ffb84a"), "gold": Color("ffd84a"), "legendary": Color("ff7a1a")}
+
+
 func _draw() -> void:
 	var h := 14.0 + sin(bob) * 3.0
 	var fade := clampf(life / 10.0, 0.25, 1.0)
-	var glow := Color("ffb84a") if rare else Color("4affff")
+	var glow: Color = TIER_COLOR.get(tier, Color("4affff"))
 	draw_shadow(16.0, 0.3 * fade)
+	# Cajas de oro y legendarias: haz de luz vertical visible de lejos.
+	if tier in ["gold", "legendary"]:
+		var bh := 260.0 if tier == "legendary" else 170.0
+		var bw := 16.0 if tier == "legendary" else 10.0
+		var pulse := 0.6 + 0.4 * sin(bob * 2.0)
+		for k in 4:
+			var ww := bw * (1.0 - k * 0.22)
+			draw_rect(Rect2(-ww * 0.5, -h - bh, ww, bh), Color(glow, 0.09 * pulse * fade * (k + 1)))
+		draw_ring(radius * 2.0, Color(glow, 0.5 * pulse * fade), 3.0)
 	draw_ring(radius * (1.2 + 0.1 * sin(bob * 1.3)), Color(glow, 0.35 * fade), 2.0)
 	var tex := SpriteLib.get_tex("loot", "cargo_box_rare" if rare else "cargo_box")
+	var tint := Color.WHITE.lerp(glow, 0.45) if tier in ["gold", "legendary"] else Color.WHITE
 	if tex:
-		var s := 52.0 if rare else 44.0
-		draw_texture_rect(tex, Rect2(-s * 0.5, -h - s * 0.6, s, s), false, Color(1, 1, 1, fade))
+		var s := 60.0 if tier == "legendary" else (52.0 if rare else 44.0)
+		draw_texture_rect(tex, Rect2(-s * 0.5, -h - s * 0.6, s, s), false, Color(tint, fade))
 	else:
 		draw_rect(Rect2(-14, -h - 14, 28, 22), Color(0.2, 0.3, 0.35, fade))
 		draw_rect(Rect2(-14, -h - 14, 28, 22), Color(glow, fade), false, 2.0)
