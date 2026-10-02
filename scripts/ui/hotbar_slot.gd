@@ -77,7 +77,7 @@ func _draw() -> void:
 		draw_rect(inner, Color(color, 0.18))
 		draw_rect(inner, Color(color, 0.8), false, 1.5)
 		var f := ThemeDB.fallback_font
-		var icon: Texture2D = SpriteLib.get_icon("ammo", e["id"]) if e["type"] == "ammo" else null
+		var icon: Texture2D = SpriteLib.get_icon("ammo" if e["type"] == "ammo" else "items", e["id"])
 		if icon:
 			draw_texture_rect(icon, r.grow(-4), false)
 			draw_string_outline(f, Vector2(0, 26), label, HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, 3, Color.BLACK)
