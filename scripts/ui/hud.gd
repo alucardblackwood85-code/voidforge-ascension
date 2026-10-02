@@ -63,9 +63,6 @@ func _build_touch() -> void:
 	box.offset_bottom = -90
 	box.add_theme_constant_override("separation", 8)
 	root.add_child(box)
-	touch_fire = _tbtn(box, "FUEGO: ON" if sector.auto_fire else "FUEGO: OFF", func():
-		sector.auto_fire = not sector.auto_fire
-		touch_fire.text = "FUEGO: ON" if sector.auto_fire else "FUEGO: OFF")
 	_tbtn(box, "IMPULSO", func(): sector.player.try_boost())
 	_tbtn(box, "HABILIDAD", func(): sector.player.try_ability())
 	_tbtn(box, "DRON", func(): sector.drone.use_ability())
@@ -161,6 +158,7 @@ func _draw_canvas() -> void:
 	canvas.draw_rect(Rect2(8, 4, 480, 130), panel_bg)
 	canvas.draw_rect(Rect2(vs.x * 0.5 - 320, 4, 640, 132 if p.target_valid() else 72), panel_bg)
 	_text(Vector2(x, 26), p.stats.get("name", ""), 18, UiTheme.ACCENT)
+	_text(Vector2(x, 26), "%s · Nv %d" % [GameState.rank_name(), GameState.level()], 13, UiTheme.WARN, HORIZONTAL_ALIGNMENT_RIGHT, 300)
 	_bar(Vector2(x, 36), 300, 18, p.shield / maxf(1.0, p.shield_max), Color("3aa0ff"), "Escudo %s / %s" % [GameData.format_num(p.shield), GameData.format_num(p.shield_max)])
 	_bar(Vector2(x, 58), 300, 18, p.hull / p.hull_max, Color("5ad16a") if p.hull / p.hull_max > 0.3 else UiTheme.BAD, "Casco %s / %s" % [GameData.format_num(p.hull), GameData.format_num(p.hull_max)])
 	_bar(Vector2(x, 80), 300, 10, p.energy / 100.0, Color("ffe04a"), "")
@@ -198,8 +196,6 @@ func _draw_canvas() -> void:
 		canvas.draw_rect(Rect2(cx - 140, 98, 280 * frac, 10), Color("ff4a4a"))
 		if not in_range:
 			_text(Vector2(cx - 200, 126), "Fuera de alcance", 14, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 400)
-		elif not p.firing:
-			_text(Vector2(cx - 200, 126), "Mantén clic derecho para disparar" if not Controls.is_touch else "Activa FUEGO", 14, UiTheme.MUTED, HORIZONTAL_ALIGNMENT_CENTER, 400)
 
 	# Botín y bodega
 	var rx := vs.x - 236.0
@@ -306,9 +302,14 @@ func toggle_pause() -> void:
 	get_tree().paused = true
 	pause_panel = _modal("PAUSA")
 	var box: VBoxContainer = pause_panel.get_meta("box")
-	box.add_child(UiTheme.label("Controles: clic izq. mover/seleccionar · clic der. disparar · %s habilidad · %s impulso · %s dron · 1-0 barra rápida · %s mapa · rueda zoom" % [Controls.key_label("ability"), Controls.key_label("boost"), Controls.key_label("drone"), Controls.key_label("tactical_map")], 14, UiTheme.MUTED))
+	var ctl := UiTheme.label("Clic izquierdo: fijar objetivo  ·  Clic derecho: mover (mantener para guiar)  ·  Ataque automático
+1-0: munición y objetos  ·  %s habilidad  ·  %s impulso  ·  %s dron  ·  %s mapa  ·  rueda: zoom" % [Controls.key_label("ability"), Controls.key_label("boost"), Controls.key_label("drone"), Controls.key_label("tactical_map")], 14, UiTheme.MUTED)
+	ctl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(ctl)
+	box.add_child(UiTheme.label("Sonido", 18, UiTheme.ACCENT))
+	box.add_child(AudioPanel.new())
 	box.add_child(UiTheme.button("Continuar", toggle_pause))
-	box.add_child(UiTheme.button("Abandonar sector (pierdes el 50% del botín)", func():
+	box.add_child(UiTheme.button("Abandonar sector", func():
 		toggle_pause()
 		sector._finish("death")))
 

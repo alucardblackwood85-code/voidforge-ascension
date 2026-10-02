@@ -11,9 +11,9 @@ Cada `push` a `main` compila automáticamente la versión web (GitHub Pages) y u
 ## Controles (mouse-first, GDD §4.2)
 | Acción | Control |
 |---|---|
-| Mover | Clic izquierdo en el mapa (mantener para guiar) · WASD opcional |
+| Mover | Clic derecho en el mapa (mantener para guiar) |
 | Seleccionar objetivo | Clic izquierdo sobre enemigo o depósito de recursos |
-| Disparar | Mantener clic derecho |
+| Disparar | Automático (andanada cada 1,2 s con la munición elegida) |
 | Habilidad de nave / Impulso / Dron | Q / Espacio / E |
 | Barra rápida | 1-0 (munición, consumibles, minas) |
 | Mapa táctico / Interactuar / Zoom | Tab / F / rueda |

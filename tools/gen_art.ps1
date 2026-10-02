@@ -16,6 +16,7 @@
   .\tools\gen_art.ps1 -Shard 0 -Shards 3           # reparte el trabajo en 3 procesos paralelos
 #>
 param(
+    [string]$ManifestFile = "art_manifest.json",
     [string]$Only = "",
     [string]$Group = "",
     [switch]$Force,
@@ -34,7 +35,7 @@ if (-not $key) {
     exit 1
 }
 
-$manifest = Get-Content (Join-Path $PSScriptRoot "art_manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+$manifest = Get-Content (Join-Path $PSScriptRoot $ManifestFile) -Raw -Encoding UTF8 | ConvertFrom-Json
 $all = @($manifest.assets | Where-Object {
         (-not $Only -or $_.out -eq $Only) -and (-not $Group -or $_.out.StartsWith($Group))
     })

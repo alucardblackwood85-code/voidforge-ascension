@@ -121,8 +121,11 @@ func _process(delta: float) -> void:
 	plane_pos += (velocity + pull_vel) * delta
 	pull_vel = pull_vel.move_toward(Vector2.ZERO, 400.0 * delta)
 	plane_pos = sector.constrain(plane_pos, radius)
-	var face := velocity if state != "aim" else (p.plane_pos - plane_pos)
-	if aggro and arch in ["harasser", "artillery", "tank", "hunter", "support", "drainer", "sniper", "elite", "defender", "control"]:
+	# Con el jugador detectado, todos miran hacia él salvo durante embestidas, fase o retirada.
+	var face := velocity
+	if aggro and p.alive and not (state in ["dash", "phase", "retreat"]) and arch != "miner":
+		face = p.plane_pos - plane_pos
+	elif state == "aim":
 		face = p.plane_pos - plane_pos
 	if face.length() > 1.0 and not is_nest:
 		heading = lerp_angle(heading, face.angle(), clampf(6.0 * delta, 0.0, 1.0))
@@ -162,8 +165,11 @@ func _keep_distance(p: PlayerShip, dist: float, want: float, strafe: float) -> V
 
 func _shoot_at(p: PlayerShip, bullet_speed: float, size: float, mult: float = 1.0, spread: float = 0.0, sound: bool = true) -> void:
 	var lead := p.plane_pos + p.velocity * (plane_pos.distance_to(p.plane_pos) / bullet_speed) * 0.5
-	var dir := (lead - plane_pos).normalized().rotated(randf_range(-spread, spread))
-	sector.spawn_enemy_bullet(plane_pos + dir * radius, dir, bullet_speed, out_dmg() * mult, size, def["accent"])
+	var aim_dir := (lead - plane_pos).normalized()
+	# La proa se orienta al disparar y la bala sale del frente, a la altura visual del enemigo.
+	heading = aim_dir.angle()
+	var dir := aim_dir.rotated(randf_range(-spread, spread))
+	sector.spawn_enemy_bullet(plane_pos + aim_dir * radius * 0.9, dir, bullet_speed, out_dmg() * mult, size, def["accent"], height)
 	if sound:
 		sfx(shot_sfx, -4.0)
 
@@ -473,7 +479,6 @@ func die(by_player: bool) -> void:
 	if not alive:
 		return
 	alive = false
-	sfx("explosion_l" if radius > 55.0 else ("explosion_m" if radius > 32.0 else "explosion_s"))
 	sector.on_enemy_killed(self, by_player)
 	queue_free()
 

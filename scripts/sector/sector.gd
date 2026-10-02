@@ -59,7 +59,12 @@ var ended := false
 var demo := false
 var showcase := false
 var demo_timer := 0.0
-var left_held := false
+var right_held := false
+var map_w := 4
+var map_h := 3
+var bounds := Rect2()
+var run_xp := 0
+var kills_by: Dictionary = {}
 var zoom_level := 1.15
 var auto_fire := false
 
@@ -109,7 +114,7 @@ func _ready() -> void:
 	camera.reset_smoothing()
 	camera.zoom = Vector2.ONE * zoom_level
 
-	var role: String = GameState.data.get("drone_role", "asalto")
+	var role: String = GameState.data["drone"]["role"]
 	drone = Drone.new()
 	drone.setup(self, role)
 	world.add_child(drone)
@@ -122,6 +127,7 @@ func _ready() -> void:
 		if e is Dictionary and e.get("type") == "ammo" and int(run_ammo.get(e["id"], 0)) > 0:
 			active_ammo = e["id"]
 			break
+	Music.play(biome_id)
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
 	if showcase:
@@ -130,24 +136,21 @@ func _ready() -> void:
 
 # --- Generación procedural ------------------------------------------------------------
 func _generate() -> void:
-	var n := clampi(9 + level / 2, 9, 20)
-	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	cells[start_cell] = {"visited": true}
-	var frontier: Array = [start_cell]
-	# Crecimiento por ramas: cada paso expande desde una celda existente (forma de red/ramas).
-	while cells.size() < n:
-		var from: Vector2i = frontier[rng.randi() % frontier.size()]
-		var d: Vector2i = dirs[rng.randi() % 4]
-		var c: Vector2i = from + d
-		if not cells.has(c):
-			cells[c] = {"visited": false}
-			frontier.append(c)
+	# Mapa siempre rectangular (más espacio libre); crece con el nivel de amenaza.
+	map_w = clampi(4 + level / 6, 4, 8)
+	map_h = clampi(3 + level / 8, 3, 6)
+	for x in map_w:
+		for y in map_h:
+			cells[Vector2i(x, y)] = {"visited": false}
+	start_cell = Vector2i(0, map_h / 2)
+	cells[start_cell]["visited"] = true
+	bounds = Rect2(Vector2.ZERO, Vector2(map_w, map_h) * CHUNK)
 	gate_pos = cell_center(start_cell)
 
 	objective = "limpieza" if rng.randf() < 0.5 else "nidos"
 	var far_cells: Array = cells.keys()
 	far_cells.erase(start_cell)
-	far_cells.sort_custom(func(a, b): return Vector2(a).length() > Vector2(b).length())
+	far_cells.sort_custom(func(a, b): return Vector2(a - start_cell).length() > Vector2(b - start_cell).length())
 
 	if objective == "nidos":
 		objective_target = clampi(3 + level / 4, 3, 6)
@@ -299,6 +302,7 @@ func _update_alert(delta: float) -> void:
 	if floorf(alert) > before:
 		hud.toast("¡ALERTA DEL SECTOR %d!" % int(floorf(alert)), 3.0, UiTheme.WARN)
 		Sfx.play("alert", null, -11.0)
+		Sfx.voice("sector_alert")
 		wave_timer = 2.0
 	if alert >= 1.0:
 		wave_timer -= delta
@@ -340,21 +344,11 @@ func _separate_enemies() -> void:
 					b.plane_pos -= push * wb
 
 
-## Mantiene una posición dentro de los chunks y fuera de los asteroides.
+## Mantiene una posición dentro del rectángulo del mapa y fuera de los obstáculos.
 func constrain(p: Vector2, r: float) -> Vector2:
+	var inner := bounds.grow(-r)
+	p = Vector2(clampf(p.x, inner.position.x, inner.end.x), clampf(p.y, inner.position.y, inner.end.y))
 	var c := cell_of(p)
-	if not cells.has(c):
-		var best := p
-		var best_d := INF
-		for cc in cells.keys():
-			var rect := Rect2(Vector2(cc) * CHUNK, Vector2.ONE * CHUNK).grow(-r)
-			var q := Vector2(clampf(p.x, rect.position.x, rect.end.x), clampf(p.y, rect.position.y, rect.end.y))
-			var dd := q.distance_squared_to(p)
-			if dd < best_d:
-				best_d = dd
-				best = q
-		p = best
-		c = cell_of(p)
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
 			var list: Array = asteroids_by_cell.get(c + Vector2i(dx, dy), [])
@@ -369,9 +363,9 @@ func constrain(p: Vector2, r: float) -> Vector2:
 
 
 func is_blocked(p: Vector2, margin: float = 0.0) -> bool:
-	var c := cell_of(p)
-	if not cells.has(c):
+	if not bounds.has_point(p):
 		return true
+	var c := cell_of(p)
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
 			for a in asteroids_by_cell.get(c + Vector2i(dx, dy), []):
@@ -380,7 +374,7 @@ func is_blocked(p: Vector2, margin: float = 0.0) -> bool:
 	return false
 
 
-# --- Entrada (4.2) ----------------------------------------------------------------
+# --- Entrada: clic izquierdo = objetivo, clic derecho = mover, ataque automático ---------------
 func mouse_plane() -> Vector2:
 	return Iso.to_plane(get_global_mouse_position())
 
@@ -389,7 +383,7 @@ func pick_at(screen: Vector2) -> Entity:
 	var best: Entity = null
 	var best_d := INF
 	for e in enemies:
-		if not e.alive:
+		if not e.alive or not e.visible:
 			continue
 		var d := screen.distance_to(e.position + Vector2(0, -e.height))
 		if d < e.radius * 0.9 + PICK_SCREEN_RADIUS and d < best_d:
@@ -401,7 +395,7 @@ func pick_at(screen: Vector2) -> Entity:
 		for a in c:
 			if is_instance_valid(a) and a.alive and a.ore != "":
 				var d: float = screen.distance_to(a.position + Vector2(0, -a.radius * 0.35))
-				if d < a.radius * 0.8 and d < best_d:
+				if d < a.radius * 0.9 and d < best_d:
 					best_d = d
 					best = a
 	return best
@@ -419,11 +413,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_LEFT:
 				_left_click()
 			MOUSE_BUTTON_RIGHT:
-				var e := pick_at(get_global_mouse_position())
-				if e:
-					player.target = e
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-		left_held = false
+				_right_click()
 	if event.is_action_pressed("cancel"):
 		if placing != "":
 			placing = ""
@@ -449,33 +439,52 @@ func _unhandled_input(event: InputEvent) -> void:
 				break
 
 
+## Clic izquierdo: fija objetivo (enemigo o depósito). En pantallas táctiles también mueve.
 func _left_click() -> void:
-	var mp := mouse_plane()
 	if placing != "":
-		_place(placing, mp)
+		_place(placing, mouse_plane())
 		return
 	var e := pick_at(get_global_mouse_position())
 	if e:
+		if e != player.target:
+			Sfx.play("ui_select", null, -10.0)
 		player.target = e
 		return
-	if get_global_mouse_position().distance_to(Iso.to_screen(gate_pos)) < 80.0:
-		if player.plane_pos.distance_to(gate_pos) < 200.0:
-			request_extract()
-			return
-	player.move_target = mp
+	if _near_gate_click():
+		return
+	if Controls.is_touch:
+		_move_to(mouse_plane())
+
+
+## Clic derecho: mover la nave (mantener pulsado para guiarla).
+func _right_click() -> void:
+	if _near_gate_click():
+		return
+	_move_to(mouse_plane())
+	right_held = true
+
+
+func _near_gate_click() -> bool:
+	if get_global_mouse_position().distance_to(Iso.to_screen(gate_pos)) < 80.0 and player.plane_pos.distance_to(gate_pos) < 200.0:
+		request_extract()
+		return true
+	return false
+
+
+func _move_to(p: Vector2) -> void:
+	player.move_target = p
 	player.has_move_target = true
-	left_held = true
+	fx_ring(p, 26.0, Color(0.4, 1.0, 0.8, 0.6))
 
 
 func _handle_held_input() -> void:
 	if demo:
 		return
-	player.firing = Input.is_action_pressed("fire") or (auto_fire and player.target_valid())
-	if left_held and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and placing == "":
+	if right_held and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		player.move_target = mouse_plane()
 		player.has_move_target = true
-	elif not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		left_held = false
+	else:
+		right_held = false
 
 
 func _interact() -> void:
@@ -601,7 +610,7 @@ func spawn_player_bolt(origin: Vector2, target: Entity, dmg: float, info: Dictio
 	fx_top.add_child(b)
 
 
-func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, size: float, color: Color) -> void:
+func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, size: float, color: Color, h: float = 16.0) -> void:
 	var b := Projectile.new()
 	b.sector = self
 	b.hostile = true
@@ -612,6 +621,7 @@ func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, s
 	b.size = size
 	b.color = color
 	b.life = 2.4
+	b.lift_h = h
 	b.position = Iso.to_screen(origin)
 	fx_top.add_child(b)
 
@@ -715,7 +725,7 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 	enemies.erase(e)
 	if player.target == e:
 		player.target = null
-	fx_explosion(e.plane_pos, e.radius * 1.6, e.def["accent"])
+	ship_explosion(e.plane_pos, e.radius * 1.6)
 	var counted := initial_enemies.has(e.get_instance_id())
 	if e.has_meta("nest"):
 		nests_alive -= 1
@@ -728,6 +738,14 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 	kills += 1
 	var v: Dictionary = GameData.VARIANTS[e.variant]
 	var rmult: float = float(v["reward"])
+	if not e.is_nest:
+		kills_by[e.id] = int(kills_by.get(e.id, 0)) + 1
+	var xp := GameData.enemy_xp(float(e.def["hp"]), level, rmult)
+	run_xp += xp
+	if GameState.add_xp(xp) > 0:
+		hud.toast("¡ASCENSO! %s — Nivel %d" % [GameState.rank_name(), GameState.level()], 4.0, UiTheme.WARN)
+		Sfx.play("objective")
+		Sfx.voice("rank_up", true)
 	var credits := GameData.level_reward(float(e.def["credits"]), level) * rmult
 	var piles := 1 + int(rmult)
 	for i in piles:
@@ -762,6 +780,7 @@ func _check_objective() -> void:
 		objective_done = true
 		hud.toast("OBJETIVO COMPLETADO — vuelve al portal para extraer", 5.0, UiTheme.GOOD)
 		Sfx.play("objective")
+		Sfx.voice("objective")
 
 
 func _objective_text() -> String:
@@ -840,6 +859,15 @@ func fx_spark(p: Vector2, color: Color) -> void:
 	_fx("spark", p, 10.0, color, 0.25)
 
 
+## Explosión universal de nave (misma animación y sonido para todas; escala con el tamaño).
+func ship_explosion(p: Vector2, size: float) -> void:
+	var ex := ShipExplosion.new()
+	ex.plane_pos = p
+	ex.size = size
+	fx_top.add_child(ex)
+	Sfx.play("ship_explode", p, clampf(-14.0 + size * 0.12, -12.0, 0.0), 0.08)
+
+
 func fx_explosion(p: Vector2, r: float, color: Color) -> void:
 	_fx("explosion", p, r, color, 0.6)
 
@@ -864,8 +892,9 @@ func request_extract() -> void:
 
 
 func _on_player_died() -> void:
-	hud.toast("NAVE DESTRUIDA", 3.0, UiTheme.BAD)
-	await get_tree().create_timer(1.8).timeout
+	# Sin avisos: la nave estalla, desaparece y se vuelve al inicio (se pierde el 90% del botín).
+	drone.visible = false
+	await get_tree().create_timer(2.6).timeout
 	_finish("death")
 
 
@@ -879,15 +908,16 @@ func _finish(outcome: String) -> void:
 	var final_loot := loot.duplicate()
 	if outcome == "death":
 		for k in final_loot.keys():
-			if k != "nexo":
-				final_loot[k] = int(final_loot[k] * (1.0 - GameData.DEATH_LOOT_LOSS))
+			final_loot[k] = int(final_loot[k] * (1.0 - GameData.DEATH_LOOT_LOSS))
 	var result := {
 		"outcome": outcome, "level": level, "loot": final_loot, "raw_loot": loot,
 		"ammo_used": ammo_used, "items_used": items_used, "kills": kills,
 		"objective_done": objective_done and outcome != "death", "time": elapsed,
+		"xp": run_xp, "kills_by": kills_by, "biome": biome_id,
 	}
-	hud.show_result(result)
-	await hud.result_closed
+	if outcome == "extract":
+		hud.show_result(result)
+		await hud.result_closed
 	finished.emit(result)
 
 
@@ -905,7 +935,6 @@ func _demo_autopilot(delta: float) -> void:
 		player.target = best
 	if player.target_valid():
 		var d := player.plane_pos.distance_to(player.target.plane_pos)
-		player.firing = d < GameData.LASER_RANGE
 		if demo_timer <= 0.0:
 			demo_timer = 0.8
 			# Si no hay amenaza cercana, recoge el botín más próximo para probar la recolección.

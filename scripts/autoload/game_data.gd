@@ -10,7 +10,8 @@ const SHIELD_FROM_HULL := 0.5         # escudo base = 50% del casco (el GDD no f
 const SHIELD_RECHARGE_DELAY := 4.0
 const SHIELD_RECHARGE_RATE := 0.06    # fracción del escudo máximo por segundo
 const CARGO_UNIT := 20                # 1 de "Carga" GDD = 20 unidades de material
-const DEATH_LOOT_LOSS := 0.5          # decisión provisional: al morir se pierde el 50% del botín
+const DEATH_LOOT_LOSS := 0.9          # al morir se pierde el 90% de lo recolectado en el sector (sin aviso)
+const VOLLEY_INTERVAL := 1.2          # la nave dispara una andanada con todos sus láseres cada 1.2 s
 
 const RARITY_NAMES := ["Común", "Común+", "Raro", "Épico", "Muy raro", "Legendario"]
 const RARITY_COLORS := [
@@ -298,6 +299,102 @@ const OBJECTIVES := {
 	"limpieza": {"name": "Limpieza", "desc": "Elimina el %d%% de la presencia hostil."},
 	"nidos": {"name": "Destruir nidos", "desc": "Destruye %d puntos de aparición."},
 }
+
+# --- Rangos y experiencia --------------------------------------------------------
+# XP total necesaria para alcanzar el nivel N (N >= 2) = 10 000 x 2^(N-1): 20K, 40K, 80K… nivel 21 máximo.
+const MAX_LEVEL := 21
+const RANKS := [
+	"Soldado Básico", "Soldado", "Soldado de Primera", "Cabo", "Cabo Primero", "Sargento",
+	"Sargento Primero", "Sargento Mayor", "Suboficial", "Alférez", "Subteniente", "Teniente",
+	"Teniente Primero", "Capitán", "Mayor", "Teniente Coronel", "Coronel", "General de Brigada",
+	"General de División", "Teniente General", "General de Ejército",
+]
+
+static func xp_for_level(lvl: int) -> int:
+	if lvl <= 1:
+		return 0
+	return 10000 * int(pow(2.0, lvl - 1))
+
+static func level_from_xp(xp: int) -> int:
+	var lvl := 1
+	while lvl < MAX_LEVEL and xp >= xp_for_level(lvl + 1):
+		lvl += 1
+	return lvl
+
+## XP que otorga un enemigo: proporcional a su vida base, nivel de sector y variante.
+static func enemy_xp(base_hp: float, level: int, reward_mult: float) -> int:
+	return int(round(base_hp / 8.0 * level_reward(1.0, level) * reward_mult))
+
+# --- Dron: láseres exclusivos (10.2) ---------------------------------------------------
+const DRONE_LASERS := {
+	"pet_pulse": {"name": "Pet-Pulse", "dmg": 0.55, "color": Color("d8ffd0"), "effect": "", "desc": "Disparo estable, bajo consumo.", "cost": {"credits": 3000}},
+	"pet_stinger": {"name": "Pet-Stinger", "dmg": 0.50, "color": Color("ffe86a"), "effect": "stinger", "desc": "Cada 5 impactos aplica un golpe 2x.", "cost": {"credits": 15000, "cobalto": 20}},
+	"pet_ion": {"name": "Pet-Ion", "dmg": 0.50, "color": Color("6aa8ff"), "effect": "", "desc": "+35% daño a escudos.", "cost": {"credits": 18000, "paladio": 4}},
+	"pet_arc": {"name": "Pet-Arc", "dmg": 0.45, "color": Color("8ad8ff"), "effect": "chain", "desc": "Puede saltar a un segundo enemigo.", "cost": {"credits": 30000, "iridio": 6}},
+	"pet_guard": {"name": "Pet-Guard", "dmg": 0.30, "color": Color("e8e8f0"), "effect": "guard", "desc": "Daño bajo; 5% de destruir proyectiles cercanos.", "cost": {"credits": 25000, "titanio": 30}},
+	"pet_marker": {"name": "Pet-Marker", "dmg": 0.35, "color": Color("ff6a6a"), "effect": "marker", "desc": "Marca al objetivo: la nave inflige +3% de daño 3 s.", "cost": {"credits": 28000, "xenocristal": 8}},
+}
+const DRONE_SLOTS := 2
+
+# --- Módulos (9) ----------------------------------------------------------------------
+const MODULE_FAMILIES := {
+	"verde": {"name": "Casco", "stat": "hull", "color": Color("5ad16a"), "subs": ["hull_regen", "repair_bonus", "collision_res"]},
+	"azul": {"name": "Escudo", "stat": "shield", "color": Color("3aa0ff"), "subs": ["recharge", "recharge_delay", "shield_break"]},
+	"rojo": {"name": "Daño", "stat": "dmg", "color": Color("ff4a4a"), "subs": ["crit", "pierce", "elite_dmg"]},
+	"amarillo": {"name": "Velocidad", "stat": "speed", "color": Color("ffd84a"), "subs": ["accel", "turn", "boost_cd"]},
+}
+const MODULE_RARITIES := ["comun", "raro", "epico", "reliquia", "exotico"]
+# Bandas del atributo principal (9.3), en %.
+const MODULE_BANDS := {
+	"hull": [[1, 14], [10, 28], [24, 45], [40, 60], [56, 70]],
+	"shield": [[1, 8], [6, 16], [14, 26], [24, 34], [32, 40]],
+	"dmg": [[1, 4], [3, 8], [7, 12], [11, 17], [16, 20]],
+	"speed": [[1, 3], [2, 6], [5, 9], [8, 12], [11, 15]],
+}
+const MODULE_LINES := [[1, 1], [1, 2], [2, 2], [2, 3], [3, 3]]   # líneas por rareza (incluye la principal)
+const MODULE_SUB_NAMES := {
+	"hull_regen": "Regeneración de casco", "repair_bonus": "Reparación recibida", "collision_res": "Resistencia a colisión",
+	"recharge": "Recarga de escudo", "recharge_delay": "Retraso de recarga", "shield_break": "Eficiencia al romperse",
+	"crit": "Probabilidad crítica", "pierce": "Penetración", "elite_dmg": "Daño a élites",
+	"accel": "Aceleración", "turn": "Giro", "boost_cd": "Enfriamiento de impulso",
+}
+# Cajas crafteables (14.2): pesos por rareza [común, raro, épico, reliquia, exótico].
+const MODULE_BOXES := {
+	"estandar": {"name": "Caja Estándar", "weights": [60.0, 28.0, 10.0, 1.8, 0.2], "recipe": {"credits": 8000, "polvo_cuantico": 3, "cristal_helix": 1}},
+	"afinada": {"name": "Caja Afinada", "weights": [35.0, 40.0, 20.0, 4.4, 0.6], "recipe": {"credits": 20000, "cristal_helix": 3, "xenocristal": 10}},
+	"reliquia": {"name": "Caja Reliquia", "weights": [0.0, 0.0, 80.0, 18.0, 2.0], "recipe": {"credits": 60000, "aetherium": 2, "cristal_helix": 4, "seals": 5}},
+	"anomala": {"name": "Caja Anómala", "weights": [20.0, 35.0, 30.0, 12.0, 3.0], "recipe": {"credits": 40000, "fragmento_vacio": 3, "materia_oscura": 2, "nexo": 50}},
+}
+const PITY_RELIC := 40    # Reliquia garantizada tras 40 cajas sin Reliquia/Exótico
+const PITY_EXOTIC := 100  # a partir de 100 sin Exótico, su probabilidad sube
+
+# --- Obstáculos por bioma (sprites en assets/sprites/obstacles/) ---------------------------
+const OBSTACLES_COMMON := ["rock_1", "rock_2", "rock_3", "rock_4", "junk_1", "junk_2", "junk_3", "wreck_1", "wreck_2"]
+const OBSTACLES_BIOME := {
+	"ferron": ["ferron_1", "ferron_2", "junk_1", "junk_3", "wreck_1"],
+	"vesper": ["vesper_1", "vesper_2", "vesper_1"],
+	"prismaticos": ["prismaticos_1", "prismaticos_2", "prismaticos_1"],
+	"vacio": ["vacio_1", "vacio_2", "vacio_1"],
+	"leviatan": ["leviatan_1", "leviatan_2", "leviatan_1"],
+}
+
+# --- Tienda: precio en créditos (y Nexo si la receta lo pide) --------------------------------
+const MAT_VALUE := [20, 45, 160, 650, 2600, 11000]   # valor en créditos por rareza de material
+
+static func shop_price(recipe: Dictionary, markup: float = 1.4) -> Dictionary:
+	var credits := float(recipe.get("credits", 0))
+	var price := {}
+	for k in recipe.keys():
+		if k == "credits":
+			continue
+		if k == "nexo" or k == "seals":
+			price[k] = int(ceil(recipe[k] * markup))
+			continue
+		var r: int = MATERIALS.get(k, {}).get("rarity", 0)
+		credits += MAT_VALUE[r] * float(recipe[k])
+	price["credits"] = int(round(credits * markup / 100.0)) * 100
+	return price
+
 
 
 # --- Fórmulas (12.2, 14.1, 23) -----------------------------------------------

@@ -5,7 +5,7 @@ extends Node2D
 ## Capas 2-3: estrellas a distintas profundidades.
 
 const BG_PARALLAX := 0.04
-const BG_SCALE := 1.6
+
 
 var sector: Sector
 var stars: Array = []
@@ -39,8 +39,14 @@ func _draw() -> void:
 	var cam := position
 	if tex:
 		# Región de la textura desplazada por la cámara: el fondo se mueve más lento que el mapa.
-		var region_size := span / BG_SCALE
-		var offset := cam * BG_PARALLAX / BG_SCALE
+		# Se muestra ~85% de la imagen a la vez (respetando la proporción de la pantalla) para que
+		# la nebulosa del bioma se aprecie completa; el parallax la desplaza muy despacio.
+		var ts := tex.get_size()
+		var aspect := span.x / span.y
+		var region_size := Vector2(ts.x * 0.85, ts.x * 0.85 / aspect)
+		if region_size.y > ts.y * 0.85:
+			region_size = Vector2(ts.y * 0.85 * aspect, ts.y * 0.85)
+		var offset := ts * 0.5 + cam * BG_PARALLAX * 0.25
 		draw_texture_rect_region(tex, rect, Rect2(offset - region_size * 0.5, region_size), Color(1, 1, 1, 0.9))
 	for s in stars:
 		var p: Vector2 = s["p"] * span - cam * s["d"]

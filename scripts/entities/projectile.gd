@@ -16,6 +16,7 @@ var life := 1.2
 var pierce_left := 0
 var hit_list: Array = []
 var trail := Vector2.ZERO
+var lift_h := 16.0   # altura visual (igual a la del que dispara)
 
 
 func _process(delta: float) -> void:
@@ -65,7 +66,7 @@ func _hit_enemy(e: Entity) -> void:
 
 func _draw() -> void:
 	var tail := Iso.to_screen(-dir * (14.0 if hostile else 36.0))
-	var lift := Vector2(0, -16)
+	var lift := Vector2(0, -lift_h)
 	if hostile:
 		draw_circle(lift, size * 1.6, Color(color, 0.25))
 		draw_circle(lift, size, color.lightened(0.3))

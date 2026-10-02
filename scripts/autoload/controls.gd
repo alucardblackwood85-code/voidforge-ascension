@@ -1,5 +1,6 @@
 extends Node
-## Registro de acciones de entrada (4.2). Se definen en código para poder reasignarlas en ajustes.
+## Registro de acciones de entrada. Esquema mouse-first: clic izquierdo selecciona objetivo, clic derecho
+## mueve la nave y el ataque es automático. Teclado: barra rápida 1-0, Q, Espacio, E, Tab, F y Esc.
 
 const HOTBAR_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0]
 
@@ -14,13 +15,8 @@ func _ready() -> void:
 	_key("interact", KEY_F)
 	_key("tactical_map", KEY_TAB)
 	_key("cancel", KEY_ESCAPE)
-	_key("move_up", KEY_W)
-	_key("move_down", KEY_S)
-	_key("move_left", KEY_A)
-	_key("move_right", KEY_D)
 	for i in HOTBAR_KEYS.size():
 		_key("hotbar_%d" % i, HOTBAR_KEYS[i])
-	_mouse("fire", MOUSE_BUTTON_RIGHT)
 
 
 func _key(action: String, keycode: Key) -> void:

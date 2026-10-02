@@ -1,5 +1,5 @@
 extends Node
-## Raíz del juego: alterna entre Hangar y Sector.
+## Raíz del juego: alterna entre la pantalla de INICIO (StartMenu) y el Sector.
 ## Argumentos de depuración (tras "--"): --sector  entra directo a un sector con autopiloto de demo.
 
 var current: Node = null
@@ -22,7 +22,7 @@ func _ready() -> void:
 	elif autotest:
 		goto_sector({"level": 1, "seed": 12345, "demo": true, "biome": demo_biome})
 	else:
-		goto_hangar()
+		goto_menu()
 
 
 func _swap(node: Node) -> void:
@@ -32,8 +32,8 @@ func _swap(node: Node) -> void:
 	add_child(node)
 
 
-func goto_hangar() -> void:
-	var h := Hangar.new()
+func goto_menu() -> void:
+	var h := StartMenu.new()
 	h.launch_requested.connect(goto_sector)
 	_swap(h)
 
@@ -47,4 +47,4 @@ func goto_sector(params: Dictionary) -> void:
 
 func _on_sector_finished(result: Dictionary) -> void:
 	GameState.apply_run_result(result)
-	goto_hangar()
+	goto_menu()

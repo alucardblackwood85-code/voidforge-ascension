@@ -56,3 +56,31 @@ Objetivo del GDD §25 "Prioridad de prototipo": nave + láseres + enemigos + map
 **UI**
 - Iconos de munición Mk-I…VI (prueba) en barra rápida y fabricación.
 - Modos de depuración: `-- --sector=<bioma>` y `-- --showcase=<bioma>`.
+
+## v0.3.0 — Controles, INICIO, economía, rangos y audio completo (2026-10-02)
+**Controles (mouse + 1-0, sin WASD)**
+- Clic izquierdo: fijar objetivo. Clic derecho: mover (mantener para guiar). Ataque automático.
+- La nave dispara una andanada con todos sus láseres cada 1.2 s; la cadencia del GDD de cada láser se
+  convierte en daño por andanada para conservar el balance. Con objetivo, la proa siempre le apunta.
+**Combate**
+- Enemigos: todos encaran al jugador al disparar, la bala sale del frente y a su altura visual (antes
+  algunos arquetipos disparaban mirando hacia donde se movían).
+- Explosión universal de nave (animación + sonido) para jugador y alienígenas; la nave desaparece.
+- Voz robótica femenina (OpenAI TTS + filtro): casco crítico, escudos agotados, alerta, objetivo, ascenso.
+- Muerte: se pierde el 90% de todo lo recolectado en el sector, sin ventana ni aviso; vuelta al INICIO.
+  La experiencia de las bajas se conserva.
+**Mapa**
+- Sectores rectangulares (4-8 x 3-6 chunks de 2000 u). Obstáculos con sprites: rocas, chatarra, restos,
+  depósitos minerales y elementos propios de cada bioma.
+**Audio**
+- Banda sonora procedural en bucle por bioma + menú (`scripts/tools/gen_music.gd`).
+- Buses y deslizadores: General, Música, Efectos, Láseres y Voz (Ajustes y menú de pausa).
+**INICIO (sustituye al hangar)**
+- Hangar (vista previa animada + estadísticas comparadas + confirmar), Equipamiento con arrastrar y soltar
+  (láseres, generadores, módulos, pet y barra rápida), Tienda por subventanas, Crafteo con inventario de
+  materiales, cajas de módulos con probabilidades y pity, mejoras 1-16, Estadísticas, Códex, Ajustes y JUGAR.
+- Tienda = créditos/Nexo (precio derivado de la receta); Crafteo = materiales. Mk-V/VI y cajas sólo se fabrican.
+**Progresión**
+- XP por bajas (proporcional a la vida base, nivel y variante). XP total para nivel N = 10 000 x 2^(N-1),
+  máximo nivel 21. 21 rangos militares con insignias dibujadas por código. Bajas por tipo de enemigo.
+- Módulos (4 familias, 5 rarezas, líneas secundarias) aplicados a la nave; un módulo por color.

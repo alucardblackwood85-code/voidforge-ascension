@@ -12,7 +12,7 @@ config_version=5
 
 config/name="VOIDFORGE: ASCENSION"
 config/description="Shooter espacial isométrico 2D con progresión persistente."
-config/version="0.1.0"
+config/version="0.3.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -23,6 +23,7 @@ GameData="*res://scripts/autoload/game_data.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 Controls="*res://scripts/autoload/controls.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
+Music="*res://scripts/autoload/music.gd"
 
 [display]
 
