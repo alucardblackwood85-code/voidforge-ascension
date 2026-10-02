@@ -202,6 +202,12 @@ func _pylon(col: Color, pulse: float) -> void:
 
 
 func _wreck(col: Color) -> void:
+	# Satélite abandonado (sprite prerrenderizado); el dibujo vectorial queda de reserva.
+	var tex := SpriteLib.get_tex("obstacles", "junk_2")
+	if tex:
+		var s := radius * 2.8
+		draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.75, s, s), false, Color.WHITE.lerp(col, 0.25) if col.v > 0.4 else Color(0.45, 0.45, 0.5))
+		return
 	var rot := Iso.MATRIX
 	var pts := PackedVector2Array()
 	for p in [Vector2(-50, -10), Vector2(-20, -28), Vector2(30, -22), Vector2(55, 4), Vector2(18, 26), Vector2(-34, 20)]:
