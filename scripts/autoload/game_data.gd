@@ -342,9 +342,105 @@ static func level_from_xp(xp: int) -> int:
 		lvl += 1
 	return lvl
 
-## XP que otorga un enemigo: proporcional a su vida base, nivel de sector y variante.
+## M2: XP por baja = vida base / 8, escalada como la vida enemiga del nivel (x5,8 en el 40) y por la variante.
 static func enemy_xp(base_hp: float, level: int, reward_mult: float) -> int:
-	return int(round(base_hp / 8.0 * level_reward(1.0, level) * reward_mult))
+	return int(round(base_hp / 8.0 * level_hp(1.0, level) / level_hp(1.0, 1) * reward_mult))
+
+
+## XP de referencia de una baja media del nivel (para objetivos y primeras limpiezas).
+static func level_kill_xp(level: int) -> int:
+	return enemy_xp(2000.0, level, 1.0)
+
+
+# --- M1: economía ------------------------------------------------------------------------
+const CREDIT_MULT := 0.15              # créditos por baja (antes x1: la flota se compraba en ~3 h; objetivo EH ~150 h)
+## Multiplicador de precio de nave por clase (receta completa: créditos y materiales).
+const SHIP_TIER_MULT := {"caza": 1.0, "tanque": 2.0, "carguera": 2.0, "crucero": 4.0, "batalla": 8.0}
+const SPECIAL_SHIP_MULT := 10.0
+const OBJECTIVE_XP_KILLS := 10         # M2: completar el objetivo = 10 bajas medias del nivel
+const FIRST_CLEAR_XP_KILLS := 50       # M2: primera limpieza = 50 bajas medias
+
+static func ship_price_mult(id: String) -> float:
+	var s: Dictionary = SHIPS[id]
+	if s.get("special", false):
+		return SPECIAL_SHIP_MULT
+	return float(SHIP_TIER_MULT.get(s["class"], 1.0))
+
+
+# --- M2: nivel del pet ------------------------------------------------------------------------
+## El pet recibe el 25% de la XP del jugador; 12 niveles cortos (1→12 ≈ 10 h de juego).
+const PET_MAX_LEVEL := 12
+const PET_XP_SHARE := 0.25
+const PET_XP_BASE := 6700.0
+const PET_XP_GROWTH := 1.35
+const PET_DMG_PER_LEVEL := 0.08        # +8% de daño por nivel del pet
+const PET_RATE_PER_LEVEL := 0.03       # -3% de intervalo de disparo por nivel
+const PET_THIRD_SLOT_LEVEL := 8        # tercer slot de láser del pet
+
+static func pet_xp_for_level(lvl: int) -> int:
+	if lvl <= 1:
+		return 0
+	return int(PET_XP_BASE * (pow(PET_XP_GROWTH, lvl - 1) - 1.0) / (PET_XP_GROWTH - 1.0))
+
+static func pet_level_from_xp(xp: int) -> int:
+	var lvl := 1
+	while lvl < PET_MAX_LEVEL and xp >= pet_xp_for_level(lvl + 1):
+		lvl += 1
+	return lvl
+
+
+# --- M3: recompensas por rango (se entregan al ascender) ----------------------------------------
+## kind: nexo | credits | item | ammo | module (rareza) | perma (bonificación permanente) | ship | unlock
+const RANK_REWARDS := {
+	2: [{"kind": "nexo", "amount": 25}, {"kind": "item", "id": "repair", "amount": 5}],
+	3: [{"kind": "module", "rarity": 1}],
+	4: [{"kind": "nexo", "amount": 50}, {"kind": "ammo", "id": "mk2", "amount": 500}],
+	5: [{"kind": "unlock", "id": "modules"}, {"kind": "module", "rarity": 2}],
+	6: [{"kind": "perma", "stat": "dmg", "amount": 0.01}],
+	7: [{"kind": "ship", "id": "raptor_v2"}],
+	8: [{"kind": "perma", "stat": "hull", "amount": 0.01}, {"kind": "ammo", "id": "mk3", "amount": 500}],
+	9: [{"kind": "module", "rarity": 3}],
+	10: [{"kind": "nexo", "amount": 150}, {"kind": "credits", "amount": 250000}],
+	11: [{"kind": "perma", "stat": "dmg", "amount": 0.01}],
+	12: [{"kind": "ship", "id": "vanguard_m"}],
+	13: [{"kind": "module", "rarity": 3}, {"kind": "ammo", "id": "mk4", "amount": 500}],
+	14: [{"kind": "perma", "stat": "shield", "amount": 0.02}],
+	15: [{"kind": "nexo", "amount": 300}],
+	16: [{"kind": "perma", "stat": "dmg", "amount": 0.01}],
+	17: [{"kind": "module", "rarity": 4}],
+	18: [{"kind": "ship", "id": "seraph_prime"}],
+	19: [{"kind": "perma", "stat": "hull", "amount": 0.02}],
+	20: [{"kind": "nexo", "amount": 500}, {"kind": "credits", "amount": 5000000}],
+	21: [{"kind": "ship", "id": "event_horizon"}, {"kind": "perma", "stat": "dmg", "amount": 0.02}],
+}
+
+static func reward_text(r: Dictionary) -> String:
+	match r["kind"]:
+		"nexo":
+			return "%d Cristales Nexo" % r["amount"]
+		"credits":
+			return "%s créditos" % format_num(r["amount"])
+		"item":
+			return "%d x %s" % [r["amount"], ITEMS[r["id"]]["name"]]
+		"ammo":
+			return "%d x %s" % [r["amount"], AMMO[r["id"]]["name"]]
+		"module":
+			return "Módulo %s" % ITEM_RARITY_NAMES[MODULE_RARITIES[int(r["rarity"])]]
+		"perma":
+			var names := {"dmg": "daño", "hull": "casco", "shield": "escudo"}
+			return "+%d%% de %s permanente" % [int(round(float(r["amount"]) * 100.0)), names.get(r["stat"], r["stat"])]
+		"ship":
+			return "Nave %s" % SHIPS[r["id"]]["name"]
+		"unlock":
+			return "Desbloquea los módulos"
+	return "?"
+
+
+# --- M12: seguro de carga -------------------------------------------------------------------
+const INSURED_KEEP := 0.5              # con seguro, al morir se conserva el 50% del botín
+
+static func insurance_cost(level: int) -> int:
+	return int(round(1500.0 * level_reward(1.0, level) * (1.0 + level * 0.15) / 100.0)) * 100
 
 # --- Dron: láseres exclusivos (10.2) ---------------------------------------------------
 const DRONE_LASERS := {
@@ -427,8 +523,9 @@ static func nexo_price(recipe: Dictionary) -> Dictionary:
 static func level_hp(base: float, level: int) -> float:
 	return base * pow(1.0 + 0.085 * level, 1.18)
 
+## M7: el daño enemigo crece algo más despacio (0,045 en vez de 0,060) para que el equipo pueda seguirle el paso.
 static func level_dmg(base: float, level: int) -> float:
-	return base * pow(1.0 + 0.060 * level, 1.10)
+	return base * pow(1.0 + 0.045 * level, 1.10)
 
 static func level_reward(base: float, level: int) -> float:
 	return base * (1.0 + 0.045 * level)

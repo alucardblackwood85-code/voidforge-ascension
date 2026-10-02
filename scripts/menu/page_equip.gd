@@ -153,6 +153,21 @@ func _pet_view() -> void:
 	hh.add_child(ShipPreview.make(SpriteLib.get_tex("drone", "drone"), Vector2(200, 150)))
 	var iv := W.vbox(6)
 	iv.add_child(UiTheme.label("Dron acompañante", 24, UiTheme.ACCENT))
+	var plv := GameState.pet_level()
+	var pxp := int(GameState.data["pet"]["xp"])
+	iv.add_child(UiTheme.label("Nivel %d / %d  ·  +%d%% daño  ·  +%d%% cadencia" % [plv, GameData.PET_MAX_LEVEL, int(GameData.PET_DMG_PER_LEVEL * (plv - 1) * 100), int(GameData.PET_RATE_PER_LEVEL * (plv - 1) * 100)], 15, Color("5affc8")))
+	var pbar := ProgressBar.new()
+	pbar.show_percentage = false
+	pbar.custom_minimum_size = Vector2(320, 10)
+	pbar.add_theme_stylebox_override("fill", UiTheme.box(Color("5affc8"), Color("5affc8"), 3, 0, 0))
+	if plv < GameData.PET_MAX_LEVEL:
+		pbar.min_value = GameData.pet_xp_for_level(plv)
+		pbar.max_value = GameData.pet_xp_for_level(plv + 1)
+		pbar.value = pxp
+	else:
+		pbar.value = pbar.max_value
+	iv.add_child(pbar)
+	iv.add_child(UiTheme.label("El pet recibe el 25%% de tu experiencia (%s / %s XP de pet)" % [GameData.format_num(pxp), GameData.format_num(GameData.pet_xp_for_level(mini(plv + 1, GameData.PET_MAX_LEVEL)))], 12, UiTheme.MUTED))
 	iv.add_child(UiTheme.label("Sigue a tu nave y ataca automáticamente a tu objetivo. Habilidad: [%s]" % Controls.key_label("drone"), 14, UiTheme.MUTED))
 	var roles := W.hbox(8)
 	var cur: String = GameState.data["drone"]["role"]
@@ -168,10 +183,19 @@ func _pet_view() -> void:
 	var sec := W.card(Color(0.04, 0.06, 0.1, 0.9))
 	var sv := W.vbox(6)
 	sec.add_child(sv)
-	sv.add_child(UiTheme.label("LÁSERES DEL PET  (%d slots)" % GameData.DRONE_SLOTS, 16, UiTheme.ACCENT))
+	sv.add_child(UiTheme.label("LÁSERES DEL PET  (3.er slot en el nivel %d)" % GameData.PET_THIRD_SLOT_LEVEL, 16, UiTheme.ACCENT))
 	var slots := W.hbox(8)
 	var dl: Array = GameState.data["drone"]["lasers"]
 	for i in dl.size():
+		if i >= 2 and GameState.pet_level() < GameData.PET_THIRD_SLOT_LEVEL:
+			var lock := W.card(Color(0.03, 0.04, 0.07, 0.9), UiTheme.BORDER, 6)
+			lock.custom_minimum_size = Vector2(96, 112)
+			var ll := UiTheme.label("Bloqueado
+Pet nv %d" % GameData.PET_THIRD_SLOT_LEVEL, 12, UiTheme.MUTED)
+			ll.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lock.add_child(ll)
+			slots.add_child(lock)
+			continue
 		var uid := int(dl[i])
 		var it := GameState.find_item("drone_lasers", uid) if uid >= 0 else {}
 		var slot := DropSlot.make("drone_lasers", i, uid, W.item_info("drone_lasers", it) if not it.is_empty() else {}, "Láser %d" % (i + 1))

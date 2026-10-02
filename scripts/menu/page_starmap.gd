@@ -43,8 +43,35 @@ func _ready() -> void:
 	lv_row.add_child(spin)
 	lv_row.add_child(UiTheme.label("(máximo desbloqueado: %d)" % GameState.data["sector_max"], 14, UiTheme.MUTED))
 	lv_row.add_child(W.spacer())
-	var launch := W.button("   LANZAR INCURSIÓN   ", func():
-		menu.launch({"level": int(spin.value), "seed": randi(), "biome": sel}), true, 320)
+	# M12: seguro de carga opcional (al morir conservas el 50% del botín en lugar del 10%).
+	var insure := CheckBox.new()
+	insure.focus_mode = Control.FOCUS_NONE
+	var update_insure := func():
+		insure.text = "Seguro de carga: %s créditos (al morir conservas el 50%%)" % GameData.format_num(GameData.insurance_cost(int(spin.value)))
+	update_insure.call()
+	spin.value_changed.connect(func(_v): update_insure.call())
+	var do_launch := func():
+		var lvl := int(spin.value)
+		var insured := insure.button_pressed
+		if insured and not GameState.pay({"credits": GameData.insurance_cost(lvl)}):
+			Sfx.play("ui_error")
+			return
+		menu.launch({"level": lvl, "seed": randi(), "biome": sel, "insured": insured})
+	var on_launch := func():
+		# M7: aviso fuerte si tu poder queda muy por debajo del recomendado.
+		var ratio := power_index() / recommended_power(int(spin.value))
+		if ratio < 0.7:
+			var dlg := ConfirmationDialog.new()
+			dlg.title = "Sector peligroso"
+			dlg.dialog_text = "Tu poder es el %d%% del recomendado para el nivel %d.\nLos enemigos pueden destruirte en segundos. ¿Lanzar igualmente?" % [int(ratio * 100), int(spin.value)]
+			dlg.ok_button_text = "Lanzar"
+			dlg.confirmed.connect(do_launch)
+			menu.add_child(dlg)
+			dlg.popup_centered()
+		else:
+			do_launch.call()
+	var launch := W.button("   LANZAR INCURSIÓN   ", on_launch, true, 320)
+	lv_row.add_child(insure)
 	launch.custom_minimum_size.y = 60
 	launch.add_theme_font_size_override("font_size", 24)
 	if GameState.equipped_lasers().is_empty():

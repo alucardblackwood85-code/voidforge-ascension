@@ -157,6 +157,21 @@ func _count_owned(list_key: String, id: String) -> String:
 
 
 func _buy(kind: String, id: String, qty: int, currency: String) -> void:
+	# M14 / GDD 17.2: confirmar gastos de Cristales Nexo por encima de 50.
+	var cost := int(GameState.price_of(kind, id, "nexo")["nexo"]) * qty
+	if currency == "nexo" and cost > 50:
+		var dlg := ConfirmationDialog.new()
+		dlg.title = "Confirmar compra"
+		dlg.dialog_text = "¿Gastar %d Cristales Nexo?" % cost
+		dlg.ok_button_text = "Comprar"
+		dlg.confirmed.connect(func(): _do_buy(kind, id, qty, currency))
+		menu.add_child(dlg)
+		dlg.popup_centered()
+		return
+	_do_buy(kind, id, qty, currency)
+
+
+func _do_buy(kind: String, id: String, qty: int, currency: String) -> void:
 	if GameState.buy(kind, id, qty, currency):
 		Sfx.play("craft")
 	else:

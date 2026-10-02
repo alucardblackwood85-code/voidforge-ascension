@@ -57,6 +57,12 @@ func _ready() -> void:
 		l.custom_minimum_size.x = 260
 		row.add_child(l)
 		row.add_child(UiTheme.label(GameData.format_num(GameData.xp_for_level(i)) + " XP", 13, UiTheme.GOOD if reached else UiTheme.MUTED))
+		var rw: Array = []
+		for r in GameData.RANK_REWARDS.get(i, []):
+			rw.append(GameData.reward_text(r))
+		if not rw.is_empty():
+			var rl := UiTheme.label("  " + ", ".join(rw), 12, UiTheme.GOOD if reached else UiTheme.MUTED)
+			row.add_child(rl)
 		ladder.add_child(row)
 	var lc := W.card(Color(0.04, 0.06, 0.1, 0.9))
 	lc.size_flags_vertical = Control.SIZE_EXPAND_FILL

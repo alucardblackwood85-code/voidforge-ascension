@@ -41,7 +41,12 @@ func new_profile() -> Dictionary:
 		"gens": [],
 		"modules": [],
 		"drone_lasers": [],
-		"drone": {"role": "asalto", "lasers": [-1, -1]},
+		"drone": {"role": "asalto", "lasers": [-1, -1, -1]},
+		"pet": {"xp": 0},
+		"perma": {"dmg": 0.0, "hull": 0.0, "shield": 0.0},
+		"rank_claimed": 1,
+		"rank_log": [],
+		"unlocks": {"modules": false, "pet": false},
 		"loadouts": {},
 		"sector_max": 1,
 		"sector_cleared": [],
@@ -102,6 +107,7 @@ func load_game() -> void:
 	data = parsed
 	_migrate()
 	_fix_json_types()
+	claim_rank_rewards()
 	save_game()
 
 
@@ -109,6 +115,8 @@ func load_game() -> void:
 func _migrate() -> void:
 	var defaults := {
 		"xp": 0, "modules": [], "drone_lasers": [], "kills_by": {},
+		"pet": {"xp": 0}, "perma": {"dmg": 0.0, "hull": 0.0, "shield": 0.0}, "rank_claimed": 1, "rank_log": [],
+		"unlocks": {"modules": int(data.get("xp", 0)) >= GameData.xp_for_level(5), "pet": int(data.get("stats", {}).get("runs", 0)) >= 2},
 		"pity": {"since_relic": 0, "since_exotic": 0, "opened": 0},
 		"drone": {"role": data.get("drone_role", "asalto"), "lasers": [-1, -1]},
 	}
@@ -121,6 +129,8 @@ func _migrate() -> void:
 	if not data["settings"].has("audio"):
 		data["settings"]["audio"] = default_audio()
 	data["settings"].erase("wasd")
+	while data["drone"]["lasers"].size() < 3:
+		data["drone"]["lasers"].append(-1)
 	if data["drone_lasers"].is_empty():
 		var dl := add_drone_laser("pet_pulse")
 		data["drone"]["lasers"][0] = dl["uid"]
@@ -136,6 +146,8 @@ func _migrate() -> void:
 
 ## JSON convierte enteros en float; los normalizamos.
 func _fix_json_types() -> void:
+	data["rank_claimed"] = int(data.get("rank_claimed", 1))
+	data["pet"]["xp"] = int(data["pet"].get("xp", 0))
 	for k in ["next_uid", "credits", "nexo", "seals", "sector_max", "xp"]:
 		data[k] = int(data[k])
 	for dict_key in ["materials", "ammo", "items", "stats", "kills_by", "pity"]:
@@ -217,14 +229,56 @@ func rank_name(lvl: int = -1) -> String:
 	return GameData.RANKS[clampi(lvl, 1, GameData.MAX_LEVEL) - 1]
 
 
-## Suma experiencia y devuelve cuántos niveles se ganaron.
+## Suma experiencia (y el 25% al pet) y entrega las recompensas de cada rango alcanzado (M3).
+## Devuelve cuántos niveles se ganaron.
 func add_xp(amount: int) -> int:
 	var before := level()
 	data["xp"] = int(data["xp"]) + amount
+	data["pet"]["xp"] = int(data["pet"]["xp"]) + int(amount * GameData.PET_XP_SHARE)
 	var after := level()
+	claim_rank_rewards()
 	if after > before:
 		leveled_up.emit(after)
 	return after - before
+
+
+func pet_level() -> int:
+	return GameData.pet_level_from_xp(int(data["pet"]["xp"]))
+
+
+## Entrega las recompensas pendientes hasta el rango actual y las anota en rank_log para mostrarlas.
+func claim_rank_rewards() -> void:
+	var lvl := level()
+	while int(data["rank_claimed"]) < lvl:
+		var r_lvl := int(data["rank_claimed"]) + 1
+		data["rank_claimed"] = r_lvl
+		var texts: Array = []
+		for r in GameData.RANK_REWARDS.get(r_lvl, []):
+			texts.append(_grant(r))
+		data["rank_log"].append({"level": r_lvl, "rewards": texts})
+
+
+func _grant(r: Dictionary) -> String:
+	match r["kind"]:
+		"nexo", "credits":
+			add_amount(r["kind"], int(r["amount"]))
+		"item":
+			data["items"][r["id"]] = int(data["items"].get(r["id"], 0)) + int(r["amount"])
+		"ammo":
+			data["ammo"][r["id"]] = int(data["ammo"].get(r["id"], 0)) + int(r["amount"])
+		"module":
+			data["modules"].append(roll_module(int(r["rarity"])))
+		"perma":
+			data["perma"][r["stat"]] = float(data["perma"].get(r["stat"], 0.0)) + float(r["amount"])
+		"ship":
+			if data["ships"].has(r["id"]):
+				add_amount("nexo", 200)
+				return GameData.reward_text(r) + " (ya la tenías: +200 Nexo)"
+			data["ships"].append(r["id"])
+			ensure_loadout(r["id"])
+		"unlock":
+			data["unlocks"][r["id"]] = true
+	return GameData.reward_text(r)
 
 
 # --- Inventario de componentes ---------------------------------------------------
@@ -366,7 +420,13 @@ func recipe_of(kind: String, id: String) -> Dictionary:
 func _raw_recipe(kind: String, id: String) -> Dictionary:
 	match kind:
 		"ship":
-			return GameData.SHIPS[id]["cost"]
+			# M1: precio escalado por clase (caza x1 … batalla x8, especiales x10).
+			var m := GameData.ship_price_mult(id)
+			var c := {}
+			for k in GameData.SHIPS[id]["cost"].keys():
+				var v = GameData.SHIPS[id]["cost"][k]
+				c[k] = int(round(float(v) * (1.0 if k == "nexo" else m)))
+			return c
 		"laser":
 			return GameData.LASERS[id]["cost"]
 		"gen":
@@ -543,6 +603,11 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 				_:
 					if bonus.has(key):
 						bonus[key] += v
+	# M3: bonificaciones permanentes de rango.
+	var perma: Dictionary = data.get("perma", {})
+	bonus["hull"] += float(perma.get("hull", 0.0))
+	bonus["shield"] += float(perma.get("shield", 0.0))
+	bonus["dmg"] += float(perma.get("dmg", 0.0))
 	var hull_base := float(ship["hull"])
 	var shield_base := hull_base * GameData.SHIELD_FROM_HULL
 	var speed_base := float(ship["speed"])
@@ -582,8 +647,11 @@ func equipped_lasers(ship_id: String = "") -> Array:
 
 func equipped_drone_lasers() -> Array:
 	var out: Array = []
-	for uid in data["drone"]["lasers"]:
-		if int(uid) < 0:
+	var slots: Array = data["drone"]["lasers"]
+	for i in slots.size():
+		var uid := int(slots[i])
+		# El tercer slot del pet se abre en el nivel PET_THIRD_SLOT_LEVEL.
+		if uid < 0 or (i >= 2 and pet_level() < GameData.PET_THIRD_SLOT_LEVEL):
 			continue
 		var it := find_item("drone_lasers", int(uid))
 		if not it.is_empty():
@@ -632,6 +700,7 @@ func apply_run_result(result: Dictionary) -> void:
 			var first_nexo := 5 + lvl / 2
 			add_amount("nexo", first_nexo)
 			result["first_clear_nexo"] = first_nexo
+			add_xp(GameData.level_kill_xp(lvl) * GameData.FIRST_CLEAR_XP_KILLS)
 		data["sector_max"] = maxi(int(data["sector_max"]), lvl + 1)
 	# La experiencia ya se fue sumando durante la incursión (ascensos en tiempo real).
 	last_result = result

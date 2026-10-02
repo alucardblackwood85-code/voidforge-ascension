@@ -80,6 +80,7 @@ var boxes: Array = []                 # cajas de botín activas
 var collect_target: LootBox = null     # caja hacia la que va la nave para recogerla
 var hover_box: LootBox = null
 var loot_version := 0                  # cambia cuando varía la bodega (refresca el inventario)
+var xp_mult := 1.0                       # multiplicador de XP (eventos, Ascensión)
 var shield_buff := {"pct": 0.0, "time": 0.0}
 var laser_buff := {"pct": 0.0, "charges": 0}
 var zoom_level := 1.15
@@ -795,14 +796,9 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 	var rmult: float = float(v["reward"])
 	if not e.is_nest:
 		kills_by[e.id] = int(kills_by.get(e.id, 0)) + 1
-	var xp := GameData.enemy_xp(float(e.def["hp"]), level, rmult)
-	run_xp += xp
-	if GameState.add_xp(xp) > 0:
-		hud.toast("¡ASCENSO! %s — Nivel %d" % [GameState.rank_name(), GameState.level()], 4.0, UiTheme.WARN)
-		Sfx.play("objective")
-		Sfx.voice("rank_up", true)
+	_award_xp(GameData.enemy_xp(float(e.def["hp"]), level, rmult))
 	# Créditos y Nexo se acreditan al instante; los materiales quedan en una caja de botín.
-	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult)
+	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult * GameData.CREDIT_MULT)
 	_gain("credits", credits)
 	var nexo_chance: float = float(e.def["nexo"]) * rmult
 	if e.variant != "base":
@@ -837,6 +833,7 @@ func _check_objective() -> void:
 	if done:
 		objective_done = true
 		hud.toast("OBJETIVO COMPLETADO — vuelve al portal para extraer", 5.0, UiTheme.GOOD)
+		_award_xp(GameData.level_kill_xp(level) * GameData.OBJECTIVE_XP_KILLS)
 		Sfx.play("objective")
 		Sfx.voice("objective")
 
@@ -1076,8 +1073,10 @@ func _finish(outcome: String) -> void:
 		Sfx.play("warp")
 	var final_loot := loot.duplicate()
 	if outcome == "death":
+		# M12: con seguro de carga se conserva el 50%; sin él, sólo el 10%.
+		var keep := GameData.INSURED_KEEP if params.get("insured", false) else 1.0 - GameData.DEATH_LOOT_LOSS
 		for k in final_loot.keys():
-			final_loot[k] = int(final_loot[k] * (1.0 - GameData.DEATH_LOOT_LOSS))
+			final_loot[k] = int(final_loot[k] * keep)
 	var result := {
 		"outcome": outcome, "level": level, "loot": final_loot, "raw_loot": loot,
 		"ammo_used": ammo_used, "items_used": items_used, "kills": kills,
@@ -1230,3 +1229,20 @@ func _bot_tick(_delta: float) -> void:
 			stat_refined += 20
 	if drone.ability_cd <= 0.0 and player.target_valid():
 		drone.use_ability()
+
+
+## Suma XP (jugador y pet) y avisa de ascensos con sus recompensas (M2, M3).
+func _award_xp(xp: int) -> void:
+	xp = int(xp * xp_mult)
+	run_xp += xp
+	var pet_before := GameState.pet_level()
+	if GameState.add_xp(xp) > 0:
+		var log: Array = GameState.data["rank_log"]
+		var last: Dictionary = log.back() if not log.is_empty() else {}
+		hud.toast("¡ASCENSO! %s — Nivel %d" % [GameState.rank_name(), GameState.level()], 4.0, UiTheme.WARN)
+		if not last.is_empty():
+			hud.toast("Recompensa: " + ", ".join(last["rewards"]), 5.0, UiTheme.GOOD)
+		Sfx.play("objective")
+		Sfx.voice("rank_up", true)
+	if GameState.pet_level() > pet_before:
+		hud.toast("Tu pet sube al nivel %d" % GameState.pet_level(), 3.0, Color("5affc8"))

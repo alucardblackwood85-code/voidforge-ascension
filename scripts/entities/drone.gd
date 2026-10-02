@@ -23,11 +23,13 @@ var repick := 0.0
 var mode_time := 0.0
 var fetch_box: LootBox = null
 var attack_len := 5.0
+var pet_lvl := 1
 
 
 func setup(p_sector: Sector, p_role: String) -> void:
 	sector = p_sector
 	role = p_role
+	pet_lvl = GameState.pet_level()
 	radius = 12.0
 	height = 34.0
 	plane_pos = sector.player.plane_pos + Vector2(-40, 0)
@@ -114,7 +116,7 @@ func _process(delta: float) -> void:
 	if role == "asalto" and not lasers.is_empty():
 		fire_timer -= delta * (3.0 if burst > 0.0 else 1.0)
 		if fire_timer <= 0.0 and p.firing and p.target_valid() and plane_pos.distance_to(p.target.plane_pos) < GameData.LASER_RANGE:
-			fire_timer = FIRE_INTERVAL
+			fire_timer = FIRE_INTERVAL * (1.0 - GameData.PET_RATE_PER_LEVEL * (pet_lvl - 1))
 			_fire(p)
 	sync_screen()
 	queue_redraw()
@@ -123,7 +125,7 @@ func _process(delta: float) -> void:
 func _fire(p: PlayerShip) -> void:
 	for l in lasers:
 		var def: Dictionary = l["def"]
-		var dmg: float = GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * sector.active_ammo_mult() * 0.5 * FIRE_INTERVAL
+		var dmg: float = GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * sector.active_ammo_mult() * 0.5 * FIRE_INTERVAL * (1.0 + GameData.PET_DMG_PER_LEVEL * (pet_lvl - 1))
 		l["hits"] += 1
 		var info := {"effect": "", "color": def["color"]}
 		match def["effect"]:
@@ -153,7 +155,7 @@ func use_ability() -> void:
 
 
 func pickup_bonus() -> float:
-	return 1.6 if role == "recolector" else 1.0
+	return (1.6 + 0.05 * (pet_lvl - 1)) if role == "recolector" else 1.0
 
 
 func _draw() -> void:

@@ -68,6 +68,7 @@ func _ready() -> void:
 			page_id = arg.get_slice("=", 1)
 	refresh()
 	Music.play("menu")
+	_show_rank_rewards.call_deferred()
 
 
 func _fit() -> void:
@@ -168,3 +169,21 @@ func launch(params: Dictionary) -> void:
 	GameState.save_game()
 	Sfx.play("warp")
 	launch_requested.emit(params)
+
+
+## M3: al volver al INICIO muestra los ascensos pendientes y lo que se recibió en cada uno.
+func _show_rank_rewards() -> void:
+	var log: Array = GameState.data.get("rank_log", [])
+	if log.is_empty():
+		return
+	var txt := ""
+	for e in log:
+		txt += "%s (nivel %d): %s\n" % [GameState.rank_name(int(e["level"])), int(e["level"]), ", ".join(e["rewards"])]
+	GameState.data["rank_log"] = []
+	GameState.save_game()
+	var dlg := AcceptDialog.new()
+	dlg.title = "¡Ascenso!"
+	dlg.dialog_text = txt.strip_edges()
+	add_child(dlg)
+	dlg.popup_centered()
+	Sfx.play("objective")
