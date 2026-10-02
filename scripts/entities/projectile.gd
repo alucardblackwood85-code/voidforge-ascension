@@ -17,6 +17,7 @@ var pierce_left := 0
 var hit_list: Array = []
 var trail := Vector2.ZERO
 var lift_h := 16.0   # altura visual (igual a la del que dispara)
+var homing := 0.0   # rad/s de giro hacia la nave (proyectiles enemigos teledirigidos)
 
 
 func _process(delta: float) -> void:
@@ -34,6 +35,9 @@ func _process(delta: float) -> void:
 		target = null
 	# La munición atraviesa el terreno: sólo las naves colisionan con asteroides.
 	plane_pos += dir * speed * delta
+	if hostile and homing > 0.0 and sector.player.alive and not sector.player.invulnerable:
+		var want := (sector.player.plane_pos - plane_pos).angle()
+		dir = Vector2.from_angle(rotate_toward(dir.angle(), want, homing * delta))
 	if hostile:
 		var p := sector.player
 		if p.alive and plane_pos.distance_to(p.plane_pos) < p.radius + size:

@@ -117,28 +117,34 @@ func _product(kind: String, id: String) -> Control:
 	dl_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dl_label.custom_minimum_size = Vector2(270, 54)
 	v.add_child(dl_label)
-	var price := GameState.price_of(kind, id)
-	v.add_child(W.cost_row(price))
-	var buy := W.hbox(6)
 	if kind == "ship" and GameState.data["ships"].has(id):
-		buy.add_child(UiTheme.label("✔ En propiedad", 14, UiTheme.GOOD))
-	else:
-		var qtys := [1]
-		if kind == "ammo":
-			qtys = [1, 10]
-		elif kind == "item":
-			qtys = [1, 5]
+		v.add_child(UiTheme.label("✔ En propiedad", 14, UiTheme.GOOD))
+		return c
+	# Dos formas de pago excluyentes: créditos O Cristales Nexo (nunca ambos).
+	var qtys := [1]
+	if kind == "ammo":
+		qtys = [1, 10]
+	elif kind == "item":
+		qtys = [1, 5]
+	for cur in ["credits", "nexo"]:
+		var price := GameState.price_of(kind, id, cur)
+		var row := W.hbox(6)
+		row.add_child(W.cost_row(price))
+		row.add_child(W.spacer())
 		for q in qtys:
 			var label := "Comprar" if q == 1 else "x%d" % q
 			if kind == "ammo":
 				label = "+%d" % (100 * q)
-			var b := W.button(label, func(): _buy(kind, id, q), q == 1)
+			var b := W.button(label, func(): _buy(kind, id, q, cur), q == 1 and cur == "credits")
 			b.disabled = not GameState.can_afford(price, q)
-			buy.add_child(b)
-		if owned_txt != "":
-			buy.add_child(W.spacer())
-			buy.add_child(UiTheme.label(owned_txt, 12, UiTheme.MUTED))
-	v.add_child(buy)
+			row.add_child(b)
+		v.add_child(row)
+		if cur == "credits":
+			var o := UiTheme.label("— o —", 11, UiTheme.MUTED)
+			o.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			v.add_child(o)
+	if owned_txt != "":
+		v.add_child(UiTheme.label(owned_txt, 12, UiTheme.MUTED))
 	return c
 
 
@@ -150,8 +156,8 @@ func _count_owned(list_key: String, id: String) -> String:
 	return "Tienes %d" % n if n > 0 else ""
 
 
-func _buy(kind: String, id: String, qty: int) -> void:
-	if GameState.buy(kind, id, qty):
+func _buy(kind: String, id: String, qty: int, currency: String) -> void:
+	if GameState.buy(kind, id, qty, currency):
 		Sfx.play("craft")
 	else:
 		Sfx.play("ui_error")

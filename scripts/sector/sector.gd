@@ -66,6 +66,12 @@ var map_h := 3
 var bounds := Rect2()
 var run_xp := 0
 var kills_by: Dictionary = {}
+var boxes: Array = []                 # cajas de botín activas
+var collect_target: LootBox = null     # caja hacia la que va la nave para recogerla
+var hover_box: LootBox = null
+var loot_version := 0                  # cambia cuando varía la bodega (refresca el inventario)
+var shield_buff := {"pct": 0.0, "time": 0.0}
+var laser_buff := {"pct": 0.0, "charges": 0}
 var zoom_level := 1.15
 var auto_fire := false
 
@@ -132,6 +138,8 @@ func _ready() -> void:
 	Music.play(biome_id)
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
+	if OS.get_cmdline_user_args().has("--showinv"):
+		hud.inventory.visible = true
 	if aimtest:
 		_build_aimtest()
 	elif showcase:
@@ -293,6 +301,7 @@ func _process(delta: float) -> void:
 	var c := cell_of(player.plane_pos)
 	if cells.has(c) and not cells[c]["visited"]:
 		cells[c]["visited"] = true
+	_update_loot(delta)
 	Sfx.listener_pos = player.plane_pos
 	Sfx.has_listener = true
 	camera.position = player.position + Vector2(0, -20)
@@ -436,6 +445,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		drone.use_ability()
 	elif event.is_action_pressed("tactical_map"):
 		hud.toggle_map()
+	elif event.is_action_pressed("inventory"):
+		hud.toggle_inventory()
 	elif event.is_action_pressed("interact"):
 		_interact()
 	else:
@@ -449,6 +460,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _left_click() -> void:
 	if placing != "":
 		_place(placing, mouse_plane())
+		return
+	var box := box_at(get_global_mouse_position())
+	if box:
+		# Clic en una caja de botín: la nave va a recogerla.
+		collect_target = box
+		_move_to(box.plane_pos)
+		Sfx.play("ui_select", null, -10.0)
 		return
 	var e := pick_at(get_global_mouse_position())
 	if e:
@@ -464,6 +482,7 @@ func _left_click() -> void:
 
 ## Clic derecho: mover la nave (mantener pulsado para guiarla).
 func _right_click() -> void:
+	collect_target = null
 	if _near_gate_click():
 		return
 	_move_to(mouse_plane())
@@ -616,7 +635,7 @@ func spawn_player_bolt(origin: Vector2, target: Entity, dmg: float, info: Dictio
 	fx_top.add_child(b)
 
 
-func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, size: float, color: Color, h: float = 16.0) -> void:
+func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, size: float, color: Color, h: float = 16.0, life: float = 2.4) -> void:
 	var b := Projectile.new()
 	b.sector = self
 	b.hostile = true
@@ -626,7 +645,8 @@ func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, s
 	b.damage = dmg
 	b.size = size
 	b.color = color
-	b.life = 2.4
+	b.life = clampf(life, 0.6, 3.5)
+	b.homing = GameData.ENEMY_BULLET_TURN
 	b.lift_h = h
 	b.position = Iso.to_screen(origin)
 	fx_top.add_child(b)
@@ -720,12 +740,6 @@ func gravity_well(p: Vector2, r: float, dur: float) -> void:
 	fx_ring(p, r, Color("8a4aff"))
 
 
-func pull_loot(p: Vector2, r: float) -> void:
-	for n in world.get_children():
-		if n is Loot and n.plane_pos.distance_to(p) < r:
-			n.magnet = true
-
-
 # --- Botín (13) -----------------------------------------------------------------------
 func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 	enemies.erase(e)
@@ -752,19 +766,22 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		hud.toast("¡ASCENSO! %s — Nivel %d" % [GameState.rank_name(), GameState.level()], 4.0, UiTheme.WARN)
 		Sfx.play("objective")
 		Sfx.voice("rank_up", true)
-	var credits := GameData.level_reward(float(e.def["credits"]), level) * rmult
-	var piles := 1 + int(rmult)
-	for i in piles:
-		_drop("credits", int(credits / piles), e.plane_pos)
-	for mat in e.def["drops"].keys():
-		var q: float = GameData.level_reward(float(e.def["drops"][mat]), level) * rmult
-		var rare: bool = GameData.MATERIALS[mat]["rarity"] >= 2
-		_drop(mat, int(ceil(q)) if rare else int(round(q)), e.plane_pos)
+	# Créditos y Nexo se acreditan al instante; los materiales quedan en una caja de botín.
+	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult)
+	_gain("credits", credits)
 	var nexo_chance: float = float(e.def["nexo"]) * rmult
 	if e.variant != "base":
 		nexo_chance += 0.12 * (rmult - 1.0)
 	if rng.randf() < nexo_chance:
-		_drop("nexo", maxi(1, int(rmult) - 1), e.plane_pos)
+		_gain("nexo", maxi(1, int(rmult) - 1))
+	var contents := {}
+	for mat in e.def["drops"].keys():
+		var q: float = GameData.level_reward(float(e.def["drops"][mat]), level) * rmult
+		var rare: bool = GameData.MATERIALS.get(mat, {}).get("rarity", 0) >= 2
+		var n := int(ceil(q)) if rare else int(round(q))
+		if n > 0:
+			contents[mat] = n
+	spawn_box(contents, e.plane_pos, e.is_elite or e.variant != "base")
 	_check_objective()
 
 
@@ -802,46 +819,157 @@ func objective_text() -> String:
 func on_ore_mined(a: Asteroid) -> void:
 	Sfx.play("explosion_s", a.plane_pos)
 	fx_explosion(a.plane_pos, a.radius, GameData.mat_color(a.ore))
-	var q := int(GameData.level_reward(rng.randf_range(15.0, 30.0), level))
-	for i in 3:
-		_drop(a.ore, q / 3, a.plane_pos)
+	var contents := {a.ore: int(GameData.level_reward(rng.randf_range(15.0, 30.0), level))}
 	if rng.randf() < 0.35:
-		_drop("nanoespuma", 6, a.plane_pos)
+		contents["nanoespuma"] = 6
+	spawn_box(contents, a.plane_pos, false)
 	if player.target == a:
 		player.target = null
 
 
-func _drop(item: String, amount: int, p: Vector2) -> void:
+# --- Botín: cajas, bodega, refinado ----------------------------------------------------------
+## Monedas (créditos, Nexo, sellos): no ocupan bodega y se suman al instante.
+func _gain(item: String, amount: int) -> void:
 	if amount <= 0:
 		return
-	var l := Loot.new()
-	l.setup(self, item, amount, p)
-	world.add_child(l)
+	loot[item] = int(loot.get(item, 0)) + amount
+	hud.pickup(item, amount)
+	Sfx.play("pickup_rare" if item == "nexo" else "pickup", null, -10.0)
+
+
+func spawn_box(contents: Dictionary, p: Vector2, rare: bool) -> void:
+	if contents.is_empty():
+		return
+	var b := LootBox.new()
+	b.setup(self, contents, p + Vector2(rng.randf_range(-12, 12), rng.randf_range(-12, 12)), rare)
+	world.add_child(b)
+	boxes.append(b)
+
+
+func remove_box(b: LootBox) -> void:
+	boxes.erase(b)
+	if collect_target == b:
+		collect_target = null
+	if hover_box == b:
+		hover_box = null
+	b.queue_free()
+
+
+func box_at(screen: Vector2) -> LootBox:
+	var best: LootBox = null
+	var best_d := 40.0
+	for b in boxes:
+		if not b.visible:
+			continue
+		var d := screen.distance_to(b.position + Vector2(0, -22))
+		if d < best_d:
+			best_d = d
+			best = b
+	return best
 
 
 func cargo_capacity() -> int:
 	return int(player.stats["cargo"])
 
 
-func collect(l: Loot) -> bool:
-	if l.item in ["credits", "nexo", "seals"]:
-		loot[l.item] = int(loot.get(l.item, 0)) + l.amount
-		hud.pickup(l.item, l.amount)
-		Sfx.play("pickup_rare" if l.item == "nexo" else "pickup", null, -8.0)
-		return true
-	var free := cargo_capacity() - cargo_used
-	if free <= 0:
-		hud.toast("Bodega llena", 1.0, UiTheme.WARN)
-		return false
-	var take := mini(free, l.amount)
-	loot[l.item] = int(loot.get(l.item, 0)) + take
-	cargo_used += take
-	hud.pickup(l.item, take)
-	Sfx.play("pickup", null, -8.0)
-	if take < l.amount:
-		l.amount -= take
-		return false
-	return true
+## Pasa a la bodega todo lo que quepa (primero lo más valioso). Lo demás se queda en la caja.
+func collect_box(b: LootBox) -> void:
+	var keys: Array = b.contents.keys()
+	keys.sort_custom(func(x, y): return GameData.MATERIALS.get(x, {}).get("rarity", 0) > GameData.MATERIALS.get(y, {}).get("rarity", 0))
+	var got := 0
+	for mat in keys:
+		var free := cargo_capacity() - cargo_used
+		if free <= 0:
+			break
+		var take := mini(free, int(b.contents[mat]))
+		loot[mat] = int(loot.get(mat, 0)) + take
+		cargo_used += take
+		got += take
+		hud.pickup(mat, take)
+		b.contents[mat] = int(b.contents[mat]) - take
+		if int(b.contents[mat]) <= 0:
+			b.contents.erase(mat)
+	if got > 0:
+		Sfx.play("pickup", null, -6.0)
+		loot_version += 1
+	if not b.contents.is_empty():
+		hud.toast("Bodega llena — abre Inventario/Refinado (%s) para tirar o refinar" % Controls.key_label("inventory"), 2.5, UiTheme.WARN)
+		Sfx.play("ui_error", null, -10.0)
+	if collect_target == b:
+		collect_target = null
+	if b.contents.is_empty():
+		remove_box(b)
+
+
+## Recogida remota (imán, compresor, dron recolector, tecla F): cajas en un radio.
+func pull_loot(p: Vector2, r: float) -> void:
+	for b in boxes.duplicate():
+		if b.plane_pos.distance_to(p) < r:
+			collect_box(b)
+
+
+func cargo_materials() -> Array:
+	var out: Array = []
+	for k in loot.keys():
+		if k in ["credits", "nexo", "seals"] or int(loot[k]) <= 0:
+			continue
+		out.append(k)
+	out.sort_custom(func(x, y): return GameData.MATERIALS.get(x, {}).get("rarity", 0) < GameData.MATERIALS.get(y, {}).get("rarity", 0))
+	return out
+
+
+func _remove_cargo(mat: String, qty: int) -> int:
+	qty = mini(qty, int(loot.get(mat, 0)))
+	if qty <= 0:
+		return 0
+	loot[mat] = int(loot[mat]) - qty
+	if int(loot[mat]) <= 0:
+		loot.erase(mat)
+	cargo_used = maxi(0, cargo_used - qty)
+	loot_version += 1
+	return qty
+
+
+## Desecha material de la bodega para liberar espacio.
+func jettison(mat: String, qty: int) -> void:
+	if _remove_cargo(mat, qty) > 0:
+		Sfx.play("deploy", null, -6.0)
+
+
+## Refina material: "shield" = +% de escudo máximo durante 5 min por unidad (acumulable en tiempo);
+## "laser" = +% de daño en un disparo de láser por unidad. Más raro el material → más bonificación.
+func refine(mat: String, qty: int, kind: String) -> void:
+	var n := _remove_cargo(mat, qty)
+	if n <= 0:
+		return
+	var r: int = GameData.MATERIALS.get(mat, {}).get("rarity", 0)
+	if kind == "shield":
+		var p: float = GameData.REFINE_SHIELD_PCT[r]
+		var t := GameData.REFINE_SHIELD_TIME * n
+		# Media ponderada por tiempo restante: mezclar materiales nunca supera el mejor porcentaje.
+		var total_t: float = float(shield_buff["time"]) + t
+		shield_buff["pct"] = (shield_buff["pct"] * shield_buff["time"] + p * t) / total_t
+		shield_buff["time"] = minf(GameData.REFINE_SHIELD_CAP, total_t)
+		player.shield = minf(player.shield_max_now(), player.shield + player.shield_max * p * 0.5)
+	else:
+		var p: float = GameData.REFINE_LASER_PCT[r]
+		var total_c: float = float(laser_buff["charges"]) + n
+		laser_buff["pct"] = (laser_buff["pct"] * laser_buff["charges"] + p * n) / total_c
+		laser_buff["charges"] = laser_buff["charges"] + n
+	Sfx.play("craft", null, -4.0)
+	fx_ring(player.plane_pos, 70.0, Color("3aa0ff") if kind == "shield" else Color("ff5a5a"))
+
+
+## Bonificación de láser para un disparo (consume una carga).
+func take_laser_charge() -> float:
+	if laser_buff["charges"] <= 0:
+		return 0.0
+	laser_buff["charges"] -= 1
+	return laser_buff["pct"]
+
+
+func shield_bonus() -> float:
+	return shield_buff["pct"] if shield_buff["time"] > 0.0 else 0.0
 
 
 # --- Efectos -------------------------------------------------------------------------
@@ -944,24 +1072,24 @@ func _demo_autopilot(delta: float) -> void:
 		if demo_timer <= 0.0:
 			demo_timer = 0.8
 			# Si no hay amenaza cercana, recoge el botín más próximo para probar la recolección.
-			var loot_target := _nearest_loot(450.0)
-			if d > 500.0 and loot_target != Vector2.INF:
-				player.move_target = loot_target
+			var box := _nearest_box_demo(450.0)
+			if d > 500.0 and box:
+				collect_target = box
+				player.move_target = box.plane_pos
 			else:
 				var ang := (player.plane_pos - player.target.plane_pos).angle() + 0.6
 				player.move_target = player.target.plane_pos + Vector2.from_angle(ang) * 380.0
 			player.has_move_target = true
 
 
-func _nearest_loot(max_d: float) -> Vector2:
-	var best := Vector2.INF
+func _nearest_box_demo(max_d: float) -> LootBox:
+	var best: LootBox = null
 	var best_d := max_d
-	for n in world.get_children():
-		if n is Loot:
-			var d: float = n.plane_pos.distance_to(player.plane_pos)
-			if d < best_d:
-				best_d = d
-				best = n.plane_pos
+	for b in boxes:
+		var d: float = b.plane_pos.distance_to(player.plane_pos)
+		if d < best_d:
+			best_d = d
+			best = b
 	return best
 
 
@@ -1006,3 +1134,17 @@ func _update_aimtest(delta: float) -> void:
 	aim_dummy.plane_pos = player.plane_pos + Vector2.from_angle(aim_t) * 420.0
 	aim_dummy.home = aim_dummy.plane_pos
 	player.target = aim_dummy
+
+
+func _update_loot(delta: float) -> void:
+	shield_buff["time"] = maxf(0.0, shield_buff["time"] - delta)
+	hover_box = box_at(get_global_mouse_position()) if not demo else null
+	if collect_target and is_instance_valid(collect_target) and player.alive:
+		if player.plane_pos.distance_to(collect_target.plane_pos) < 70.0:
+			collect_box(collect_target)
+		elif not right_held:
+			player.move_target = collect_target.plane_pos
+			player.has_move_target = true
+	# Imán / compresor: recoge solo las cajas cercanas.
+	if player.buffs.has("magnet"):
+		pull_loot(player.plane_pos, player.pickup_radius())

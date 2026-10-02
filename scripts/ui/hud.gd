@@ -17,6 +17,7 @@ var map_open := false
 var pause_panel: Control
 var result_panel: Control
 var touch_fire: Button
+var inventory: InventoryPanel
 
 
 func _ready() -> void:
@@ -47,6 +48,23 @@ func _ready() -> void:
 		slots.append(s)
 	hotbar.offset_top = -72
 	hotbar.offset_bottom = -14
+	# Ventana de inventario/refinado (tecla I) y su botón bajo el minimapa.
+	inventory = InventoryPanel.new()
+	inventory.sector = sector
+	inventory.visible = false
+	# A la izquierda, bajo los indicadores: nunca tapa la nave (centro de pantalla).
+	inventory.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	inventory.offset_left = 8
+	inventory.offset_top = 150
+	root.add_child(inventory)
+	var inv_btn := UiTheme.button("INVENTARIO / REFINADO (%s)" % Controls.key_label("inventory"), toggle_inventory)
+	inv_btn.focus_mode = Control.FOCUS_NONE
+	inv_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	inv_btn.offset_left = -236
+	inv_btn.offset_right = -16
+	inv_btn.offset_top = 290
+	inv_btn.offset_bottom = 322
+	root.add_child(inv_btn)
 
 	if Controls.is_touch:
 		_build_touch()
@@ -115,6 +133,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if get_tree().paused and event.is_action_pressed("cancel"):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
+
+
+func toggle_inventory() -> void:
+	inventory.visible = not inventory.visible
+	Sfx.play("ui_click")
 
 
 func toggle_map() -> void:
@@ -204,7 +227,7 @@ func _draw_canvas() -> void:
 	_text(Vector2(rx, 278), "Bodega  %d / %d" % [sector.cargo_used, sector.cargo_capacity()], 15, UiTheme.WARN if sector.cargo_used >= sector.cargo_capacity() else UiTheme.TEXT)
 	if sector.loot.get("nexo", 0) > 0:
 		_text(Vector2(rx, 298), "Cristales Nexo  %d" % sector.loot["nexo"], 15, GameData.mat_color("nexo"))
-	var py := 330.0
+	var py := 345.0
 	for pk in pickups:
 		var a := clampf(pk["t"], 0.0, 1.0)
 		_text(Vector2(rx, py), "+%s %s" % [GameData.format_num(pk["amount"]), GameData.mat_name(pk["item"])], 14, Color(GameData.mat_color(pk["item"]), a))
@@ -212,7 +235,7 @@ func _draw_canvas() -> void:
 
 	# Munición activa
 	var am: Dictionary = GameData.AMMO[sector.active_ammo]
-	_text(Vector2(cx - 200, vs.y - 84), "Munición: %s (%s)  %s" % [am["name"], am["short"], GameData.format_num(sector.run_ammo.get(sector.active_ammo, 0))], 14, am["color"], HORIZONTAL_ALIGNMENT_CENTER, 400)
+	_text(Vector2(cx - 200, vs.y - 84), "Munición: %s (%s)  %s  ·  %d por andanada" % [am["name"], am["short"], GameData.format_num(sector.run_ammo.get(sector.active_ammo, 0)), p.lasers.size()], 14, am["color"], HORIZONTAL_ALIGNMENT_CENTER, 400)
 
 	# Avisos
 	var ty := vs.y * 0.3

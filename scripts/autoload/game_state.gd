@@ -349,7 +349,17 @@ func set_drone_role(role: String) -> void:
 
 # --- Tienda (créditos/Nexo) y fabricación (materiales) ------------------------------------
 ## kind: ship | laser | gen | drone_laser | ammo (lote de 100) | item
+## Receta de crafteo (créditos + materiales). Naves y armas no piden Nexo al fabricarse; sólo las
+## cajas Anómalas y las mejoras 13-16 lo usan (GDD 14).
 func recipe_of(kind: String, id: String) -> Dictionary:
+	var r := _raw_recipe(kind, id)
+	if kind in ["ship", "laser", "gen", "drone_laser"] and r.has("nexo"):
+		r = r.duplicate()
+		r.erase("nexo")
+	return r
+
+
+func _raw_recipe(kind: String, id: String) -> Dictionary:
 	match kind:
 		"ship":
 			return GameData.SHIPS[id]["cost"]
@@ -368,8 +378,9 @@ func recipe_of(kind: String, id: String) -> Dictionary:
 	return {}
 
 
-func price_of(kind: String, id: String) -> Dictionary:
-	return GameData.shop_price(recipe_of(kind, id))
+func price_of(kind: String, id: String, currency: String = "credits") -> Dictionary:
+	var raw := _raw_recipe(kind, id)
+	return GameData.nexo_price(raw) if currency == "nexo" else GameData.shop_price(raw)
 
 
 ## La munición Mk-V/VI y las cajas de módulos sólo se fabrican (GDD 18.1 y 14.2).
@@ -383,8 +394,8 @@ func in_shop(kind: String, id: String) -> bool:
 	return true
 
 
-func buy(kind: String, id: String, qty: int = 1) -> bool:
-	return _acquire(kind, id, qty, price_of(kind, id))
+func buy(kind: String, id: String, qty: int = 1, currency: String = "credits") -> bool:
+	return _acquire(kind, id, qty, price_of(kind, id, currency))
 
 
 func craft(kind: String, id: String, qty: int = 1) -> bool:

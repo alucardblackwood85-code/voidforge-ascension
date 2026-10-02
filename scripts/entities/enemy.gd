@@ -24,6 +24,7 @@ var aggro := false
 var is_nest := false
 var is_elite := false
 var shot_sfx := "e_shot_light"
+var attack_range := 450.0
 
 var attack_timer := 1.0
 var ability_timer := 5.0
@@ -67,9 +68,11 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 		def = GameData.ENEMIES[id]
 	var v: Dictionary = GameData.VARIANTS[variant]
 	arch = def["arch"]
-	hp_max = GameData.level_hp(float(def["hp"]), level) * float(v["hp"])
+	hp_max = GameData.level_hp(float(def["hp"]), level) * float(v["hp"]) * GameData.ENEMY_HP_MULT
 	hp = hp_max
-	dmg = GameData.level_dmg(float(def["dmg"]), level) * float(v["dmg"])
+	dmg = GameData.level_dmg(float(def["dmg"]), level) * float(v["dmg"]) * GameData.ENEMY_DMG_MULT
+	# Alcance de disparo propio de cada especie (arquetipo ± pequeña variación estable por especie).
+	attack_range = float(def.get("range", GameData.ARCH_RANGE.get(def["arch"], 450.0))) * (0.92 + 0.16 * float(abs(hash(id)) % 100) / 100.0)
 	speed = float(def["vel"]) * GameData.SPEED_UNIT * 0.75
 	radius = float(def["size"]) * float(v["scale"]) * 1.35
 	height = 0.0 if is_nest or arch == "trap" else 14.0 + radius * 0.2
@@ -81,6 +84,16 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	anim = randf() * 10.0
 	shot_sfx = "e_shot_swarm" if arch == "swarm" else FACTION_SHOT.get(sector.biome_id, "e_shot_light")
 	sync_screen()
+
+
+## Al detectar al jugador avisa a su grupo cercano (los enemigos atacan en manada).
+func set_aggro() -> void:
+	if aggro:
+		return
+	aggro = true
+	for e in sector.enemies:
+		if e != self and not e.aggro and not e.is_nest and e.plane_pos.distance_to(plane_pos) < 450.0:
+			e.set_aggro()
 
 
 func display_name() -> String:
@@ -107,7 +120,7 @@ func _process(delta: float) -> void:
 	reflecting = maxf(0.0, reflecting - delta)
 	_statuses(delta)
 	if not aggro and not sector.showcase and (dist < 700.0 or sector.alert >= 3.0):
-		aggro = true
+		set_aggro()
 	var move := Vector2.ZERO
 	if aggro and p.alive:
 		move = _behave(delta, p, dist)
@@ -169,7 +182,8 @@ func _shoot_at(p: PlayerShip, bullet_speed: float, size: float, mult: float = 1.
 	# La proa se orienta al disparar y la bala sale del frente, a la altura visual del enemigo.
 	heading = aim_dir.angle()
 	var dir := aim_dir.rotated(randf_range(-spread, spread))
-	sector.spawn_enemy_bullet(plane_pos + aim_dir * radius * 0.9, dir, bullet_speed, out_dmg() * mult, size, def["accent"], height)
+	# Disparos teledirigidos: persiguen a la nave con giro limitado y duran lo justo para su alcance.
+	sector.spawn_enemy_bullet(plane_pos + aim_dir * radius * 0.9, dir, bullet_speed, out_dmg() * mult, size, def["accent"], height, attack_range * 1.35 / bullet_speed)
 	if sound:
 		sfx(shot_sfx, -4.0)
 
@@ -185,14 +199,14 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 	state_time += delta
 	match arch:
 		"harasser":
-			if attack_timer <= 0.0 and dist < 600.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 1.6
-				_shoot_at(p, 420.0, 6.0)
-			return _keep_distance(p, dist, 340.0, 0.6)
+				_shoot_at(p, 520.0, 6.0)
+			return _keep_distance(p, dist, attack_range * 0.7, 0.6)
 		"swarm":
-			if attack_timer <= 0.0 and dist < 380.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 1.3
-				_shoot_at(p, 380.0, 5.0, 1.0, 0.15)
+				_shoot_at(p, 480.0, 5.0, 1.0, 0.15)
 			return _keep_distance(p, dist, 130.0, 0.9)
 		"tank":
 			if state == "aim":
@@ -202,14 +216,14 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 					for k in 3:
 						_shoot_at(p, 300.0, 10.0, 0.6, 0.25, false)
 				return Vector2.ZERO
-			if attack_timer <= 0.0 and dist < 520.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 2.6
 				_set_state("aim")
 			return _keep_distance(p, dist, 200.0, 0.1)
 		"hunter":
-			if attack_timer <= 0.0 and dist < 450.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 1.0
-				_shoot_at(p, 520.0, 5.0)
+				_shoot_at(p, 600.0, 5.0)
 			var flank := p.plane_pos + Vector2.from_angle(p.heading + PI * 0.5 * strafe_sign) * 230.0
 			return (flank - plane_pos).normalized() if plane_pos.distance_to(flank) > 30.0 else Vector2.ZERO
 		"charger":
@@ -235,18 +249,18 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 				sfx("e_arm")
 			return (p.plane_pos - plane_pos).normalized()
 		"artillery":
-			if attack_timer <= 0.0 and dist < 750.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 3.2
 				var aim := p.plane_pos + p.velocity * 1.0
 				sector.telegraph_circle(aim, 115.0, 1.3, out_dmg(), def["accent"])
 				sfx("e_launch", -2.0)
-			return _keep_distance(p, dist, 520.0, 0.3)
+			return _keep_distance(p, dist, attack_range * 0.7, 0.3)
 		"mother":
 			spawn_timer -= delta
 			if spawn_timer <= 0.0:
 				spawn_timer = 7.0
 				_spawn_children(2)
-			if attack_timer <= 0.0 and dist < 600.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 2.0
 				sfx("e_heavy", -3.0)
 				for k in 2:
@@ -269,7 +283,7 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 				ability_timer = 6.0
 				reflecting = 1.6
 				sfx("e_reflect")
-			if attack_timer <= 0.0 and dist < 520.0 and reflecting <= 0.0:
+			if attack_timer <= 0.0 and dist < attack_range and reflecting <= 0.0:
 				attack_timer = 1.8
 				_shoot_at(p, 380.0, 8.0)
 			return _keep_distance(p, dist, 260.0, 0.2)
@@ -286,7 +300,7 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 				_set_state("nova")
 				sfx("e_nova")
 				return Vector2.ZERO
-			if attack_timer <= 0.0 and dist < 620.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 1.4
 				sfx(shot_sfx, -2.0)
 				for k in 3:
@@ -300,7 +314,7 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 				if dist < 460.0:
 					p.buffs["slowed"] = 2.5
 					p.external_pull += (plane_pos - p.plane_pos).normalized() * 260.0
-			if attack_timer <= 0.0 and dist < 560.0:
+			if attack_timer <= 0.0 and dist < attack_range:
 				attack_timer = 2.0
 				_shoot_at(p, 360.0, 7.0)
 			return _keep_distance(p, dist, 380.0, 0.3)
@@ -412,12 +426,12 @@ func _sniper(p: PlayerShip, dist: float) -> Vector2:
 				p.take_damage(out_dmg() * 2.0)
 			sector.ground.add_beam(plane_pos, plane_pos + dir * 1100.0, def["accent"])
 		return Vector2.ZERO
-	if attack_timer <= 0.0 and dist < 900.0:
+	if attack_timer <= 0.0 and dist < attack_range:
 		attack_timer = 4.0
 		_set_state("aim")
 		aim_point = p.plane_pos
 		sfx("e_snipe_charge", -3.0)
-	return _keep_distance(p, dist, 680.0, 0.25)
+	return _keep_distance(p, dist, attack_range * 0.75, 0.25)
 
 
 func _spawn_children(n: int) -> void:
@@ -432,7 +446,7 @@ func _spawn_children(n: int) -> void:
 func take_hit(amount: float, info: Dictionary) -> void:
 	if not alive:
 		return
-	aggro = true
+	set_aggro()
 	if phased:
 		amount *= 0.25
 	if reflecting > 0.0:
@@ -543,6 +557,8 @@ func _draw() -> void:
 	var selected: bool = p.target == self
 	if selected:
 		draw_ring(radius * 1.5, Color(1, 0.3, 0.3, 0.9), 2.0)
+		if attack_range > 120.0:
+			draw_ring(attack_range, Color(def["accent"], 0.16), 1.5)
 	if selected or hp < hp_max or is_elite:
 		var top := -height - radius * 0.8 - 12.0
 		var bar_col := Color("ff4a4a")

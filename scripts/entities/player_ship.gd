@@ -147,7 +147,8 @@ func _warnings(delta: float) -> void:
 
 
 func shield_max_now() -> float:
-	return shield_max * (1.35 if buffs.has("anchor") else 1.0)
+	# Ancla defensiva y refinado de escudo (Inventario/Refinado) aumentan el escudo máximo.
+	return shield_max * (1.35 if buffs.has("anchor") else 1.0) * (1.0 + sector.shield_bonus())
 
 
 func target_valid() -> bool:
@@ -197,6 +198,8 @@ func _shoot_laser(i: int, l: Dictionary) -> void:
 		dmg *= 1.0 + float(stats["elite_dmg"])
 	if marked == target and marked_time > 0.0:
 		dmg *= 1.03
+	# Refinado de láser: cada disparo de cada láser consume una carga con su bonificación.
+	dmg *= 1.0 + sector.take_laser_charge()
 	l["count"] += 1
 	if l["last_target"] != target:
 		l["stack"] = 0

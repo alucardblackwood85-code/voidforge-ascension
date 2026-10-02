@@ -94,7 +94,9 @@ func _detail(id: String) -> Control:
 		buttons.add_child(b)
 	else:
 		buttons.add_child(UiTheme.label("Precio:", 15, UiTheme.MUTED))
-		buttons.add_child(W.cost_row(GameState.price_of("ship", id)))
+		buttons.add_child(W.cost_row(GameState.price_of("ship", id, "credits")))
+		buttons.add_child(UiTheme.label("o", 14, UiTheme.MUTED))
+		buttons.add_child(W.cost_row(GameState.price_of("ship", id, "nexo")))
 		buttons.add_child(W.spacer())
 		buttons.add_child(W.button("Ir a la tienda", func():
 			menu.state["shop_tab"] = "ship"

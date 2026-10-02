@@ -14,6 +14,7 @@ func _ready() -> void:
 	_key("drone", KEY_E)
 	_key("interact", KEY_F)
 	_key("tactical_map", KEY_TAB)
+	_key("inventory", KEY_I)
 	_key("cancel", KEY_ESCAPE)
 	for i in HOTBAR_KEYS.size():
 		_key("hotbar_%d" % i, HOTBAR_KEYS[i])

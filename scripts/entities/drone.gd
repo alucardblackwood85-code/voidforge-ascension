@@ -10,12 +10,19 @@ const ROLES := {
 const FIRE_INTERVAL := 1.6
 
 var role := "asalto"
-var orbit := 0.0
 var fire_timer := 0.5
 var burst := 0.0
 var ability_cd := 0.0
 var heading := 0.0
 var lasers: Array = []   # [{id, def, hits}]
+# Movimiento de guardia: escolta con desplazamientos aleatorios, sale a atacar desde varios ángulos
+# y vuelve con la nave (nada de orbitar como una luna).
+var mode := "escort"     # escort | attack | return | fetch
+var waypoint := Vector2.ZERO
+var repick := 0.0
+var mode_time := 0.0
+var fetch_box: LootBox = null
+var attack_len := 5.0
 
 
 func setup(p_sector: Sector, p_role: String) -> void:
@@ -24,20 +31,84 @@ func setup(p_sector: Sector, p_role: String) -> void:
 	radius = 12.0
 	height = 34.0
 	plane_pos = sector.player.plane_pos + Vector2(-40, 0)
+	waypoint = plane_pos
 	for l in GameState.equipped_drone_lasers():
 		lasers.append({"id": l["id"], "def": l["def"], "hits": 0})
+
+
+func _set_mode(m: String) -> void:
+	mode = m
+	mode_time = 0.0
+	repick = 0.0
+	if m == "attack":
+		attack_len = randf_range(4.0, 7.0)
+
+
+func _think(delta: float, p: PlayerShip) -> void:
+	mode_time += delta
+	repick -= delta
+	var has_target := p.target_valid() and p.target is Enemy and p.plane_pos.distance_to(p.target.plane_pos) < 900.0
+	match mode:
+		"escort":
+			if role == "asalto" and has_target and mode_time > 0.6:
+				_set_mode("attack")
+			elif role == "recolector" and mode_time > 0.8:
+				fetch_box = _nearest_box(p, 700.0)
+				if fetch_box:
+					_set_mode("fetch")
+			if repick <= 0.0 or plane_pos.distance_to(waypoint) < 20.0:
+				repick = randf_range(1.0, 2.4)
+				waypoint = p.plane_pos + Vector2.from_angle(randf() * TAU) * randf_range(70.0, 170.0)
+			else:
+				# El punto de escolta se mueve con la nave.
+				waypoint += p.velocity * delta
+		"attack":
+			if not has_target or mode_time > attack_len:
+				_set_mode("return")
+			elif repick <= 0.0:
+				# Nuevo ángulo de ataque alrededor del objetivo.
+				repick = randf_range(0.8, 1.6)
+				waypoint = p.target.plane_pos + Vector2.from_angle(randf() * TAU) * randf_range(150.0, 280.0)
+		"return":
+			waypoint = p.plane_pos + (plane_pos - p.plane_pos).normalized() * 80.0
+			if plane_pos.distance_to(p.plane_pos) < 120.0 or mode_time > 3.0:
+				_set_mode("escort")
+		"fetch":
+			if fetch_box == null or not is_instance_valid(fetch_box) or not fetch_box.alive or fetch_box.contents.is_empty():
+				_set_mode("return")
+			else:
+				waypoint = fetch_box.plane_pos
+				if plane_pos.distance_to(waypoint) < 40.0:
+					sector.collect_box(fetch_box)
+					fetch_box = null
+					_set_mode("return")
+
+
+func _nearest_box(p: PlayerShip, r: float) -> LootBox:
+	var best: LootBox = null
+	var best_d := r
+	for b in sector.boxes:
+		var d: float = b.plane_pos.distance_to(p.plane_pos)
+		if d < best_d:
+			best_d = d
+			best = b
+	return best
 
 
 func _process(delta: float) -> void:
 	var p := sector.player
 	if not p.alive:
 		return
-	orbit += delta * 1.4
-	var want := p.plane_pos + Vector2.from_angle(orbit) * 70.0
-	plane_pos = plane_pos.lerp(want, clampf(5.0 * delta, 0.0, 1.0))
-	var face := (p.target.plane_pos - plane_pos) if p.target_valid() else (want - plane_pos)
+	_think(delta, p)
+	var to := waypoint - plane_pos
+	var dist := to.length()
+	var top := 560.0 if mode in ["attack", "fetch"] else maxf(320.0, p.velocity.length() * 1.3)
+	var desired := to / maxf(dist, 1.0) * top * clampf(dist / 90.0, 0.0, 1.0)
+	velocity = velocity.move_toward(desired, 1400.0 * delta)
+	plane_pos += velocity * delta
+	var face := (p.target.plane_pos - plane_pos) if (p.target_valid() and mode == "attack") else velocity
 	if face.length() > 4.0:
-		heading = lerp_angle(heading, face.angle(), 0.2)
+		heading = lerp_angle(heading, face.angle(), clampf(10.0 * delta, 0.0, 1.0))
 	ability_cd = maxf(0.0, ability_cd - delta)
 	burst = maxf(0.0, burst - delta)
 	if role == "asalto" and not lasers.is_empty():

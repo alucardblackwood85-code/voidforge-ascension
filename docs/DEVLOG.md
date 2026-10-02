@@ -84,3 +84,16 @@ Objetivo del GDD §25 "Prioridad de prototipo": nave + láseres + enemigos + map
 - XP por bajas (proporcional a la vida base, nivel y variante). XP total para nivel N = 10 000 x 2^(N-1),
   máximo nivel 21. 21 rangos militares con insignias dibujadas por código. Bajas por tipo de enemigo.
 - Módulos (4 familias, 5 rarezas, líneas secundarias) aplicados a la nave; un módulo por color.
+
+## v0.4.0 — Dificultad, alcance, cajas de botín, refinado, moneda premium y pet guardia (2026-10-02)
+- Dificultad: daño enemigo x2.4 y vida x1.4; disparos enemigos teledirigidos (giro 3.2 rad/s) y ataque en manada.
+- Alcance de disparo por arquetipo (francotirador 980, artillería 820 > láser del jugador 620; enjambre 360…),
+  con pequeña variación por especie. El enemigo seleccionado muestra su anillo de alcance.
+- Tienda: cada artículo se paga O con créditos O con Cristales Nexo (1 Nexo ≈ 587 créditos; Specter-X 246.4K o 420).
+  Crafteo de naves/armas sin Nexo (sólo cajas Anómalas y mejoras 13-16 lo usan, GDD 14).
+- Botín en cajas: créditos y Nexo se suman al instante; los materiales quedan en una caja que se recoge con clic
+  izquierdo (dura 120 s). Imán/compresor/pet recolector recogen cajas cercanas.
+- Ventana Inventario/Refinado (I): tirar materiales y refinarlos en escudo (+5…30% durante 5 min por unidad) o láser
+  (+2…18% en un disparo por unidad) según rareza.
+- Munición: cada andanada gasta 1 por láser equipado (visible en el HUD).
+- Pet: movimiento de guardia (escolta aleatoria, ataque desde varios ángulos y regreso).

@@ -1,0 +1,9 @@
+{
+  "styles": {
+    "sprite": "High-quality pre-rendered 3D CGI game sprite for a sci-fi browser MMO space shooter, NOT pixel art, NOT flat vector. Glossy metal, specular highlights, soft cinematic lighting from the top-left, glowing emissive lights. Seen from above at a slight three-quarter angle, centered, filling about 70% of the canvas, fully transparent background, no shadow, no text, single object only."
+  },
+  "assets": [
+    {"out": "sprites/loot/cargo_box", "prompt": "Floating space cargo loot crate: compact armored metal box with rounded edges, steel-grey and teal panels, glowing cyan seams and a small beacon light on top, sealed salvage container."},
+    {"out": "sprites/loot/cargo_box_rare", "prompt": "Floating rare space loot crate: ornate armored box with gold and black panels, glowing amber-orange seams, energy aura, precious salvage container."}
+  ]
+}

@@ -12,6 +12,26 @@ const SHIELD_RECHARGE_RATE := 0.06    # fracción del escudo máximo por segundo
 const CARGO_UNIT := 20                # 1 de "Carga" GDD = 20 unidades de material
 const DEATH_LOOT_LOSS := 0.9          # al morir se pierde el 90% de lo recolectado en el sector (sin aviso)
 const VOLLEY_INTERVAL := 1.2          # la nave dispara una andanada con todos sus láseres cada 1.2 s
+const ENEMY_DMG_MULT := 2.4           # dificultad: los alienígenas pegan bastante más fuerte que en v0.3
+const ENEMY_HP_MULT := 1.4
+const ENEMY_BULLET_TURN := 3.2        # rad/s: los disparos enemigos persiguen a la nave (sólo un impulso los esquiva)
+const NEXO_RATE := 587.0              # créditos equivalentes a 1 Cristal Nexo (Specter-X: 246.4K créditos o 420 Nexo)
+const LOOT_BOX_LIFE := 120.0          # segundos que permanece una caja de botín
+
+## Alcance de disparo por arquetipo (unidades de plano; el láser del jugador alcanza LASER_RANGE).
+const ARCH_RANGE := {
+	"harasser": 560.0, "swarm": 360.0, "tank": 480.0, "hunter": 440.0, "charger": 480.0, "support": 420.0,
+	"miner": 95.0, "artillery": 820.0, "mother": 600.0, "nest": 0.0, "drainer": 330.0, "ambusher": 400.0,
+	"defender": 500.0, "sniper": 980.0, "elite": 640.0, "control": 470.0, "trap": 520.0,
+}
+
+## Refinado en sector (por rareza de material: común … legendario).
+## Escudo: +% de escudo máximo durante REFINE_SHIELD_TIME s por unidad (acumulable hasta REFINE_SHIELD_CAP).
+## Láser: +% de daño en un disparo de láser por unidad.
+const REFINE_SHIELD_PCT := [0.05, 0.07, 0.10, 0.14, 0.20, 0.30]
+const REFINE_SHIELD_TIME := 300.0
+const REFINE_SHIELD_CAP := 3600.0
+const REFINE_LASER_PCT := [0.02, 0.03, 0.05, 0.08, 0.12, 0.18]
 
 const RARITY_NAMES := ["Común", "Común+", "Raro", "Épico", "Muy raro", "Legendario"]
 const RARITY_COLORS := [
@@ -381,19 +401,24 @@ const OBSTACLES_BIOME := {
 # --- Tienda: precio en créditos (y Nexo si la receta lo pide) --------------------------------
 const MAT_VALUE := [20, 45, 160, 650, 2600, 11000]   # valor en créditos por rareza de material
 
+## Precio en la tienda pagando SÓLO con créditos (los materiales de la receta se convierten a créditos;
+## la parte en Nexo de la receta no se cobra: la moneda premium es una alternativa, no un extra).
 static func shop_price(recipe: Dictionary, markup: float = 1.4) -> Dictionary:
 	var credits := float(recipe.get("credits", 0))
-	var price := {}
 	for k in recipe.keys():
-		if k == "credits":
-			continue
-		if k == "nexo" or k == "seals":
-			price[k] = int(ceil(recipe[k] * markup))
+		if k in ["credits", "nexo", "seals"]:
 			continue
 		var r: int = MATERIALS.get(k, {}).get("rarity", 0)
 		credits += MAT_VALUE[r] * float(recipe[k])
-	price["credits"] = int(round(credits * markup / 100.0)) * 100
-	return price
+	return {"credits": maxi(100, int(round(credits * markup / 100.0)) * 100)}
+
+
+## Precio alternativo pagando SÓLO con Cristales Nexo (equivalente al precio en créditos).
+static func nexo_price(recipe: Dictionary) -> Dictionary:
+	var credits := float(shop_price(recipe)["credits"])
+	var n := credits / NEXO_RATE
+	var rounded := int(ceil(n)) if n < 50.0 else int(round(n / 10.0)) * 10
+	return {"nexo": maxi(1, rounded)}
 
 
 
