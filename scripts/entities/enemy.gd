@@ -107,7 +107,9 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	anim = randf() * 10.0
 	shot_sfx = "e_shot_swarm" if arch == "swarm" else FACTION_SHOT.get(sector.biome_id, "e_shot_light")
 	_setup_shield()
-	_roll_affixes({"boss": 1, "mega": 2, "ultra": randi_range(2, 3), "uber": 3}.get(variant, 0))
+	# Los afijos llegan a partir del nivel 5 (antes castigaban demasiado al jugador nuevo).
+	if level >= 5:
+		_roll_affixes({"boss": 1, "mega": 2, "ultra": randi_range(2, 3), "uber": 3}.get(variant, 0))
 	sync_screen()
 
 
