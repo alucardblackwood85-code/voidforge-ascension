@@ -402,8 +402,8 @@ func pick_at(screen: Vector2) -> Entity:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if ended:
-		return
+	if ended or demo:
+		return  # el piloto automático ignora entradas reales para que las pruebas sean reproducibles
 	if event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_WHEEL_UP:
@@ -462,6 +462,8 @@ func _left_click() -> void:
 
 
 func _handle_held_input() -> void:
+	if demo:
+		return
 	player.firing = Input.is_action_pressed("fire") or (auto_fire and player.target_valid())
 	if left_held and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and placing == "":
 		player.move_target = mouse_plane()
@@ -884,9 +886,26 @@ func _demo_autopilot(delta: float) -> void:
 		player.firing = d < GameData.LASER_RANGE
 		if demo_timer <= 0.0:
 			demo_timer = 0.8
-			var ang := (player.plane_pos - player.target.plane_pos).angle() + 0.6
-			player.move_target = player.target.plane_pos + Vector2.from_angle(ang) * 380.0
+			# Si no hay amenaza cercana, recoge el botín más próximo para probar la recolección.
+			var loot_target := _nearest_loot(450.0)
+			if d > 500.0 and loot_target != Vector2.INF:
+				player.move_target = loot_target
+			else:
+				var ang := (player.plane_pos - player.target.plane_pos).angle() + 0.6
+				player.move_target = player.target.plane_pos + Vector2.from_angle(ang) * 380.0
 			player.has_move_target = true
+
+
+func _nearest_loot(max_d: float) -> Vector2:
+	var best := Vector2.INF
+	var best_d := max_d
+	for n in world.get_children():
+		if n is Loot:
+			var d: float = n.plane_pos.distance_to(player.plane_pos)
+			if d < best_d:
+				best_d = d
+				best = n.plane_pos
+	return best
 
 
 # --- Vitrina de arte (depuración: godot -- --showcase) -------------------------------------

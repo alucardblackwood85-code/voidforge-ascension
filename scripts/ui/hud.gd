@@ -156,6 +156,10 @@ func _draw_canvas() -> void:
 	var p := sector.player
 	# Vida / escudo / energía
 	var x := 16.0
+	# Paneles de fondo para que el texto se lea sobre cualquier objeto del mapa.
+	var panel_bg := Color(0.02, 0.03, 0.06, 0.6)
+	canvas.draw_rect(Rect2(8, 4, 480, 130), panel_bg)
+	canvas.draw_rect(Rect2(vs.x * 0.5 - 320, 4, 640, 132 if p.target_valid() else 72), panel_bg)
 	_text(Vector2(x, 26), p.stats.get("name", ""), 18, UiTheme.ACCENT)
 	_bar(Vector2(x, 36), 300, 18, p.shield / maxf(1.0, p.shield_max), Color("3aa0ff"), "Escudo %s / %s" % [GameData.format_num(p.shield), GameData.format_num(p.shield_max)])
 	_bar(Vector2(x, 58), 300, 18, p.hull / p.hull_max, Color("5ad16a") if p.hull / p.hull_max > 0.3 else UiTheme.BAD, "Casco %s / %s" % [GameData.format_num(p.hull), GameData.format_num(p.hull_max)])
