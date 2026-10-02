@@ -5,7 +5,7 @@ extends SceneTree
 ## k: caída (exp), vib/vd: vibrato Hz/profundidad, lp: filtro paso bajo Hz, hp: paso alto}.
 ## Opciones globales: drive (distorsión), echo [retardo s, realimentación, repeticiones].
 
-const SR := 22050
+const SR := 44100
 const OUT_DIR := "res://assets/audio/sfx/"
 
 
@@ -16,7 +16,7 @@ func L(w: String, f0: float, f1: float, d: float, v: float = 1.0, extra: Diction
 
 
 func sounds() -> Dictionary:
-	return {
+	var base := {
 		# --- Láseres del jugador: cada uno con firma propia (19.3) ---
 		"laser_l01": {"layers": [L("square", 980, 260, 0.16, 0.6, {"k": 5.0, "lp": 5000}), L("sine", 1960, 520, 0.08, 0.3)]},
 		"laser_l02": {"layers": [L("square", 1300, 600, 0.07, 0.5, {"k": 6.0, "lp": 6000}), L("square", 1250, 560, 0.07, 0.5, {"t": 0.045, "k": 6.0, "lp": 6000})]},
@@ -84,6 +84,9 @@ func sounds() -> Dictionary:
 		"ui_error": {"layers": [L("square", 220, 180, 0.15, 0.35, {"lp": 1500}), L("square", 180, 150, 0.15, 0.35, {"t": 0.12, "lp": 1500})]},
 		"craft": {"layers": [L("noise", 3000, 3000, 0.04, 0.4, {"lp": 5000}), L("tri", 700, 1050, 0.2, 0.4, {"t": 0.05})]},
 	}
+	# Los láseres y disparos modernos sustituyen a la versión clásica (más "arcade").
+	base.merge(modern(), true)
+	return base
 
 
 func _init() -> void:
@@ -101,7 +104,7 @@ func render(spec: Dictionary) -> PackedFloat32Array:
 	for l in spec["layers"]:
 		total = maxf(total, l["t"] + l["d"])
 	var echo: Array = spec.get("echo", [0.0, 0.0, 0])
-	total += echo[0] * echo[2] + 0.02
+	total += echo[0] * echo[2] + 0.02 + (0.3 if spec.get("rev", 0.0) > 0.0 else 0.0)
 	var n := int(total * SR)
 	var buf := PackedFloat32Array()
 	buf.resize(n)
@@ -118,6 +121,9 @@ func render(spec: Dictionary) -> PackedFloat32Array:
 		for r in echo[2]:
 			for i in range(n - 1, dly - 1, -1):
 				buf[i] += buf[i - dly] * echo[1]
+	var rev: float = spec.get("rev", 0.0)
+	if rev > 0.0:
+		_reverb(buf, rev)
 	var peak := 0.0001
 	for i in n:
 		peak = maxf(peak, absf(buf[i]))
@@ -148,6 +154,10 @@ func _render_layer(buf: PackedFloat32Array, l: Dictionary, rng: RandomNumberGene
 	var k: float = l["k"]
 	var lp: float = l.get("lp", 0.0)
 	var hp: float = l.get("hp", 0.0)
+	var ratio: float = l.get("ratio", 1.0)
+	var index: float = l.get("index", 0.0)
+	var ik: float = l.get("ik", 4.0)
+	var mod_phase := 0.0
 	for j in len:
 		var i := start + j
 		if i >= buf.size():
@@ -168,6 +178,10 @@ func _render_layer(buf: PackedFloat32Array, l: Dictionary, rng: RandomNumberGene
 				s = 2.0 * phase - 1.0
 			"tri":
 				s = 4.0 * absf(phase - 0.5) - 1.0
+			"fm":
+				# FM de 2 operadores: timbre metálico/energético moderno; el índice decae con el tiempo.
+				mod_phase = fposmod(mod_phase + freq * ratio / SR, 1.0)
+				s = sin(TAU * phase + index * exp(-ik * u) * sin(TAU * mod_phase))
 			"noise":
 				# Ruido "con tono": se re-muestrea a la frecuencia indicada.
 				noise_phase += freq / SR
@@ -205,3 +219,86 @@ func save_wav(path: String, samples: PackedFloat32Array) -> void:
 	w.stereo = false
 	w.data = data
 	w.save_to_wav(ProjectSettings.globalize_path(path))
+
+
+# --- Diseño "moderno" (inspirado en shooters MMO actuales, no en 8 bits) ---------------------
+## Disparo láser por capas: transitorio de ruido (pegada) + cuerpo FM con barrido + brillo armónico
+## + golpe grave + soplo de aire filtrado. Se completa con saturación suave y reverb corta.
+func zap(f0: float, f1: float, d: float, ratio: float, index: float, o: Dictionary = {}) -> Array:
+	var t: float = o.get("t", 0.0)
+	var v: float = o.get("v", 1.0)
+	var layers := [
+		L("noise", 9000, 3500, 0.03, 0.5 * v, {"t": t, "hp": 2500, "k": 16.0, "a": 0.001}),
+		L("fm", f0, f1, d, 0.75 * v, {"t": t, "ratio": ratio, "index": index, "ik": o.get("ik", 5.0), "k": o.get("k", 4.5), "lp": o.get("lp", 9000.0), "a": 0.002, "vib": o.get("vib", 0.0), "vd": o.get("vd", 0.0)}),
+		L("sine", f0 * 2.0, f1 * 1.5, d * 0.5, 0.16 * v, {"t": t, "k": 6.0}),
+		L("noise", 5200, 900, d * 0.9, o.get("air", 0.22) * v, {"t": t, "lp": 4500, "k": 4.0, "a": 0.004}),
+	]
+	if o.get("sub", 0.45) > 0.0:
+		layers.append(L("sine", o.get("sub_f", 150.0), 42, minf(0.2, d), o.get("sub", 0.45) * v, {"t": t, "k": 7.0}))
+	return layers
+
+
+func modern() -> Dictionary:
+	var m := {
+		"laser_l01": {"layers": zap(1500, 220, 0.20, 1.5, 3.0)},
+		"laser_l02": {"layers": zap(1750, 320, 0.14, 2.0, 2.5, {"v": 0.85}) + zap(1650, 300, 0.14, 2.0, 2.5, {"t": 0.055, "v": 0.85, "sub": 0.0})},
+		"laser_l03": {"layers": zap(3300, 1500, 0.14, 3.0, 1.5, {"sub": 0.15, "air": 0.3})},
+		"laser_l04": {"layers": zap(1150, 260, 0.15, 1.0, 4.0, {"k": 6.0})},
+		"laser_l05": {"layers": zap(950, 180, 0.30, 0.5, 6.0, {"vib": 42.0, "vd": 0.06, "lp": 6000.0})},
+		"laser_l06": {"layers": zap(720, 130, 0.30, 1.41, 5.0, {"lp": 5000.0}) + [L("noise", 2200, 700, 0.35, 0.3, {"lp": 2000, "vib": 30, "vd": 0.8, "k": 2.5})]},
+		"laser_l07": {"layers": zap(2600, 2000, 0.26, 2.76, 2.0, {"vib": 9.0, "vd": 0.02, "k": 3.0, "sub": 0.2})},
+		"laser_l08": {"layers": zap(1300, 200, 0.22, 1.0, 3.0) + [L("noise", 6000, 900, 0.18, 0.55, {"lp": 5000, "k": 6.0})]},
+		"laser_l09": {"layers": zap(1800, 600, 0.32, 7.0, 8.0, {"lp": 7000.0}) + [L("noise", 4500, 2000, 0.3, 0.3, {"lp": 6000, "vib": 55, "vd": 0.9, "k": 3.0})]},
+		"laser_l10": {"layers": zap(620, 60, 0.55, 0.5, 6.0, {"sub": 0.9, "sub_f": 120.0, "k": 2.8, "lp": 4000.0}), "drive": 1.6},
+		"laser_l11": {"layers": zap(1200, 3000, 0.18, 1.5, 3.0, {"sub": 0.2})},
+		"laser_l12": {"layers": zap(880, 700, 0.36, 2.0, 2.0, {"k": 2.2, "ik": 2.0})},
+		"laser_l13": {"layers": zap(2100, 90, 0.65, 1.0, 7.0, {"sub": 0.8, "k": 2.2, "air": 0.35}), "drive": 1.5},
+		"laser_l14": {"layers": zap(420, 300, 0.28, 0.25, 3.0, {"lp": 3000.0})},
+		"laser_l15": {"layers": zap(320, 40, 0.6, 0.5, 8.0, {"sub": 0.9, "k": 2.0}) + [L("noise", 300, 3000, 0.55, 0.3, {"lp": 2500, "a": 0.25, "k": 1.2})]},
+		"laser_l16": {"layers": zap(1600, 500, 0.15, 3.5, 3.0), "echo": [0.085, 0.45, 3]},
+		"laser_l17": {"layers": zap(1400, 260, 0.2, 1.5, 3.0, {"v": 0.7}) + zap(1750, 330, 0.2, 1.5, 3.0, {"t": 0.03, "v": 0.6, "sub": 0.0}) + zap(2100, 400, 0.2, 1.5, 3.0, {"t": 0.06, "v": 0.5, "sub": 0.0})},
+		"laser_l18": {"layers": zap(900, 50, 0.6, 0.7, 9.0, {"sub": 0.9, "k": 2.4}), "drive": 2.2},
+		"laser_drone": {"layers": zap(2400, 1200, 0.09, 2.0, 1.5, {"sub": 0.0, "air": 0.12, "v": 0.7})},
+		# Disparos alienígenas: más oscuros y graves que los del jugador para distinguirlos.
+		"e_shot_light": {"layers": zap(780, 190, 0.17, 1.41, 3.0, {"v": 0.8, "sub": 0.3})},
+		"e_shot_swarm": {"layers": zap(1500, 900, 0.09, 2.0, 2.0, {"v": 0.7, "sub": 0.0})},
+		"e_shot_bio": {"layers": zap(420, 260, 0.2, 0.5, 4.0, {"vib": 18.0, "vd": 0.12, "lp": 3000.0, "v": 0.85})},
+		"e_shot_crystal": {"layers": zap(3000, 2500, 0.13, 2.76, 2.0, {"sub": 0.1, "v": 0.75})},
+		"e_shot_void": {"layers": zap(500, 110, 0.22, 0.5, 5.0, {"lp": 2500.0, "vib": 7.0, "vd": 0.05})},
+		"e_heavy": {"layers": zap(420, 60, 0.36, 0.7, 6.0, {"sub": 0.8, "lp": 3000.0}), "drive": 1.5},
+		"e_snipe_fire": {"layers": zap(2600, 300, 0.32, 3.0, 6.0, {"sub": 0.7, "air": 0.4}), "drive": 1.4},
+	}
+	# Reverb corta para todo lo moderno (sensación de espacio, no de chip de 8 bits).
+	for k in m.keys():
+		m[k]["rev"] = 0.22
+	return m
+
+
+## Reverb tipo Schroeder (4 peines + 2 pasa-todo), cola corta.
+func _reverb(buf: PackedFloat32Array, wet: float) -> void:
+	var n := buf.size()
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for d in [1116, 1188, 1277, 1356]:
+		var delay: int = d * SR / 44100
+		var line := PackedFloat32Array()
+		line.resize(delay)
+		var idx := 0
+		for i in n:
+			var y := line[idx]
+			line[idx] = buf[i] + y * 0.72
+			out[i] += y
+			idx = (idx + 1) % delay
+	for d in [556, 441]:
+		var delay: int = d * SR / 44100
+		var line := PackedFloat32Array()
+		line.resize(delay)
+		var idx := 0
+		for i in n:
+			var x := out[i]
+			var y := line[idx]
+			line[idx] = x + y * 0.5
+			out[i] = y - x * 0.5
+			idx = (idx + 1) % delay
+	for i in n:
+		buf[i] = buf[i] * (1.0 - wet * 0.4) + out[i] * wet * 0.22

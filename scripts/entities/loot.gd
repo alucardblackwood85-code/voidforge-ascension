@@ -42,9 +42,19 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_shadow(7.0, 0.25)
-	var h := 10.0 + sin(bob) * 3.0
+	draw_shadow(9.0, 0.25)
+	var h := 12.0 + sin(bob) * 3.0
 	var c := GameData.mat_color(item)
+	# Icono real del recurso (assets/ui/mats/<id>.png) con halo del color de su rareza.
+	var tex := SpriteLib.get_icon("mats", item)
+	if tex:
+		var s := 34.0 if item in ["nexo", "credits"] else 30.0
+		var pulse := 0.5 + 0.5 * sin(bob * 1.7)
+		draw_circle(Vector2(0, -h), s * 0.55, Color(c, 0.18 + 0.12 * pulse))
+		draw_set_transform(Vector2(0, -h), sin(bob * 0.5) * 0.15, Vector2.ONE)
+		draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false)
+		draw_set_transform_matrix(Transform2D.IDENTITY)
+		return
 	if item == "credits":
 		draw_circle(Vector2(0, -h), 6.0, c)
 		draw_circle(Vector2(0, -h), 3.0, c.darkened(0.4))

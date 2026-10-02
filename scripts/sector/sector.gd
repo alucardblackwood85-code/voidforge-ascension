@@ -58,6 +58,7 @@ var mines: Array = []
 var ended := false
 var demo := false
 var showcase := false
+var aimtest := false
 var demo_timer := 0.0
 var right_held := false
 var map_w := 4
@@ -73,7 +74,8 @@ func _ready() -> void:
 	level = int(params.get("level", 1))
 	rng.seed = int(params.get("seed", randi()))
 	demo = params.get("demo", false)
-	showcase = params.get("showcase", false)
+	showcase = params.get("showcase", false) or params.get("aimtest", false)
+	aimtest = params.get("aimtest", false)
 	biome_id = params.get("biome", "ferron")
 	biome = GameData.BIOMES[biome_id]
 	run_ammo = GameState.data["ammo"].duplicate()
@@ -130,7 +132,9 @@ func _ready() -> void:
 	Music.play(biome_id)
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
-	if showcase:
+	if aimtest:
+		_build_aimtest()
+	elif showcase:
 		_build_showcase()
 
 
@@ -280,6 +284,8 @@ func _process(delta: float) -> void:
 	_handle_held_input()
 	if demo:
 		_demo_autopilot(delta)
+	if aimtest:
+		_update_aimtest(delta)
 	for k in item_cd.keys():
 		item_cd[k] = maxf(0.0, item_cd[k] - delta)
 	_separate_enemies()
@@ -975,3 +981,28 @@ func _build_showcase() -> void:
 		var e := spawn_enemy(ids[i], pos, 1, "base")
 		e.heading = PI * 0.25
 		e.home = pos
+
+
+# --- Prueba de puntería (depuración: godot -- --aimtest) ------------------------------------
+var aim_dummy: Enemy = null
+var aim_t := 0.0
+
+
+func _build_aimtest() -> void:
+	for e in enemies.duplicate():
+		e.queue_free()
+	enemies.clear()
+	alert = 0.0
+	aim_dummy = spawn_enemy("xenomita", player.plane_pos + Vector2(420, 0), 1, "base")
+	aim_dummy.hp_max = 1e9
+	aim_dummy.hp = 1e9
+	player.target = aim_dummy
+
+
+func _update_aimtest(delta: float) -> void:
+	if aim_dummy == null or not is_instance_valid(aim_dummy):
+		return
+	aim_t += delta * 0.5
+	aim_dummy.plane_pos = player.plane_pos + Vector2.from_angle(aim_t) * 420.0
+	aim_dummy.home = aim_dummy.plane_pos
+	player.target = aim_dummy

@@ -1,0 +1,10 @@
+{
+  "styles": {
+    "icon": "High-quality pre-rendered 3D CGI inventory icon for a sci-fi browser MMO space shooter, NOT pixel art, NOT flat vector. Glossy metal and glowing energy, soft studio lighting, three-quarter view, single centered object filling about 75% of the canvas, bold readable silhouette that still reads at 32 pixels, fully transparent background, no text, no numbers, no frame."
+  },
+  "assets": [
+    {"out": "ui/mats/credits", "style": "icon", "out_w": 96, "out_h": 96, "prompt": "Stack of three futuristic golden credit coins with a glowing cyan center hexagon engraving."},
+    {"out": "ui/mats/nexo", "style": "icon", "out_w": 96, "out_h": 96, "prompt": "Nexo crystal: precious faceted magenta-pink energy crystal glowing intensely, premium currency gem."},
+    {"out": "ui/mats/seals", "style": "icon", "out_w": 96, "out_h": 96, "prompt": "Sector seal: ornate bronze-gold military medallion token with a star emblem and glowing amber rim."}
+  ]
+}

@@ -42,3 +42,13 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.02, 0.025, 0.05, 1)
 anti_aliasing/quality/msaa_2d=1
+
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
+
+[importer_defaults]
+
+wav={
+"compress/mode": 0
+}
