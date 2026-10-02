@@ -9,3 +9,6 @@ export_credentials.cfg
 # SO
 Thumbs.db
 .DS_Store
+
+# Logs de playtest
+build_playtest*.log

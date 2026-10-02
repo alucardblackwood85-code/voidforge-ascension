@@ -6,6 +6,8 @@ signal changed
 signal leveled_up(level: int)
 
 const SAVE_PATH := "user://voidforge_save.json"
+const PLAYTEST_SAVE_PATH := "user://voidforge_playtest.json"   # el playtest nunca toca la partida real
+var save_path := SAVE_PATH
 const SAVE_VERSION := 2
 const HOTBAR_SIZE := 10
 
@@ -17,6 +19,8 @@ var last_result: Dictionary = {}
 
 
 func _ready() -> void:
+	if OS.get_cmdline_user_args().has("--playtest"):
+		save_path = PLAYTEST_SAVE_PATH
 	load_game()
 
 
@@ -77,7 +81,7 @@ func default_hotbar() -> Array:
 
 # --- Guardado ----------------------------------------------------------------
 func save_game() -> void:
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f == null:
 		push_warning("No se pudo guardar: %s" % FileAccess.get_open_error())
 		return
@@ -85,11 +89,11 @@ func save_game() -> void:
 
 
 func load_game() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(save_path):
 		new_profile()
 		save_game()
 		return
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var f := FileAccess.open(save_path, FileAccess.READ)
 	var parsed = JSON.parse_string(f.get_as_text()) if f else null
 	if typeof(parsed) != TYPE_DICTIONARY:
 		new_profile()

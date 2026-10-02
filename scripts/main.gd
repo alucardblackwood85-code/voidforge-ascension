@@ -17,6 +17,9 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--showcase"):
 			showcase_biome = arg.get_slice("=", 1) if "=" in arg else "ferron"
+	if OS.get_cmdline_user_args().has("--playtest"):
+		add_child(PlaytestRunner.new())
+		return
 	if OS.get_cmdline_user_args().has("--aimtest"):
 		goto_sector({"level": 1, "seed": 7, "aimtest": true, "biome": "ferron"})
 		return

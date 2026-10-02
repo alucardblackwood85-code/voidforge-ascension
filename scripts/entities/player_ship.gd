@@ -279,6 +279,7 @@ func pickup_radius() -> float:
 func take_damage(amount: float) -> void:
 	if not alive or invulnerable:
 		return
+	sector.stat_damage_taken += amount
 	since_damage = 0.0
 	var s := minf(shield, amount)
 	shield -= s

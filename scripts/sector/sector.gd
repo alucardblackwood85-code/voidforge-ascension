@@ -60,6 +60,16 @@ var demo := false
 var showcase := false
 var aimtest := false
 var demo_timer := 0.0
+var bot := false                       # playtest: piloto con decisiones (objetos, refinado, extracción)
+# Métricas de playtest
+var stat_damage_taken := 0.0
+var stat_cargo_full_t := -1.0
+var stat_objective_t := -1.0
+var stat_max_enemies := 0
+var stat_max_aggro := 0
+var stat_spawned := 0
+var stat_items_used := 0
+var stat_refined := 0
 var right_held := false
 var map_w := 4
 var map_h := 3
@@ -80,6 +90,9 @@ func _ready() -> void:
 	level = int(params.get("level", 1))
 	rng.seed = int(params.get("seed", randi()))
 	demo = params.get("demo", false)
+	bot = params.get("bot", false)
+	if bot:
+		demo = true
 	showcase = params.get("showcase", false) or params.get("aimtest", false)
 	aimtest = params.get("aimtest", false)
 	biome_id = params.get("biome", "ferron")
@@ -223,8 +236,10 @@ func _populate_cell(c: Vector2i, is_start: bool) -> void:
 		var weak: Array = biome["enemies"].keys().slice(0, 2)
 		spawn_group_at(gate_pos + Vector2(750, 300), 2, level, true, weak)
 		return
-	for g in rng.randi_range(2, 4):
-		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 4) + level / 5, level, true)
+	# Densidad acotada: más grupos y algo mayores con el nivel, pero con tope (el mapa también crece).
+	var groups := rng.randi_range(1, 2) if level < 6 else rng.randi_range(2, 3)
+	for g in groups:
+		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 3) + mini(level / 10, 3), level, true)
 
 
 func _add_asteroid(c: Vector2i, p: Vector2, r: float, ore: String) -> void:
@@ -257,6 +272,7 @@ func _roll_variant() -> String:
 
 
 func spawn_enemy(id: String, pos: Vector2, lvl: int, variant: String) -> Enemy:
+	stat_spawned += 1
 	var e := Enemy.new()
 	e.setup(self, id, lvl, variant, pos)
 	world.add_child(e)
@@ -265,6 +281,8 @@ func spawn_enemy(id: String, pos: Vector2, lvl: int, variant: String) -> Enemy:
 
 
 func spawn_group_at(pos: Vector2, count: int, lvl: int, initial: bool, pool: Array = []) -> void:
+	if enemies.size() >= GameData.MAX_ENEMIES:
+		return
 	var id: String = pool[rng.randi() % pool.size()] if pool.size() > 0 else _weighted(biome["enemies"])
 	# Enjambres en grupo mayor; tanques y artillería con escolta.
 	for i in count:
@@ -278,6 +296,8 @@ func spawn_group_at(pos: Vector2, count: int, lvl: int, initial: bool, pool: Arr
 
 
 func spawn_group_near(pos: Vector2, count: int, lvl: int) -> void:
+	if enemies.size() >= GameData.MAX_ENEMIES:
+		return
 	for i in count:
 		var e := spawn_enemy(_weighted(biome["enemies"]), pos + Vector2.from_angle(rng.randf() * TAU) * 90.0, lvl, _roll_variant())
 		e.aggro = true
@@ -327,7 +347,7 @@ func _update_alert(delta: float) -> void:
 
 
 func _spawn_wave() -> void:
-	if enemies.size() > 70:
+	if enemies.size() > GameData.MAX_ENEMIES - 20:
 		return
 	# Llegan desde fuera del campo visual, en una dirección aleatoria.
 	var dir := Vector2.from_angle(rng.randf() * TAU)
@@ -340,11 +360,16 @@ func _spawn_wave() -> void:
 
 func _separate_enemies() -> void:
 	# Separación suave (4.4): evita apilamientos sin crear paredes imposibles.
-	var n := enemies.size()
+	# Sólo entre enemigos cerca de la nave (los lejanos no se ven): el coste es cuadrático.
+	var near: Array[Enemy] = []
+	for e in enemies:
+		if e.visible and e.plane_pos.distance_squared_to(player.plane_pos) < 2000.0 * 2000.0:
+			near.append(e)
+	var n := near.size()
 	for i in n:
-		var a := enemies[i]
+		var a := near[i]
 		for j in range(i + 1, n):
-			var b := enemies[j]
+			var b := near[j]
 			var d := a.plane_pos - b.plane_pos
 			var min_d := (a.radius + b.radius) * 0.8
 			var l2 := d.length_squared()
@@ -549,6 +574,14 @@ func use_hotbar(i: int) -> void:
 		placing = id
 		hud.toast("Clic izquierdo para colocar (Esc cancela)", 2.0)
 		return
+	activate_item(id)
+	hud.slot_feedback(i, true)
+
+
+## Usa un consumible instantáneo (barra rápida o bot de playtest). Devuelve false si no se pudo.
+func activate_item(id: String) -> bool:
+	if int(run_items.get(id, 0)) <= 0 or item_cd.get(id, 0.0) > 0.0:
+		return false
 	match id:
 		"repair":
 			player.repair(0.3)
@@ -556,9 +589,11 @@ func use_hotbar(i: int) -> void:
 			player.buffs["boost_item"] = 5.0
 		"shield_cell":
 			player.shield = minf(player.shield_max_now(), player.shield + player.shield_max * 0.4)
+		_:
+			return false
 	_consume_item(id)
-	hud.slot_feedback(i, true)
 	Sfx.play("item_use")
+	return true
 
 
 func _consume_item(id: String) -> void:
@@ -1058,6 +1093,16 @@ func _finish(outcome: String) -> void:
 # --- Demo (captura automática / CI) --------------------------------------------------------
 func _demo_autopilot(delta: float) -> void:
 	demo_timer -= delta
+	if bot:
+		_bot_tick(delta)
+		if objective_done or (player.hull / player.hull_max < 0.15 and int(run_items.get("repair", 0)) == 0):
+			collect_target = null
+			player.target = null
+			player.move_target = gate_pos
+			player.has_move_target = true
+			if player.plane_pos.distance_to(gate_pos) < 200.0:
+				request_extract()
+			return
 	if not player.target_valid():
 		var best: Enemy = null
 		var best_d := INF
@@ -1148,3 +1193,40 @@ func _update_loot(delta: float) -> void:
 	# Imán / compresor: recoge solo las cajas cercanas.
 	if player.buffs.has("magnet"):
 		pull_loot(player.plane_pos, player.pickup_radius())
+
+
+# --- Bot de playtest: decide como un jugador razonable y registra métricas ---------------------
+func _bot_tick(_delta: float) -> void:
+	stat_max_enemies = maxi(stat_max_enemies, enemies.size())
+	var ag := 0
+	for e in enemies:
+		if e.aggro:
+			ag += 1
+	stat_max_aggro = maxi(stat_max_aggro, ag)
+	if stat_cargo_full_t < 0.0 and cargo_used >= cargo_capacity() * 0.98:
+		stat_cargo_full_t = elapsed
+	if stat_objective_t < 0.0 and objective_done:
+		stat_objective_t = elapsed
+	var hp := player.hull / player.hull_max
+	if hp < 0.45 and activate_item("repair"):
+		stat_items_used += 1
+	if player.shield <= 1.0 and activate_item("shield_cell"):
+		stat_items_used += 1
+	if player.ability_cd <= 0.0 and player.target_valid():
+		player.try_ability()
+	if hp < 0.35:
+		player.try_boost()
+	# Munición fuerte contra élites, básica contra el resto.
+	var elite: bool = player.target is Enemy and (player.target as Enemy).is_elite
+	if elite and int(run_ammo.get("mk2", 0)) > 50:
+		active_ammo = "mk2"
+	elif int(run_ammo.get("mk1", 0)) > 0:
+		active_ammo = "mk1"
+	# Bodega casi llena: refina lo menos valioso (escudo si no hay buff, si no láser).
+	if cargo_used > cargo_capacity() * 0.85:
+		var mats := cargo_materials()
+		if not mats.is_empty():
+			refine(mats.front(), 20, "shield" if shield_buff["time"] < 600.0 else "laser")
+			stat_refined += 20
+	if drone.ability_cd <= 0.0 and player.target_valid():
+		drone.use_ability()

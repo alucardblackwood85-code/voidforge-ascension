@@ -12,11 +12,12 @@ const SHIELD_RECHARGE_RATE := 0.06    # fracción del escudo máximo por segundo
 const CARGO_UNIT := 20                # 1 de "Carga" GDD = 20 unidades de material
 const DEATH_LOOT_LOSS := 0.9          # al morir se pierde el 90% de lo recolectado en el sector (sin aviso)
 const VOLLEY_INTERVAL := 1.2          # la nave dispara una andanada con todos sus láseres cada 1.2 s
-const ENEMY_DMG_MULT := 2.4           # dificultad: los alienígenas pegan bastante más fuerte que en v0.3
-const ENEMY_HP_MULT := 1.4
-const ENEMY_BULLET_TURN := 3.2        # rad/s: los disparos enemigos persiguen a la nave (sólo un impulso los esquiva)
+const ENEMY_DMG_MULT := 1.3           # con disparos teledirigidos (casi siempre aciertan) el daño efectivo ya es ~3x el de v0.3
+const ENEMY_HP_MULT := 1.2
+const ENEMY_BULLET_TURN := 2.0        # rad/s: persiguen a la nave; un impulso o un giro cerrado aún los esquiva
 const NEXO_RATE := 587.0              # créditos equivalentes a 1 Cristal Nexo (Specter-X: 246.4K créditos o 420 Nexo)
 const LOOT_BOX_LIFE := 120.0          # segundos que permanece una caja de botín
+const MAX_ENEMIES := 160               # tope de enemigos vivos (rendimiento: más allá cae la tasa de fotogramas)
 
 ## Alcance de disparo por arquetipo (unidades de plano; el láser del jugador alcanza LASER_RANGE).
 const ARCH_RANGE := {

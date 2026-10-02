@@ -91,9 +91,10 @@ func set_aggro() -> void:
 	if aggro:
 		return
 	aggro = true
+	# Avisa sólo a los vecinos directos (sin cadena: antes se activaba medio mapa en cascada).
 	for e in sector.enemies:
 		if e != self and not e.aggro and not e.is_nest and e.plane_pos.distance_to(plane_pos) < 450.0:
-			e.set_aggro()
+			e.aggro = true
 
 
 func display_name() -> String:
@@ -435,6 +436,10 @@ func _sniper(p: PlayerShip, dist: float) -> Vector2:
 
 
 func _spawn_children(n: int) -> void:
+	# Tope de crías por nodriza y de enemigos vivos: sin él la población crecía sin límite.
+	if spawned >= 12 or sector.enemies.size() >= GameData.MAX_ENEMIES:
+		return
+	spawned += n
 	var child: String = def.get("spawns", "chatarrax")
 	sfx("e_spawn", -2.0)
 	for i in n:
