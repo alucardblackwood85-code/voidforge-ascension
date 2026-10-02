@@ -56,9 +56,10 @@ var mines: Array = []
 
 var ended := false
 var demo := false
+var showcase := false
 var demo_timer := 0.0
 var left_held := false
-var zoom_level := 1.0
+var zoom_level := 1.15
 var auto_fire := false
 
 
@@ -66,6 +67,7 @@ func _ready() -> void:
 	level = int(params.get("level", 1))
 	rng.seed = int(params.get("seed", randi()))
 	demo = params.get("demo", false)
+	showcase = params.get("showcase", false)
 	biome = GameData.BIOMES["ferron"]
 	run_ammo = GameState.data["ammo"].duplicate()
 	run_items = GameState.data["items"].duplicate()
@@ -120,6 +122,8 @@ func _ready() -> void:
 			break
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
+	if showcase:
+		_build_showcase()
 
 
 # --- Generación procedural ------------------------------------------------------------
@@ -283,6 +287,8 @@ func _process(delta: float) -> void:
 
 
 func _update_alert(delta: float) -> void:
+	if showcase:
+		return
 	var before := floorf(alert)
 	alert = minf(5.0, alert + delta / 75.0)
 	if floorf(alert) > before:
@@ -881,3 +887,21 @@ func _demo_autopilot(delta: float) -> void:
 			var ang := (player.plane_pos - player.target.plane_pos).angle() + 0.6
 			player.move_target = player.target.plane_pos + Vector2.from_angle(ang) * 380.0
 			player.has_move_target = true
+
+
+# --- Vitrina de arte (depuración: godot -- --showcase) -------------------------------------
+func _build_showcase() -> void:
+	for e in enemies.duplicate():
+		e.queue_free()
+	enemies.clear()
+	alert = 0.0
+	var ids: Array = GameData.ENEMIES.keys()
+	ids.append("nest")
+	var origin := player.plane_pos
+	for i in ids.size():
+		var col := i % 4
+		var row := i / 4
+		var pos := origin + Vector2(300 + col * 300, -450 + row * 300).rotated(-PI * 0.25)
+		var e := spawn_enemy(ids[i], pos, 1, "base")
+		e.heading = PI * 0.25
+		e.home = pos

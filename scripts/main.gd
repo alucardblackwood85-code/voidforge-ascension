@@ -9,7 +9,9 @@ var autotest := false
 func _ready() -> void:
 	UiTheme.apply_root(get_tree().root)
 	autotest = OS.get_cmdline_user_args().has("--sector")
-	if autotest:
+	if OS.get_cmdline_user_args().has("--showcase"):
+		goto_sector({"level": 1, "seed": 7, "showcase": true})
+	elif autotest:
 		goto_sector({"level": 1, "seed": 12345, "demo": true})
 	else:
 		goto_hangar()

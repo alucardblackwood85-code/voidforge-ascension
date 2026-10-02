@@ -78,7 +78,7 @@ func _process(delta: float) -> void:
 	_statuses(delta)
 	var p := sector.player
 	var dist := plane_pos.distance_to(p.plane_pos) if p.alive else 99999.0
-	if not aggro and (dist < 700.0 or sector.alert >= 3.0):
+	if not aggro and not sector.showcase and (dist < 700.0 or sector.alert >= 3.0):
 		aggro = true
 	var move := Vector2.ZERO
 	if aggro and p.alive:

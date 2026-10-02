@@ -33,7 +33,7 @@ tools/             gen_art.ps1 + art_manifest.json (sprites con la API de OpenAI
 
 ## Arte
 Las naves usan siluetas procedurales hasta que existan sprites en `assets/sprites/<grupo>/<id>.png`
-(vista cenital, frente hacia la derecha, fondo transparente). Generarlos:
+(vista cenital, frente hacia la derecha, fondo transparente). Estilo: 3D prerenderizado metálico (look tipo DarkOrbit), nunca pixel art. Generarlos:
 ```powershell
 [Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-...", "User")   # una sola vez
 .\tools\gen_art.ps1

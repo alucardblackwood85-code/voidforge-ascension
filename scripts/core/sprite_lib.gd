@@ -3,6 +3,9 @@ class_name SpriteLib
 ## silueta procedural. Convención: vista cenital estricta, frente de la nave mirando a la DERECHA,
 ## fondo transparente (la proyección isométrica se aplica en el motor).
 
+## Tamaño visual del sprite respecto al radio de colisión.
+const VISUAL_SCALE := 1.35
+
 static var _cache: Dictionary = {}
 
 
@@ -16,6 +19,6 @@ static func get_tex(group: String, id: String) -> Texture2D:
 
 ## Dibuja una textura en el plano con rotación, elevación y radio dados.
 static func draw(ci: CanvasItem, tex: Texture2D, radius: float, angle: float, h: float, modulate: Color = Color.WHITE) -> void:
-	ci.draw_set_transform_matrix(Iso.shape_matrix(angle, h, radius))
+	ci.draw_set_transform_matrix(Iso.sprite_matrix(angle, h, radius * VISUAL_SCALE))
 	ci.draw_texture_rect(tex, Rect2(-1.25, -1.25, 2.5, 2.5), false, modulate)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)

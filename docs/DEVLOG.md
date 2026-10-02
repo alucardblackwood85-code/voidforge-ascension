@@ -26,3 +26,10 @@ Objetivo del GDD §25 "Prioridad de prototipo": nave + láseres + enemigos + map
 **Pendiente (MVP §22.1)**
 - Módulos (4 familias, cajas, pity), 2 biomas más, 5 especies más, jefes con mecánicas, 2 objetivos más.
 - Sprites definitivos, audio, backend online/servidor autoritativo, arrastrar y soltar en la barra rápida.
+
+## v0.1.1 — Primer lote de arte (2026-10-02)
+- Estilo base: naves 3D prerenderizadas, metálicas y brillantes, con iluminación cinematográfica,
+  referencia de look tipo DarkOrbit (sin pixel art). Generado con `tools/gen_art.ps1` (gpt-image-1).
+- 16 sprites: 5 clases de nave del jugador, 10 alienígenas Ferron y el nido. Originales en 1024 px en `assets/source/`.
+- Los sprites se dibujan con menos aplastamiento iso (0.65) y escala visual 1.35x para conservar volumen.
+- Modo vitrina de depuración: `godot -- --showcase`.
