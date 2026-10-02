@@ -48,6 +48,22 @@ func _ready() -> void:
 		v.custom_minimum_size.x = 110
 		tg.add_child(v)
 	left.add_child(totals)
+	# M17: récords locales
+	var recs: Dictionary = GameState.data.get("records", {})
+	if not recs.is_empty():
+		var rc := W.card()
+		var rg := W.grid(3, 12)
+		rc.add_child(rg)
+		for k in GameState.RECORD_NAMES.keys():
+			if not recs.has(k):
+				continue
+			var v := W.vbox(0)
+			v.add_child(UiTheme.label(GameState.RECORD_NAMES[k], 12, UiTheme.MUTED))
+			v.add_child(UiTheme.label(GameData.format_num(int(recs[k])), 18, UiTheme.WARN))
+			v.custom_minimum_size.x = 150
+			rg.add_child(v)
+		left.add_child(UiTheme.label("RÉCORDS", 15, UiTheme.ACCENT))
+		left.add_child(rc)
 	var ladder := W.vbox(2)
 	for i in range(1, GameData.MAX_LEVEL + 1):
 		var row := W.hbox(10)

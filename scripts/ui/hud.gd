@@ -5,6 +5,7 @@ extends CanvasLayer
 signal result_closed
 
 var sector: Sector
+var hint := ""                 # M11: consejo del tutorial
 var root: Control
 var canvas: Control
 var hotbar: HBoxContainer
@@ -188,7 +189,8 @@ func _draw_canvas() -> void:
 	# Habilidades
 	_ability(Vector2(x, 100), Controls.key_label("ability"), GameData.ABILITIES[p.ability_id]["name"], p.ability_cd, GameData.ABILITIES[p.ability_id]["cd"])
 	_ability(Vector2(x + 156, 100), Controls.key_label("boost"), "Impulso", p.boost_cd, 2.5)
-	_ability(Vector2(x + 312, 100), Controls.key_label("drone"), "Dron", sector.drone.ability_cd, Drone.ROLES[sector.drone.role]["cd"])
+	if not sector.drone.locked:
+		_ability(Vector2(x + 312, 100), Controls.key_label("drone"), "Dron", sector.drone.ability_cd, Drone.ROLES[sector.drone.role]["cd"])
 
 	# Objetivo y alerta
 	var cx := vs.x * 0.5
@@ -254,6 +256,14 @@ func _draw_canvas() -> void:
 	# Munición activa
 	var am: Dictionary = GameData.AMMO[sector.active_ammo]
 	_text(Vector2(cx - 200, vs.y - 84), "Munición: %s (%s)  %s  ·  %d por andanada" % [am["name"], am["short"], GameData.format_num(sector.run_ammo.get(sector.active_ammo, 0)), p.lasers.size()], 14, am["color"], HORIZONTAL_ALIGNMENT_CENTER, 400)
+
+	# M11: tutorial
+	if hint != "":
+		var hw := 760.0
+		var hy := vs.y - 190.0
+		canvas.draw_rect(Rect2(cx - hw * 0.5, hy - 26, hw, 40), Color(0.02, 0.08, 0.12, 0.85))
+		canvas.draw_rect(Rect2(cx - hw * 0.5, hy - 26, hw, 40), UiTheme.ACCENT, false, 2.0)
+		_text(Vector2(cx - hw * 0.5, hy), "TUTORIAL · " + hint, 17, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, hw)
 
 	# Avisos
 	var ty := vs.y * 0.3

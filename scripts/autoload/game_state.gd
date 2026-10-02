@@ -117,7 +117,8 @@ func load_game() -> void:
 ## Actualiza perfiles antiguos añadiendo los campos nuevos sin perder el progreso.
 func _migrate() -> void:
 	var defaults := {
-		"xp": 0, "modules": [], "drone_lasers": [], "kills_by": {}, "asc_max": 0,
+		"xp": 0, "modules": [], "drone_lasers": [], "kills_by": {}, "asc_max": 0, "records": {},
+		"tutorial_done": int(data.get("stats", {}).get("runs", 0)) >= 1,
 		"pet": {"xp": 0}, "perma": {"dmg": 0.0, "hull": 0.0, "shield": 0.0}, "rank_claimed": 1, "rank_log": [],
 		"unlocks": {"modules": int(data.get("xp", 0)) >= GameData.xp_for_level(5), "pet": int(data.get("stats", {}).get("runs", 0)) >= 2},
 		"pity": {"since_relic": 0, "since_exotic": 0, "opened": 0},
@@ -349,6 +350,8 @@ func current_loadout() -> Dictionary:
 ## Equipa (o desequipa con uid = -1) en un slot; si el objeto estaba en otra nave/slot lo libera.
 ## Módulos: una nave nunca puede llevar dos del mismo color (9) — el anterior se desequipa.
 func equip(list_key: String, slot: int, uid: int, ship_id: String = "") -> void:
+	if list_key == "mods" and uid >= 0 and not data["unlocks"].get("modules", false):
+		return
 	if ship_id == "":
 		ship_id = data["current_ship"]
 	if list_key == "drone_lasers":
@@ -695,6 +698,10 @@ func apply_run_result(result: Dictionary) -> void:
 			data[k][id] = maxi(0, int(data[k].get(id, 0)) - int(used[id]))
 	var stats: Dictionary = data["stats"]
 	stats["runs"] = int(stats["runs"]) + 1
+	# M11: el pet se une tras la segunda incursión.
+	if int(stats["runs"]) >= 2 and not data["unlocks"].get("pet", false):
+		data["unlocks"]["pet"] = true
+		data["news"] = data.get("news", []) + ["¡Nuevo! Tu pet se une al escuadrón: equípale láseres en Equipamiento → Pet / Dron."]
 	stats["kills"] = int(stats["kills"]) + int(result.get("kills", 0))
 	stats["time"] = int(stats["time"]) + int(result.get("time", 0))
 	stats["credits_earned"] = int(stats["credits_earned"]) + int(loot.get("credits", 0))
@@ -720,7 +727,59 @@ func apply_run_result(result: Dictionary) -> void:
 		if lvl >= GameData.ASC_UNLOCK_LEVEL:
 			data["asc_max"] = mini(GameData.ASC_MAX, maxi(int(data["asc_max"]), int(result.get("asc", 0)) + 1))
 	# La experiencia ya se fue sumando durante la incursión (ascensos en tiempo real).
+	_update_records(result)
 	Prog.on_run(result)
 	last_result = result
 	save_game()
 	changed.emit()
+
+
+# --- M17: récords locales y copia de seguridad ----------------------------------------------
+func _update_records(result: Dictionary) -> void:
+	if not data.has("records"):
+		data["records"] = {}
+	var r: Dictionary = data["records"]
+	var ok: bool = result.get("outcome", "") != "death"
+	var lvl := int(result.get("level", 1))
+	var t := int(result.get("time", 0))
+	var credits := int(result.get("loot", {}).get("credits", 0))
+	_rec(r, "kills", int(result.get("kills", 0)))
+	_rec(r, "xp", int(result.get("xp", 0)))
+	_rec(r, "longest", t)
+	if ok:
+		_rec(r, "credits", credits)
+		_rec(r, "level", lvl)
+		_rec(r, "asc", int(result.get("asc", 0)))
+		if result.get("objective_done", false):
+			_rec(r, "fastest_%d" % lvl, t, false)
+
+
+const RECORD_NAMES := {"kills": "Más bajas en una incursión", "xp": "Más XP en una incursión", "credits": "Más créditos extraídos",
+	"level": "Nivel más alto extraído", "asc": "Ascensión más alta extraída", "longest": "Incursión más larga (s)"}
+
+
+## Código de exportación (texto en base64) para copiar la partida a otro dispositivo.
+func export_code() -> String:
+	return "VFA1:" + Marshalls.utf8_to_base64(JSON.stringify(data))
+
+
+func import_code(code: String) -> bool:
+	code = code.strip_edges()
+	if not code.begins_with("VFA1:"):
+		return false
+	var txt := Marshalls.base64_to_utf8(code.substr(5))
+	var parsed = JSON.parse_string(txt)
+	if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("ships") or not parsed.has("xp"):
+		return false
+	data = parsed
+	_migrate()
+	_fix_json_types()
+	Prog.ensure()
+	save_game()
+	changed.emit()
+	return true
+
+
+func _rec(r: Dictionary, key: String, v: int, higher: bool = true) -> void:
+	if not r.has(key) or (v > int(r[key]) if higher else v < int(r[key])):
+		r[key] = v

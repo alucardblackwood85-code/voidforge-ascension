@@ -68,6 +68,10 @@ func _ship_view() -> void:
 		sec.add_child(sv)
 		var arr: Array = lo[key]
 		sv.add_child(UiTheme.label("%s  (%d slots)" % [{"lasers": "LÁSERES", "gens": "GENERADORES", "mods": "MÓDULOS"}[key], arr.size()], 16, UiTheme.ACCENT))
+		if key == "mods" and not GameState.data["unlocks"].get("modules", false):
+			sv.add_child(UiTheme.label("🔒 Los módulos se desbloquean al alcanzar el nivel 5 (%s)." % GameState.rank_name(5), 14, UiTheme.WARN))
+			left.add_child(sec)
+			continue
 		var slots := HFlowContainer.new()
 		slots.add_theme_constant_override("h_separation", 8)
 		for i in arr.size():
@@ -123,7 +127,15 @@ func _inventory(filter: String, ship_id: String) -> Control:
 		var note := ""
 		if where != "":
 			note = "En %s" % GameData.SHIPS[where]["name"]
-		var d := DragItem.make(filter, int(it["uid"]), W.item_info(filter, it), note)
+		var info := W.item_info(filter, it)
+		var cmp := _compare(filter, it, ship_id)
+		if cmp != "":
+			info["tip"] += "
+
+Comparado con lo equipado: " + cmp
+			if note == "":
+				note = cmp
+		var d := DragItem.make(filter, int(it["uid"]), info, note)
 		d.activated.connect(func(item): _quick_equip(item.kind, item.uid))
 		flow.add_child(d)
 		count += 1
@@ -142,6 +154,11 @@ func _inventory(filter: String, ship_id: String) -> Control:
 
 # --- Pet / dron ----------------------------------------------------------------------------
 func _pet_view() -> void:
+	if not GameState.data["unlocks"].get("pet", false):
+		var lc := W.card(Color(0.05, 0.08, 0.13, 0.92), UiTheme.WARN, 20)
+		lc.add_child(UiTheme.label("🔒 Tu pet se une al escuadrón tras completar 2 incursiones (%d/2)." % int(GameState.data["stats"]["runs"]), 18, UiTheme.WARN))
+		add_child(lc)
+		return
 	var row := W.hbox(14)
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(row)
@@ -325,3 +342,56 @@ func _quick_equip(kind: String, uid: int) -> void:
 		Sfx.play("ui_error")
 		return
 	_equip(kind, slot, uid)
+
+
+# --- M14: comparador -------------------------------------------------------------------------
+## Diferencia del objeto frente al peor equipado de su tipo (o "slot libre").
+func _compare(filter: String, it: Dictionary, ship_id: String) -> String:
+	var lo := GameState.ensure_loadout(ship_id)
+	var mine := _item_value(filter, it)
+	var worst := INF
+	var free := false
+	var key := "mods" if filter == "mods" else filter
+	for uid in lo[key]:
+		if int(uid) < 0:
+			free = true
+			continue
+		var eq := GameState.find_item("modules" if filter == "mods" else filter, int(uid))
+		if eq.is_empty():
+			continue
+		if filter == "gens" and GameData.GENERATORS[eq["id"]]["type"] != GameData.GENERATORS[it["id"]]["type"]:
+			continue
+		if filter == "mods":
+			# Regla de color: sólo se compara con el módulo del mismo color si lo hay.
+			if eq["family"] == it["family"]:
+				worst = _item_value(filter, eq)
+				free = false
+				break
+			continue
+		worst = minf(worst, _item_value(filter, eq))
+	if lo[key].is_empty():
+		return ""
+	if free and (filter != "mods" or worst == INF):
+		return "▲ slot libre"
+	if worst == INF or worst <= 0.0:
+		return "▲ nuevo tipo"
+	var pct := (mine - worst) / worst * 100.0
+	if absf(pct) < 0.5:
+		return "= igual"
+	return ("▲ +%d%%" if pct > 0.0 else "▼ %d%%") % int(round(pct))
+
+
+func _item_value(filter: String, it: Dictionary) -> float:
+	match filter:
+		"lasers":
+			var d: Dictionary = GameData.LASERS[it["id"]]
+			return GameState.laser_volley_damage(d, int(it["level"])) * int(d["shots"])
+		"gens":
+			var g: Dictionary = GameData.GENERATORS[it["id"]]
+			return float(g["stats"].get(g["type"], 0.0)) * GameData.component_mult(int(it["level"]))
+		"mods":
+			var lines := 0.0
+			for l in it["lines"]:
+				lines += float(l["value"])
+			return float(it["main"]) + lines * 0.5
+	return 0.0

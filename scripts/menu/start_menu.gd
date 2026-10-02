@@ -184,18 +184,22 @@ func launch(params: Dictionary) -> void:
 func _show_rank_rewards() -> void:
 	var log: Array = GameState.data.get("rank_log", [])
 	var ach: Array = GameState.data.get("ach_log", [])
-	if log.is_empty() and ach.is_empty():
+	var news: Array = GameState.data.get("news", [])
+	if log.is_empty() and ach.is_empty() and news.is_empty():
 		return
 	var txt := ""
 	for e in log:
 		txt += "%s (nivel %d): %s\n" % [GameState.rank_name(int(e["level"])), int(e["level"]), ", ".join(e["rewards"])]
 	for a in ach:
 		txt += "🏆 Logro: %s\n" % a
+	for n in news:
+		txt += "%s\n" % n
 	GameState.data["rank_log"] = []
 	GameState.data["ach_log"] = []
+	GameState.data["news"] = []
 	GameState.save_game()
 	var dlg := AcceptDialog.new()
-	dlg.title = "¡Ascenso!" if not log.is_empty() else "¡Logro desbloqueado!"
+	dlg.title = "¡Ascenso!" if not log.is_empty() else ("¡Logro desbloqueado!" if not ach.is_empty() else "Novedades")
 	dlg.dialog_text = txt.strip_edges()
 	add_child(dlg)
 	dlg.popup_centered()

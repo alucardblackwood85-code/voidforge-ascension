@@ -25,6 +25,7 @@ var fetch_box: LootBox = null
 var attack_len := 5.0
 var pet_lvl := 1
 var guard_t := 0.3
+var locked := false       # M11: el pet se desbloquea tras 2 incursiones
 
 
 func setup(p_sector: Sector, p_role: String) -> void:
@@ -99,6 +100,9 @@ func _nearest_box(p: PlayerShip, r: float) -> LootBox:
 
 
 func _process(delta: float) -> void:
+	if locked:
+		visible = false
+		return
 	var p := sector.player
 	if not p.alive:
 		return
@@ -147,6 +151,8 @@ func _fire(p: PlayerShip) -> void:
 
 
 func use_ability() -> void:
+	if locked:
+		return
 	if ability_cd > 0.0:
 		return
 	ability_cd = ROLES[role]["cd"]

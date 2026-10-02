@@ -167,6 +167,7 @@ func _ready() -> void:
 	var role: String = GameState.data["drone"]["role"]
 	drone = Drone.new()
 	drone.setup(self, role)
+	drone.locked = not GameState.data["unlocks"].get("pet", false) and not (demo and not bot) and not showcase
 	world.add_child(drone)
 
 	hud = Hud.new()
@@ -408,8 +409,8 @@ func _process(delta: float) -> void:
 		cells[c]["visited"] = true
 	_update_loot(delta)
 	_update_events(delta)
-	if is_instance_valid(boss) and boss.aggro and boss.plane_pos.distance_to(player.plane_pos) < 1600.0:
-		Music.play("boss")
+	_update_tutorial(delta)
+	_update_music(delta)
 	Sfx.listener_pos = player.plane_pos
 	Sfx.has_listener = true
 	camera.position = player.position + Vector2(0, -20)
@@ -1550,3 +1551,74 @@ func _award_xp(xp: int) -> void:
 		Sfx.voice("rank_up", true)
 	if GameState.pet_level() > pet_before:
 		hud.toast("Tu pet sube al nivel %d" % GameState.pet_level(), 3.0, Color("5affc8"))
+
+
+# --- M11: tutorial guiado en las primeras incursiones -----------------------------------------
+const TUTORIAL := [
+	"Haz CLIC DERECHO en el mapa para mover la nave.",
+	"Haz CLIC IZQUIERDO sobre un enemigo para fijarlo: tu nave dispara sola cada 1,2 s.",
+	"Los enemigos sueltan cajas: haz CLIC IZQUIERDO sobre una para recogerla.",
+	"Las teclas 1-0 cambian la munición (más daño, más coste) o usan objetos de reparación.",
+	"Cumple el objetivo (arriba) y vuelve al PORTAL para extraer tu botín. Si mueres, pierdes el 90%.",
+]
+var tut_step := -2
+var tut_t := 0.0
+
+
+func _update_tutorial(delta: float) -> void:
+	if tut_step == -2:
+		tut_step = 0 if not GameState.data.get("tutorial_done", false) and not demo and not showcase else -1
+	if tut_step < 0:
+		return
+	tut_t += delta
+	var advance := false
+	match tut_step:
+		0:
+			advance = player.has_move_target or player.velocity.length() > 30.0
+		1:
+			advance = player.target_valid() and player.target is Enemy
+		2:
+			advance = run_boxes > 0 or tut_t > 40.0
+		3:
+			advance = tut_t > 9.0
+		4:
+			advance = objective_done or tut_t > 14.0
+	if advance:
+		tut_step += 1
+		tut_t = 0.0
+		if tut_step >= TUTORIAL.size():
+			tut_step = -1
+			GameState.data["tutorial_done"] = true
+			hud.hint = ""
+			return
+		Sfx.play("ui_click")
+	hud.hint = TUTORIAL[tut_step]
+
+
+# --- M15: música dinámica --------------------------------------------------------------------
+var music_t := 0.0
+var combat_level := 0.0      # sube con enemigos en combate cerca, baja lentamente
+
+
+func _update_music(delta: float) -> void:
+	if showcase:
+		return
+	music_t -= delta
+	if music_t > 0.0:
+		return
+	music_t = 0.5
+	var near := 0
+	for e in enemies:
+		if e.aggro and e.alive and e.plane_pos.distance_squared_to(player.plane_pos) < 1000.0 * 1000.0:
+			near += 1
+	# Histéresis: entra en combate con 3+ enemigos cerca y sale tras ~6 s de calma.
+	if near >= 3:
+		combat_level = minf(1.0, combat_level + 0.35)
+	else:
+		combat_level = maxf(0.0, combat_level - 0.08)
+	if is_instance_valid(boss) and boss.aggro and boss.plane_pos.distance_to(player.plane_pos) < 1600.0:
+		Music.play("boss")
+	elif combat_level >= 0.6 or (combat_level > 0.0 and Music.current == biome_id + "_combat"):
+		Music.play(biome_id + "_combat")
+	else:
+		Music.play(biome_id)

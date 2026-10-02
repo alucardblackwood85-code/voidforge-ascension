@@ -75,11 +75,16 @@ func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		only = args[0]
+	var jobs := {}
 	for name in TRACKS.keys():
-		if only != "" and name != only:
+		jobs[name] = TRACKS[name]
+		if not name in ["menu", "boss"]:
+			jobs[name + "_combat"] = combat_spec(TRACKS[name])
+	for name in jobs.keys():
+		if only != "" and not name.contains(only):
 			continue
 		var t0 := Time.get_ticks_msec()
-		var buf := render_track(name, TRACKS[name])
+		var buf := render_track(name, jobs[name])
 		save_wav(OUT_DIR + name + ".wav", buf)
 		print("%s: %.1f s de audio en %d ms" % [name, buf.size() / float(SR), Time.get_ticks_msec() - t0])
 	quit()
@@ -322,3 +327,21 @@ func save_wav(path: String, samples: PackedFloat32Array) -> void:
 	w.stereo = false
 	w.data = data
 	w.save_to_wav(ProjectSettings.globalize_path(path))
+
+
+## M15: variante de combate de un bioma (8 compases con todas las capas, algo más brillante).
+static func combat_spec(spec: Dictionary) -> Dictionary:
+	var s := spec.duplicate(true)
+	var all: Array = []
+	for sec in spec["form"]:
+		for l in sec[1]:
+			if not all.has(l):
+				all.append(l)
+	if not all.has("drums"):
+		all.append("drums")
+	var no_lead := all.duplicate()
+	no_lead.erase("lead")
+	s["form"] = [[4, no_lead], [4, all]]
+	s["pad"]["cut"] = float(s["pad"]["cut"]) * 1.4
+	s["bpm"] = int(spec["bpm"]) + 6
+	return s
