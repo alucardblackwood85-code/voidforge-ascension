@@ -33,3 +33,26 @@ Objetivo del GDD §25 "Prioridad de prototipo": nave + láseres + enemigos + map
 - 16 sprites: 5 clases de nave del jugador, 10 alienígenas Ferron y el nido. Originales en 1024 px en `assets/source/`.
 - Los sprites se dibujan con menos aplastamiento iso (0.65) y escala visual 1.35x para conservar volumen.
 - Modo vitrina de depuración: `godot -- --showcase`.
+
+## v0.2.0 — Audio, 50 alienígenas, 5 biomas y mapa espacial (2026-10-02)
+**Audio**
+- OpenAI no ofrece generación de efectos de sonido (su API de audio es voz/transcripción), así que los SFX se
+  sintetizan por procedimiento con `scripts/tools/gen_sfx.gd` → `assets/audio/sfx/*.wav` (58 sonidos).
+  Se pueden reemplazar por archivos externos con el mismo nombre sin tocar código.
+- Cada láser (L-01…L-18) tiene firma sonora propia; dron, disparos por facción, embestida, curación, minas,
+  artillería, invocación, drenaje, fase, francotirador, reflejo, pulsos, nova, explosiones, impactos, botín,
+  alerta, objetivo, extracción e interfaz. Autoload `Sfx` con atenuación por distancia y anti-saturación.
+**Contenido**
+- Bestiario completo del GDD: 50 especies en 5 facciones. Nuevos arquetipos: drenador, emboscador, defensor,
+  francotirador, élite, control y trampa, todos con telegraph visual.
+- Biomas jugables: Cinturón Ferron (1+), Nebulosa Vesper (8+), Campos Prismáticos (16+), Fractura del Vacío (24+),
+  Jardín Leviatán (32+), cada uno con jefe propio. Los otros 5 biomas del GDD quedan para expansión.
+- Sprite único para cada una de las 25 naves y para los 50 alienígenas; Códex en el hangar.
+- Color único por láser (18 tonos distintos), un solo tono por disparo.
+**Mapa**
+- Sin rejilla/cuadrantes: fondo espacial por bioma (imagen generada) con parallax + estrellas.
+- Mapa más grande: chunks de 2000 u y 9-20 chunks por sector. Barrera de energía sólo en el borde exterior.
+- La munición ya no colisiona con el terreno; sólo nave/terreno colisionan.
+**UI**
+- Iconos de munición Mk-I…VI (prueba) en barra rápida y fabricación.
+- Modos de depuración: `-- --sector=<bioma>` y `-- --showcase=<bioma>`.

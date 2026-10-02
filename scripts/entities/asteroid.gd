@@ -30,6 +30,10 @@ func setup(p_sector: Sector, pos: Vector2, r: float, p_ore: String, rng: RandomN
 
 
 func _process(delta: float) -> void:
+	# Mapa grande: sólo se animan y dibujan los asteroides cercanos a la nave.
+	visible = sector.player == null or plane_pos.distance_to(sector.player.plane_pos) < 2300.0
+	if not visible:
+		return
 	rot += spin * delta
 	flash = maxf(0.0, flash - delta * 4.0)
 	queue_redraw()

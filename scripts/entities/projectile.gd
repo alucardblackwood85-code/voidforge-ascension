@@ -31,11 +31,8 @@ func _process(delta: float) -> void:
 		dir = to.normalized()
 	elif target != null:
 		target = null
+	# La munición atraviesa el terreno: sólo las naves colisionan con asteroides.
 	plane_pos += dir * speed * delta
-	if sector.is_blocked(plane_pos):
-		sector.fx_spark(plane_pos, color)
-		queue_free()
-		return
 	if hostile:
 		var p := sector.player
 		if p.alive and plane_pos.distance_to(p.plane_pos) < p.radius + size:
@@ -74,5 +71,6 @@ func _draw() -> void:
 		draw_circle(lift, size, color.lightened(0.3))
 		draw_line(lift, lift + tail, Color(color, 0.5), size)
 	else:
-		draw_line(lift, lift + tail, Color(color, 0.35), 6.0)
-		draw_line(lift, lift + tail * 0.8, color.lightened(0.5), 2.5)
+		# Un solo color por láser: halo y núcleo del mismo tono.
+		draw_line(lift, lift + tail, Color(color, 0.35), 7.0)
+		draw_line(lift, lift + tail * 0.85, color.lightened(0.2), 3.0)

@@ -8,11 +8,19 @@ var autotest := false
 
 func _ready() -> void:
 	UiTheme.apply_root(get_tree().root)
-	autotest = OS.get_cmdline_user_args().has("--sector")
-	if OS.get_cmdline_user_args().has("--showcase"):
-		goto_sector({"level": 1, "seed": 7, "showcase": true})
+	var demo_biome := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--sector"):
+			demo_biome = arg.get_slice("=", 1) if "=" in arg else "ferron"
+	autotest = demo_biome != ""
+	var showcase_biome := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--showcase"):
+			showcase_biome = arg.get_slice("=", 1) if "=" in arg else "ferron"
+	if showcase_biome != "":
+		goto_sector({"level": 1, "seed": 7, "showcase": true, "biome": showcase_biome})
 	elif autotest:
-		goto_sector({"level": 1, "seed": 12345, "demo": true})
+		goto_sector({"level": 1, "seed": 12345, "demo": true, "biome": demo_biome})
 	else:
 		goto_hangar()
 

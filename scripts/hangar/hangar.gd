@@ -8,6 +8,7 @@ var tabs: TabContainer
 var header: HBoxContainer
 var selected_ship := ""
 var selected_level := 1
+var selected_biome := "ferron"
 
 
 func _ready() -> void:
@@ -64,6 +65,7 @@ func _rebuild() -> void:
 	_add_tab("Mejoras", _tab_upgrades())
 	_add_tab("Barra rápida", _tab_hotbar())
 	_add_tab("Dron", _tab_drone())
+	_add_tab("Códex", _tab_codex())
 	_add_tab("Inventario", _tab_inventory())
 	if current >= 0 and current < tabs.get_tab_count():
 		tabs.current_tab = current
@@ -112,31 +114,62 @@ func _card() -> PanelContainer:
 
 
 # --- Mapa estelar -----------------------------------------------------------------------
+func _biome_unlocked(id: String) -> bool:
+	var b: Dictionary = GameData.BIOMES[id]
+	return not b.get("locked", false) and int(GameState.data["sector_max"]) >= int(b["min_level"])
+
+
 func _tab_starmap() -> Control:
 	var v := _vbox(12)
 	_section(v, "Seleccionar sector")
 	var row := _row(20)
 	v.add_child(row)
 	var biomes := _vbox(6)
-	biomes.custom_minimum_size.x = 320
+	biomes.custom_minimum_size.x = 360
 	row.add_child(biomes)
+	if not _biome_unlocked(selected_biome):
+		selected_biome = "ferron"
 	for id in GameData.BIOMES.keys():
 		var b: Dictionary = GameData.BIOMES[id]
-		var locked: bool = b.get("locked", false)
 		var btn := Button.new()
-		btn.text = "%s   %s" % [b["name"], ("(Bloqueado — expansión)" if locked else "Nivel %d+" % b["min_level"])]
-		btn.disabled = locked
+		var tag := ""
+		if b.get("locked", false):
+			tag = "(expansión)"
+		elif not _biome_unlocked(id):
+			tag = "(requiere nivel %d)" % b["min_level"]
+		else:
+			tag = "Nivel %d+" % b["min_level"]
+		btn.text = "%s   %s" % [b["name"], tag]
+		btn.disabled = not _biome_unlocked(id)
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		if id == selected_biome:
+			btn.add_theme_stylebox_override("normal", UiTheme.box(Color(0.12, 0.18, 0.28), UiTheme.ACCENT, 5, 1, 8))
+			btn.add_theme_color_override("font_color", UiTheme.ACCENT)
+		btn.pressed.connect(func():
+			Sfx.play("ui_click")
+			selected_biome = id
+			selected_level = clampi(selected_level, int(b["min_level"]), int(GameState.data["sector_max"]))
+			_rebuild())
 		biomes.add_child(btn)
 	var info := _vbox(10)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(info)
+	var bg_path := "res://assets/backgrounds/%s.png" % selected_biome
+	if ResourceLoader.exists(bg_path):
+		var preview := TextureRect.new()
+		preview.texture = load(bg_path)
+		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		preview.custom_minimum_size = Vector2(0, 150)
+		preview.clip_contents = true
+		info.add_child(preview)
+	var b_sel: Dictionary = GameData.BIOMES[selected_biome]
 	var lv_row := _row()
 	lv_row.add_child(UiTheme.label("Nivel de amenaza:", 18))
 	var spin := SpinBox.new()
-	spin.min_value = 1
-	spin.max_value = GameState.data["sector_max"]
-	spin.value = selected_level
+	spin.min_value = b_sel["min_level"]
+	spin.max_value = maxi(int(b_sel["min_level"]), int(GameState.data["sector_max"]))
+	spin.value = clampi(selected_level, int(spin.min_value), int(spin.max_value))
 	lv_row.add_child(spin)
 	lv_row.add_child(UiTheme.label("(máximo desbloqueado: %d)" % GameState.data["sector_max"], 14, UiTheme.MUTED))
 	info.add_child(lv_row)
@@ -149,9 +182,11 @@ func _tab_starmap() -> Control:
 	update.call()
 	var launch := UiTheme.button("  LANZAR INCURSIÓN  ", func():
 		GameState.save_game()
-		launch_requested.emit({"level": selected_level, "seed": randi()}))
+		Sfx.play("warp")
+		launch_requested.emit({"level": selected_level, "seed": randi(), "biome": selected_biome}))
 	launch.add_theme_font_size_override("font_size", 22)
 	launch.custom_minimum_size = Vector2(320, 56)
+	launch.add_theme_stylebox_override("normal", UiTheme.box(Color(0.05, 0.25, 0.3), UiTheme.ACCENT, 6, 2, 10))
 	var warn := ""
 	if GameState.equipped_lasers().is_empty():
 		launch.disabled = true
@@ -175,14 +210,18 @@ func recommended_power(level: int) -> float:
 
 
 func _sector_details(level: int) -> String:
+	var b: Dictionary = GameData.BIOMES[selected_biome]
 	var mine := power_index()
 	var rec := recommended_power(level)
 	var col := "6fd17a" if mine >= rec else ("ffb84a" if mine >= rec * 0.8 else "ff5a5a")
-	var s := "[b]Cinturón Ferron[/b] — asteroides, metal oxidado y estaciones rotas.\n"
-	s += "Peligros: nubes de chatarra, minas.  Recursos: Ferrita, Plata, Oro, Titanio.\n\n"
+	var res: PackedStringArray = []
+	for k in b["resources"].keys():
+		res.append(GameData.mat_name(k))
+	var s := "[b]%s[/b] — %s  Facción: [b]%s[/b]\n" % [b["name"], b["desc"], b["faction"]]
+	s += "Peligros: %s  Recursos: %s.\n\n" % [b["hazards"], ", ".join(res)]
 	s += "Poder recomendado: [b]%s[/b]   ·   Tu poder: [color=#%s][b]%s[/b][/color]\n" % [GameData.format_num(rec), col, GameData.format_num(mine)]
 	s += "Vida enemiga x%.2f   ·   Daño enemigo x%.2f   ·   Recompensas x%.2f\n" % [GameData.level_hp(1.0, level), GameData.level_dmg(1.0, level), GameData.level_reward(1.0, level)]
-	s += "Objetivo procedural: Limpieza o Destruir nidos. Variantes élite posibles: Boss%s.\n" % (", Mega" if level >= 3 else "")
+	s += "Objetivo procedural: Limpieza o Destruir nidos. Jefe: %s. Variantes élite: Boss%s.\n" % [GameData.ENEMIES[b["elites"][0]]["name"], ", Mega" if level >= 3 else ""]
 	if GameState.data["sector_cleared"].has(level):
 		s += "[color=#7d8aa3]Primera limpieza ya obtenida.[/color]"
 	else:
@@ -206,6 +245,8 @@ func _tab_ships() -> Control:
 		b.text = "%s%s%s" % ["★ " if s.get("special", false) else "", s["name"], "  ✔" if owned else ""]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.custom_minimum_size.x = 250
+		b.icon = _ship_tex(id)
+		b.add_theme_constant_override("icon_max_width", 44)
 		if id == GameState.data["current_ship"]:
 			b.add_theme_color_override("font_color", UiTheme.ACCENT)
 		if id == selected_ship:
@@ -225,6 +266,14 @@ func _ship_detail(id: String) -> Control:
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := _vbox()
 	card.add_child(v)
+	var tex := _ship_tex(id)
+	if tex:
+		var pic := TextureRect.new()
+		pic.texture = tex
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.custom_minimum_size = Vector2(0, 220)
+		v.add_child(pic)
 	v.add_child(UiTheme.label(s["name"], 24, UiTheme.ACCENT))
 	v.add_child(UiTheme.label("%s%s — %s" % [GameData.SHIP_CLASSES[s["class"]]["name"], " especial" if s.get("special", false) else "", s["note"]], 15, UiTheme.MUTED))
 	var st := GameState.ship_stats(id)
@@ -350,12 +399,18 @@ func _tab_crafting() -> Control:
 	var v := _vbox(10)
 	_section(v, "Munición (lotes de 100)")
 	var g := GridContainer.new()
-	g.columns = 5
+	g.columns = 6
 	g.add_theme_constant_override("h_separation", 14)
 	g.add_theme_constant_override("v_separation", 6)
 	v.add_child(g)
 	for id in GameData.AMMO.keys():
 		var a: Dictionary = GameData.AMMO[id]
+		var icon := TextureRect.new()
+		icon.texture = SpriteLib.get_icon("ammo", id)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.custom_minimum_size = Vector2(56, 56)
+		g.add_child(icon)
 		g.add_child(UiTheme.label("%s (%s)" % [a["name"], a["short"]], 16, a["color"]))
 		g.add_child(UiTheme.label("En almacén: %s" % GameData.format_num(GameState.data["ammo"].get(id, 0)), 15))
 		var c := UiTheme.rich(UiTheme.cost_text(a["recipe"]), 13)
@@ -526,3 +581,50 @@ func _show_last_result() -> void:
 		dlg.dialog_text = "¡Sector nivel %d limpiado por primera vez!\n+%d Cristales Nexo. Nivel %d desbloqueado." % [r["level"], r["first_clear_nexo"], r["level"] + 1]
 		add_child(dlg)
 		dlg.popup_centered.call_deferred()
+
+
+func _ship_tex(id: String) -> Texture2D:
+	var t := SpriteLib.get_tex("ships", id)
+	return t if t else SpriteLib.get_tex("ships", GameData.SHIPS[id]["class"])
+
+
+# --- Códex de alienígenas (21.2) -----------------------------------------------------------
+const ARCH_NAMES := {
+	"harasser": "Hostigador", "swarm": "Enjambre", "tank": "Tanque", "hunter": "Cazador", "charger": "Rompelíneas",
+	"support": "Soporte", "miner": "Minador", "artillery": "Artillería", "mother": "Nodriza / Invocador",
+	"drainer": "Drenador", "ambusher": "Emboscador", "defender": "Defensor", "sniper": "Francotirador",
+	"elite": "Élite", "control": "Control", "trap": "Trampa",
+}
+
+
+func _tab_codex() -> Control:
+	var v := _vbox(10)
+	for bid in GameData.BIOMES.keys():
+		var b: Dictionary = GameData.BIOMES[bid]
+		if not b.has("enemies"):
+			continue
+		_section(v, "%s — %s" % [b["faction"], b["name"]])
+		var grid := GridContainer.new()
+		grid.columns = 5
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		v.add_child(grid)
+		var ids: Array = b["enemies"].keys() + b["elites"]
+		for eid in ids:
+			var e: Dictionary = GameData.ENEMIES[eid]
+			var card := _card()
+			card.custom_minimum_size = Vector2(250, 0)
+			var cv := _vbox(2)
+			card.add_child(cv)
+			var t := SpriteLib.get_tex("enemies", eid)
+			if t:
+				var pic := TextureRect.new()
+				pic.texture = t
+				pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				pic.custom_minimum_size = Vector2(0, 110)
+				cv.add_child(pic)
+			cv.add_child(UiTheme.label(e["name"], 16, e["accent"].lerp(Color.WHITE, 0.4)))
+			cv.add_child(UiTheme.label("%s · HP %d · DMG %d · VEL %d" % [ARCH_NAMES.get(e["arch"], e["arch"]), e["hp"], e["dmg"], e["vel"]], 12, UiTheme.MUTED))
+			grid.add_child(card)
+	return v

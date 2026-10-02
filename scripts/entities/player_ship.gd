@@ -27,6 +27,7 @@ var ability_cd := 0.0
 var buffs: Dictionary = {}      # nombre -> segundos restantes
 var invulnerable := false
 var thrust_anim := 0.0
+var external_pull := Vector2.ZERO  # tirón de pozos gravitatorios enemigos
 
 
 func setup(p_sector: Sector) -> void:
@@ -43,7 +44,7 @@ func setup(p_sector: Sector) -> void:
 	height = 22.0
 	ability_id = def.get("ability", GameData.SHIP_CLASSES[ship_class]["ability"])
 	for l in GameState.equipped_lasers(ship_id):
-		lasers.append({"def": l["def"], "level": l["level"], "timer": randf() * 0.3, "count": 0, "stack": 0, "last_target": null})
+		lasers.append({"id": l["id"], "def": l["def"], "level": l["level"], "timer": randf() * 0.3, "count": 0, "stack": 0, "last_target": null})
 
 
 func max_speed() -> float:
@@ -54,6 +55,8 @@ func max_speed() -> float:
 		s *= 1.4
 	if buffs.has("anchor"):
 		s *= 0.65
+	if buffs.has("slowed"):
+		s *= 0.6
 	return s
 
 
@@ -103,7 +106,8 @@ func _move(delta: float) -> void:
 			desired = Vector2.from_angle(heading)
 	var accel: float = 900.0 * stats["accel"] * (1.6 if ship_class == "caza" else 1.0)
 	velocity = velocity.move_toward(desired * top, accel * delta)
-	plane_pos += velocity * delta
+	plane_pos += (velocity + external_pull) * delta
+	external_pull = external_pull.move_toward(Vector2.ZERO, 500.0 * delta)
 	plane_pos = sector.constrain(plane_pos, radius)
 	# La nave mira al objetivo si dispara; si no, hacia donde se mueve.
 	var face_dir := velocity
@@ -182,6 +186,7 @@ func _shoot_laser(i: int, l: Dictionary) -> void:
 	var n := lasers.size()
 	var side := (float(i) - (n - 1) * 0.5) * 10.0
 	var origin := plane_pos + Vector2.from_angle(heading) * radius * 0.6 + Vector2.from_angle(heading + PI * 0.5) * side
+	Sfx.play("laser_" + l["id"], plane_pos, -2.0)
 	var shots: int = def["shots"]
 	if def["effect"] == "scatter":
 		var base_dir := (target.plane_pos - origin).normalized()
@@ -207,6 +212,7 @@ func try_boost() -> void:
 	energy -= 35.0
 	boost_time = 0.35
 	boost_cd = 2.5 * float(stats["boost_cd"])
+	Sfx.play("boost")
 	sector.fx_ring(plane_pos, 50.0, Color(0.5, 0.9, 1.0, 0.8))
 
 
@@ -224,6 +230,7 @@ func try_ability() -> void:
 			sector.gravity_well(plane_pos, 420.0, ab["dur"])
 		_:
 			buffs[ability_id] = ab["dur"]
+	Sfx.play("ability")
 	sector.fx_ring(plane_pos, 90.0, UiTheme.ACCENT)
 	sector.hud.toast(ab["name"])
 
@@ -243,10 +250,14 @@ func take_damage(amount: float) -> void:
 	if rest > 0.0:
 		hull -= rest
 		sector.hud.flash_damage()
+		Sfx.play("hit_hull", null, -3.0)
+	else:
+		Sfx.play("hit_shield", null, -6.0)
 	if hull <= 0.0:
 		hull = 0.0
 		alive = false
 		sector.fx_explosion(plane_pos, 90.0, Color("ff8a3a"))
+		Sfx.play("explosion_l")
 		died.emit()
 
 

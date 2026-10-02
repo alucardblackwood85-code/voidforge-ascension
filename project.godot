@@ -22,6 +22,7 @@ config/icon="res://icon.svg"
 GameData="*res://scripts/autoload/game_data.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 Controls="*res://scripts/autoload/controls.gd"
+Sfx="*res://scripts/autoload/sfx.gd"
 
 [display]
 

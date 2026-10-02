@@ -77,7 +77,13 @@ func _draw() -> void:
 		draw_rect(inner, Color(color, 0.18))
 		draw_rect(inner, Color(color, 0.8), false, 1.5)
 		var f := ThemeDB.fallback_font
-		draw_string(f, Vector2(0, size.y * 0.58), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 18, color.lightened(0.3))
+		var icon: Texture2D = SpriteLib.get_icon("ammo", e["id"]) if e["type"] == "ammo" else null
+		if icon:
+			draw_texture_rect(icon, r.grow(-4), false)
+			draw_string_outline(f, Vector2(0, 26), label, HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, 3, Color.BLACK)
+			draw_string(f, Vector2(0, 26), label, HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, color.lightened(0.3))
+		else:
+			draw_string(f, Vector2(0, size.y * 0.58), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 18, color.lightened(0.3))
 		if count >= 0:
 			var ct := GameData.format_num(count)
 			draw_string_outline(f, Vector2(0, size.y - 4), ct, HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 12, 3, Color.BLACK)

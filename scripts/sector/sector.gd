@@ -4,13 +4,14 @@ extends Node2D
 
 signal finished(result: Dictionary)
 
-const CHUNK := 1400.0
+const CHUNK := 2000.0
 const PICK_SCREEN_RADIUS := 26.0
 
 var params: Dictionary = {}
 var level := 1
 var rng := RandomNumberGenerator.new()
 var biome: Dictionary = {}
+var biome_id := "ferron"
 
 var cells: Dictionary = {}          # Vector2i -> {"visited": bool}
 var start_cell := Vector2i.ZERO
@@ -68,7 +69,8 @@ func _ready() -> void:
 	rng.seed = int(params.get("seed", randi()))
 	demo = params.get("demo", false)
 	showcase = params.get("showcase", false)
-	biome = GameData.BIOMES["ferron"]
+	biome_id = params.get("biome", "ferron")
+	biome = GameData.BIOMES[biome_id]
 	run_ammo = GameState.data["ammo"].duplicate()
 	run_items = GameState.data["items"].duplicate()
 	auto_fire = Controls.is_touch and GameState.data["settings"].get("auto_fire_touch", true)
@@ -128,7 +130,7 @@ func _ready() -> void:
 
 # --- Generación procedural ------------------------------------------------------------
 func _generate() -> void:
-	var n := clampi(6 + level / 2, 6, 14)
+	var n := clampi(9 + level / 2, 9, 20)
 	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	cells[start_cell] = {"visited": true}
 	var frontier: Array = [start_cell]
@@ -186,26 +188,27 @@ func _free_point_in(c: Vector2i, spread: float) -> Vector2:
 
 func _populate_cell(c: Vector2i, is_start: bool) -> void:
 	asteroids_by_cell[c] = []
-	var count := rng.randi_range(6, 12)
+	var count := rng.randi_range(9, 16)
 	for i in count:
 		var p := cell_center(c) + Vector2(rng.randf_range(-0.47, 0.47), rng.randf_range(-0.47, 0.47)) * CHUNK
 		var r := rng.randf_range(28.0, 95.0)
-		if is_start and p.distance_to(gate_pos) < 450.0:
+		if is_start and p.distance_to(gate_pos) < 550.0:
 			continue
 		if is_blocked(p, r + 40.0):
 			continue
 		_add_asteroid(c, p, r, "")
 	# Nodos de recursos
-	for i in rng.randi_range(1, 3):
+	for i in rng.randi_range(2, 4):
 		var p := _free_point_in(c, 0.85)
 		if is_start and p.distance_to(gate_pos) < 300.0:
 			continue
 		_add_asteroid(c, p, rng.randf_range(34.0, 50.0), _weighted(biome["resources"]))
 	if is_start:
 		# Tutorial ligero: un par de enemigos débiles cerca de la entrada.
-		spawn_group_at(gate_pos + Vector2(650, 250), 2, level, true, ["xenomita", "chatarrax"])
+		var weak: Array = biome["enemies"].keys().slice(0, 2)
+		spawn_group_at(gate_pos + Vector2(750, 300), 2, level, true, weak)
 		return
-	for g in rng.randi_range(1, 3):
+	for g in rng.randi_range(2, 4):
 		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 4) + level / 5, level, true)
 
 
@@ -281,6 +284,8 @@ func _process(delta: float) -> void:
 	var c := cell_of(player.plane_pos)
 	if cells.has(c) and not cells[c]["visited"]:
 		cells[c]["visited"] = true
+	Sfx.listener_pos = player.plane_pos
+	Sfx.has_listener = true
 	camera.position = player.position + Vector2(0, -20)
 	camera.zoom = camera.zoom.lerp(Vector2.ONE * zoom_level, clampf(8.0 * delta, 0.0, 1.0))
 	_check_gate()
@@ -293,6 +298,7 @@ func _update_alert(delta: float) -> void:
 	alert = minf(5.0, alert + delta / 75.0)
 	if floorf(alert) > before:
 		hud.toast("¡ALERTA DEL SECTOR %d!" % int(floorf(alert)), 3.0, UiTheme.WARN)
+		Sfx.play("alert", null, -11.0)
 		wave_timer = 2.0
 	if alert >= 1.0:
 		wave_timer -= delta
@@ -489,6 +495,7 @@ func use_hotbar(i: int) -> void:
 	var entry = hotbar_entry(i)
 	if not (entry is Dictionary):
 		hud.slot_feedback(i, false)
+		Sfx.play("ui_error", null, -8.0)
 		return
 	if entry["type"] == "ammo":
 		if int(run_ammo.get(entry["id"], 0)) <= 0:
@@ -497,6 +504,7 @@ func use_hotbar(i: int) -> void:
 			return
 		active_ammo = entry["id"]
 		hud.slot_feedback(i, true)
+		Sfx.play("ui_select", null, -4.0)
 		return
 	var id: String = entry["id"]
 	var def: Dictionary = GameData.ITEMS[id]
@@ -516,6 +524,7 @@ func use_hotbar(i: int) -> void:
 			player.shield = minf(player.shield_max_now(), player.shield + player.shield_max * 0.4)
 	_consume_item(id)
 	hud.slot_feedback(i, true)
+	Sfx.play("item_use")
 
 
 func _consume_item(id: String) -> void:
@@ -531,6 +540,7 @@ func _place(id: String, p: Vector2) -> void:
 	placing = ""
 	_consume_item(id)
 	mines.append({"pos": p, "arm": 1.0})
+	Sfx.play("deploy")
 	fx_ring(p, 40.0, Color("ff5a5a"))
 
 
@@ -634,11 +644,14 @@ func chain_from(from: Entity, dmg: float, info: Dictionary, jumps: int) -> void:
 		cur = best
 
 
-func heal_allies(src: Enemy, r: float, frac: float) -> void:
+func heal_allies(src: Enemy, r: float, frac: float) -> int:
+	var healed := 0
 	for e in enemies:
-		if e.alive and e != src and e.plane_pos.distance_to(src.plane_pos) < r:
+		if e.alive and e != src and e.hp < e.hp_max and e.plane_pos.distance_to(src.plane_pos) < r:
 			e.hp = minf(e.hp_max, e.hp + e.hp_max * frac)
 			ground.add_arc(src.plane_pos, e.plane_pos, Color("4ab8ff"))
+			healed += 1
+	return healed
 
 
 func nearest_ally(src: Enemy) -> Enemy:
@@ -655,12 +668,14 @@ func nearest_ally(src: Enemy) -> Enemy:
 
 func explode(p: Vector2, r: float, dmg: float, color: Color, _src) -> void:
 	fx_explosion(p, r, color)
+	Sfx.play("explosion_m", p, -2.0)
 	if player.alive and player.plane_pos.distance_to(p) < r + player.radius * 0.5:
 		player.take_damage(dmg)
 
 
 func player_explosion(p: Vector2, r: float, dmg: float) -> void:
 	fx_explosion(p, r, Color("ffb84a"))
+	Sfx.play("explosion_m", p, -2.0)
 	for e in enemies.duplicate():
 		if e.alive and e.plane_pos.distance_to(p) < r + e.radius:
 			e.take_hit(dmg, {})
@@ -746,6 +761,7 @@ func _check_objective() -> void:
 	if done:
 		objective_done = true
 		hud.toast("OBJETIVO COMPLETADO — vuelve al portal para extraer", 5.0, UiTheme.GOOD)
+		Sfx.play("objective")
 
 
 func _objective_text() -> String:
@@ -759,6 +775,7 @@ func objective_text() -> String:
 
 
 func on_ore_mined(a: Asteroid) -> void:
+	Sfx.play("explosion_s", a.plane_pos)
 	fx_explosion(a.plane_pos, a.radius, GameData.mat_color(a.ore))
 	var q := int(GameData.level_reward(rng.randf_range(15.0, 30.0), level))
 	for i in 3:
@@ -785,6 +802,7 @@ func collect(l: Loot) -> bool:
 	if l.item in ["credits", "nexo", "seals"]:
 		loot[l.item] = int(loot.get(l.item, 0)) + l.amount
 		hud.pickup(l.item, l.amount)
+		Sfx.play("pickup_rare" if l.item == "nexo" else "pickup", null, -8.0)
 		return true
 	var free := cargo_capacity() - cargo_used
 	if free <= 0:
@@ -794,6 +812,7 @@ func collect(l: Loot) -> bool:
 	loot[l.item] = int(loot.get(l.item, 0)) + take
 	cargo_used += take
 	hud.pickup(l.item, take)
+	Sfx.play("pickup", null, -8.0)
 	if take < l.amount:
 		l.amount -= take
 		return false
@@ -854,6 +873,9 @@ func _finish(outcome: String) -> void:
 	if ended:
 		return
 	ended = true
+	Sfx.has_listener = false
+	if outcome == "extract":
+		Sfx.play("warp")
 	var final_loot := loot.duplicate()
 	if outcome == "death":
 		for k in final_loot.keys():
@@ -914,7 +936,7 @@ func _build_showcase() -> void:
 		e.queue_free()
 	enemies.clear()
 	alert = 0.0
-	var ids: Array = GameData.ENEMIES.keys()
+	var ids: Array = biome["enemies"].keys() + biome["elites"]
 	ids.append("nest")
 	var origin := player.plane_pos
 	for i in ids.size():

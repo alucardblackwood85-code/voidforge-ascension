@@ -22,3 +22,12 @@ static func draw(ci: CanvasItem, tex: Texture2D, radius: float, angle: float, h:
 	ci.draw_set_transform_matrix(Iso.sprite_matrix(angle, h, radius * VISUAL_SCALE))
 	ci.draw_texture_rect(tex, Rect2(-1.25, -1.25, 2.5, 2.5), false, modulate)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## Icono de interfaz: res://assets/ui/<grupo>/<id>.png (o null si aún no existe).
+static func get_icon(group: String, id: String) -> Texture2D:
+	var key := "ui/" + group + "/" + id
+	if not _cache.has(key):
+		var path := "res://assets/%s.png" % key
+		_cache[key] = load(path) if ResourceLoader.exists(path) else null
+	return _cache[key]

@@ -68,6 +68,7 @@ static func label(text: String, size: int = 16, color: Color = TEXT) -> Label:
 static func button(text: String, cb: Callable, min_w: int = 0) -> Button:
 	var b := Button.new()
 	b.text = text
+	b.pressed.connect(func(): Sfx.play("ui_click"))
 	b.pressed.connect(cb)
 	if min_w > 0:
 		b.custom_minimum_size.x = min_w

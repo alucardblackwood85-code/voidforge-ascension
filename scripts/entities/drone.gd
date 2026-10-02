@@ -39,7 +39,8 @@ func _process(delta: float) -> void:
 			fire_timer = 0.8
 			# Pet-Pulse: disparo estable, sin consumo de munición en el prototipo.
 			var dmg := GameData.LASER_BASE_DAMAGE * 0.55 * sector.active_ammo_mult() * 0.5
-			sector.spawn_player_bolt(plane_pos, p.target, dmg, {"effect": "", "color": Color("5affc8")})
+			sector.spawn_player_bolt(plane_pos, p.target, dmg, {"effect": "", "color": Color("d8ffd0")})
+			Sfx.play("laser_drone", plane_pos, -9.0)
 	sync_screen()
 	queue_redraw()
 
@@ -48,6 +49,7 @@ func use_ability() -> void:
 	if ability_cd > 0.0:
 		return
 	ability_cd = ROLES[role]["cd"]
+	Sfx.play("drone_ability")
 	if role == "asalto":
 		burst = 4.0
 	else:
