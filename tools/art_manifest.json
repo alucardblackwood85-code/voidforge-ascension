@@ -1,0 +1,21 @@
+{
+  "style": "Game sprite for a dark, readable sci-fi 2D space shooter. Strict top-down orthographic view seen from directly above, the front/nose of the craft pointing to the RIGHT side of the image, centered, filling about 80% of the canvas, fully transparent background, no shadow on the ground, no text, no frame, crisp silhouette, painterly detailed hard-surface rendering with subtle rim light.",
+  "assets": [
+    {"out": "ships/caza", "prompt": "Small agile human fighter spacecraft, sleek arrow-shaped hull, swept wings, steel-blue and white armor plates, cyan engine glow at the rear."},
+    {"out": "ships/tanque", "prompt": "Heavy armored human tank spacecraft, wide boxy hull with thick layered plating, shield emitters on the sides, gunmetal and navy colors, cyan engine glow."},
+    {"out": "ships/carguera", "prompt": "Human cargo hauler spacecraft, bulky cargo pods on both sides, industrial yellow-grey plating, small cockpit at the front, cyan engines."},
+    {"out": "ships/crucero", "prompt": "Human cruiser spacecraft, long elegant hull with several laser turrets, white and steel-blue plating, cyan engines."},
+    {"out": "ships/batalla", "prompt": "Massive human battlecruiser spacecraft, long armored hull bristling with laser turrets, dark steel and gold trim, multiple cyan engines."},
+    {"out": "enemies/xenomita", "prompt": "Small insectoid alien craft of grey metal, six fins like legs, red cabin without glass, veins of black tissue between plates, spiky silhouette, cyan thrusters."},
+    {"out": "enemies/chatarrax", "prompt": "Irregular drone built from salvaged ship parts, asymmetric rotors and a frontal mechanical jaw, yellow lights, exposed cables."},
+    {"out": "enemies/ferroclasto", "prompt": "Oval armored mass with overlapping plates, giant rivets and a central optical eye, two heavy side engines, brutal industrial look, rust and orange accents."},
+    {"out": "enemies/aguijon_khepri", "prompt": "Narrow biomechanical fighter with a needle prow, beetle-like wings and black metallic segments, orange lines and small rear spines."},
+    {"out": "enemies/taladro_vorak", "prompt": "Compact craft with a huge rotating front drill, blackened yellow armor, two clamping arms and blue steam exhausts."},
+    {"out": "enemies/nodo_bastion", "prompt": "Floating hexagonal platform with antennas and three shield emitters, dark green metal, glowing blue core, folded mechanical legs."},
+    {"out": "enemies/mina_garra", "prompt": "Mechanical sphere with four curved claws, pulsing red center and small nozzles, like a metal flower about to open."},
+    {"out": "enemies/recolector_morbido", "prompt": "Scavenger craft with magnetic arms, external tanks and a prow shaped like a robotic skull, patched metal of different colors."},
+    {"out": "enemies/artillero_ciclope", "prompt": "Triangular body with a large central cannon-lens and side stabilizers, graphite armor, red lens and deployable radiators."},
+    {"out": "enemies/madre_remache", "prompt": "Large industrial mothership with an open ventral hangar, riveted plates and rows of red lights."},
+    {"out": "enemies/nest", "prompt": "Alien industrial spawning nest built into a rusty asteroid, glowing orange hatch openings, metal ribs and cables, seen from above, round shape."}
+  ]
+}
