@@ -21,11 +21,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache Godot + templates
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/godot
@@ -53,7 +53,7 @@ jobs:
         run: timeout 120 ~/godot/godot --headless --quit-after 900 -- --sector 2>&1 | tee run.log; ! grep -qE "SCRIPT ERROR|ERROR:.*\.gd" run.log
 
       - name: Export Web
-        run: mkdir -p build/web && ~/godot/godot --headless --export-release "Web" build/web/index.html
+        run: ls ~/.local/share/godot/export_templates/*/ | head; mkdir -p build/web && ~/godot/godot --headless --export-release "Web" build/web/index.html
 
       - name: Export Windows
         run: mkdir -p build/windows && ~/godot/godot --headless --export-release "Windows Desktop" build/windows/VoidforgeAscension.exe
