@@ -68,7 +68,11 @@ const VIEW_HYSTERESIS := 0.12   # rad extra antes de cambiar de vista (evita par
 static func has_views(group: String, id: String) -> bool:
 	var key := "views?/" + group + "/" + id
 	if not _cache.has(key):
-		_cache[key] = ResourceLoader.exists("res://assets/sprites/views/%s/%s/e.png" % [group, id])
+		# Sólo si están las 5 vistas: un modelo a medio generar seguiría usando el sprite cenital.
+		var ok := true
+		for d in ["e", "ne", "n", "se", "s"]:
+			ok = ok and ResourceLoader.exists("res://assets/sprites/views/%s/%s/%s.png" % [group, id, d])
+		_cache[key] = ok
 	return _cache[key]
 
 
