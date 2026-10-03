@@ -1701,8 +1701,13 @@ func _bot_nav(delta: float) -> void:
 			if e.is_nest and e.alive and e.plane_pos.distance_to(player.plane_pos) < bn:
 				bn = e.plane_pos.distance_to(player.plane_pos)
 				goal_target = e
-	# Elección de blanco: amenazas cercanas primero, luego el objetivo.
-	if nearest and nd < 700.0:
+	if goal == Vector2.INF and goal_target:
+		goal = goal_target.plane_pos
+		goal_r = 450.0
+	# Elección de blanco: el objetivo del sector si está cerca (nido, comandante); si no, la amenaza más próxima.
+	if goal_target and goal_target.plane_pos.distance_to(player.plane_pos) < 900.0:
+		player.target = goal_target
+	elif nearest and nd < 700.0:
 		player.target = nearest
 	elif goal_target:
 		player.target = goal_target

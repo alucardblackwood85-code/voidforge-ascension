@@ -80,7 +80,7 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	home = pos
 	if id == "nest":
 		is_nest = true
-		def = {"name": "Nido " + sector.biome.get("faction", "alienígena"), "arch": "nest", "hp": 6000, "dmg": 0, "vel": 0, "size": 48, "shape": "nest", "color": Color("4a3428"), "accent": Color("ff7a2a"), "credits": 3500, "drops": sector.biome["resources"].duplicate(), "nexo": 0.004}
+		def = {"name": "Nido " + sector.biome.get("faction", "alienígena"), "arch": "nest", "hp": 4500, "dmg": 0, "vel": 0, "size": 48, "shape": "nest", "color": Color("4a3428"), "accent": Color("ff7a2a"), "credits": 3500, "drops": sector.biome["resources"].duplicate(), "nexo": 0.004}
 		for k in def["drops"].keys():
 			def["drops"][k] = maxi(1, int(def["drops"][k]) / 2)
 	else:
@@ -272,8 +272,8 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 			return _keep_distance(p, dist, 200.0, 0.1)
 		"hunter":
 			if attack_timer <= 0.0 and dist < attack_range:
-				attack_timer = 1.0
-				_shoot_at(p, 600.0, 5.0)
+				attack_timer = 1.5
+				_shoot_at(p, 520.0, 5.0)
 			var flank := p.plane_pos + Vector2.from_angle(p.heading + PI * 0.5 * strafe_sign) * 230.0
 			return (flank - plane_pos).normalized() if plane_pos.distance_to(flank) > 30.0 else Vector2.ZERO
 		"charger":
