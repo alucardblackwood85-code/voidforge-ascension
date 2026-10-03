@@ -55,3 +55,55 @@ static func get_cropped(group: String, id: String) -> Texture2D:
 				out = at
 	_cache[key] = out
 	return out
+
+
+# --- Vistas direccionales (8 direcciones) ------------------------------------------------------
+## Las naves, enemigos y el dron tienen 5 vistas prerrenderizadas en perspectiva (e, ne, n, se, s);
+## las direcciones w, nw y sw son su espejo. Índice por ángulo en pantalla (y hacia abajo).
+const VIEW_DIRS := ["e", "se", "s", "se", "e", "ne", "n", "ne"]
+const VIEW_MIRROR := [false, false, false, true, true, true, false, false]
+const VIEW_HYSTERESIS := 0.12   # rad extra antes de cambiar de vista (evita parpadeo en la frontera)
+
+
+static func has_views(group: String, id: String) -> bool:
+	var key := "views?/" + group + "/" + id
+	if not _cache.has(key):
+		_cache[key] = ResourceLoader.exists("res://assets/sprites/views/%s/%s/e.png" % [group, id])
+	return _cache[key]
+
+
+static func get_view(group: String, id: String, dir: String) -> Texture2D:
+	var key := "views/" + group + "/" + id + "/" + dir
+	if not _cache.has(key):
+		var path := "res://assets/sprites/views/%s/%s/%s.png" % [group, id, dir]
+		_cache[key] = load(path) if ResourceLoader.exists(path) else null
+	return _cache[key]
+
+
+## Dibuja una entidad con su vista direccional si existe; si no, el sprite cenital girado.
+## `angle` es el rumbo en el plano lógico. La vista se elige por el rumbo proyectado en pantalla.
+static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color = Color.WHITE) -> void:
+	if not has_views(group, id):
+		if fallback:
+			draw(ci, fallback, radius, angle, h, modulate)
+		return
+	var a := Iso.to_screen(Vector2.from_angle(angle)).angle()
+	var step := PI / 4.0
+	var idx := posmod(roundi(a / step), 8)
+	var last: int = ci.get_meta("_vdir", -1)
+	if last >= 0 and last != idx:
+		# Histéresis: sólo cambia si se aleja claramente del centro de la vista anterior.
+		var d := absf(angle_difference(a, last * step))
+		if d < step * 0.5 + VIEW_HYSTERESIS:
+			idx = last
+	ci.set_meta("_vdir", idx)
+	var tex := get_view(group, id, VIEW_DIRS[idx])
+	if tex == null:
+		if fallback:
+			draw(ci, fallback, radius, angle, h, modulate)
+		return
+	var s := radius * VISUAL_SCALE * 2.6
+	var flip := -1.0 if VIEW_MIRROR[idx] else 1.0
+	ci.draw_set_transform(Vector2(0.0, -h - s * 0.08), 0.0, Vector2(flip, 1.0))
+	ci.draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, modulate)
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)

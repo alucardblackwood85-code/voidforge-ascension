@@ -595,7 +595,10 @@ func _draw() -> void:
 	if tex:
 		var mod := Color.WHITE.lerp(Color(3, 3, 3), flash * 0.3)
 		mod.a = alpha
-		SpriteLib.draw(self, tex, radius, rot, height, mod)
+		if is_nest or arch == "trap":
+			SpriteLib.draw(self, tex, radius, rot, height, mod)
+		else:
+			SpriteLib.draw_dir(self, "enemies", id, tex, radius, rot, height, mod)
 	else:
 		fill.a = alpha
 		Shapes.draw_hull(self, pts, radius, rot, height, fill, edge, def["accent"])

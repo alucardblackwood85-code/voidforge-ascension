@@ -172,7 +172,7 @@ func _draw() -> void:
 			if route_i < route.size():
 				ang = ((route[route_i] as Vector2) - plane_pos).angle()
 			if tex:
-				SpriteLib.draw(self, tex, radius, ang, height, Color(0.8, 1.0, 0.85))
+				SpriteLib.draw_dir(self, "ships", "mule_c1", tex, radius, ang, height, Color(0.8, 1.0, 0.85))
 			else:
 				draw_circle(Vector2(0, -height), radius * 0.6, col)
 			draw_ring(radius * 1.3, Color(col, 0.5), 2.0)

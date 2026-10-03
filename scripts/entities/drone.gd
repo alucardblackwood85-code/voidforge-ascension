@@ -172,7 +172,7 @@ func _draw() -> void:
 	draw_shadow(9.0, 0.25)
 	var tex := SpriteLib.get_tex("drone", "drone")
 	if tex:
-		SpriteLib.draw(self, tex, 14.0, heading, height)
+		SpriteLib.draw_dir(self, "drone", "drone", tex, 14.0, heading, height)
 	else:
 		var pts := [Vector2(1.0, 0), Vector2(-0.6, 0.7), Vector2(-0.3, 0), Vector2(-0.6, -0.7)]
 		Shapes.draw_hull(self, pts, 12.0, heading, height, Color("2a6a5a"), Color("5affc8"), Color("ffffff"))
