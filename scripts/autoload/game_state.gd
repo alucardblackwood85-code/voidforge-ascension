@@ -335,8 +335,11 @@ func ensure_loadout(ship_id: String) -> Dictionary:
 			a.resize(n)
 			a.fill(-1)
 			return a
-		data["loadouts"][ship_id] = {"lasers": mk.call(int(ship["lasers"])), "gens": mk.call(int(ship["gens"])), "mods": mk.call(int(ship["mods"])), "hotbar": default_hotbar()}
+		data["loadouts"][ship_id] = {"lasers": mk.call(int(ship["lasers"])), "gens": mk.call(GameData.gen_slots_total(ship_id)), "mods": mk.call(int(ship["mods"])), "hotbar": default_hotbar()}
 	var lo: Dictionary = data["loadouts"][ship_id]
+	# Partidas antiguas: añade los espacios de escudo de las naves pesadas.
+	while lo["gens"].size() < GameData.gen_slots_total(ship_id):
+		lo["gens"].append(-1)
 	var hb: Array = lo["hotbar"]
 	if hb.size() != HOTBAR_SIZE:
 		hb.resize(HOTBAR_SIZE)
@@ -365,6 +368,10 @@ func equip(list_key: String, slot: int, uid: int, ship_id: String = "") -> void:
 		changed.emit()
 		return
 	var lo := ensure_loadout(ship_id)
+	# Espacios extra de las naves pesadas: sólo generadores de escudo.
+	if list_key == "gens" and uid >= 0 and slot >= int(GameData.SHIPS[ship_id]["gens"]):
+		if GameData.GENERATORS[find_item("gens", uid).get("id", "")]["type"] != "shield":
+			return
 	if uid >= 0:
 		for other in data["loadouts"].values():
 			var arr: Array = other[list_key]
@@ -383,12 +390,17 @@ func equip(list_key: String, slot: int, uid: int, ship_id: String = "") -> void:
 
 
 ## Primer slot libre compatible (para equipar con doble clic).
-func first_free_slot(list_key: String, ship_id: String = "") -> int:
+func first_free_slot(list_key: String, ship_id: String = "", uid: int = -1) -> int:
 	if list_key == "drone_lasers":
 		return data["drone"]["lasers"].find(-1)
 	if ship_id == "":
 		ship_id = data["current_ship"]
-	return ensure_loadout(ship_id)[list_key].find(-1)
+	var arr: Array = ensure_loadout(ship_id)[list_key]
+	# Un generador de velocidad no cabe en los espacios de escudo de las naves pesadas.
+	if list_key == "gens" and uid >= 0 and GameData.GENERATORS[find_item("gens", uid).get("id", "sg_aegis1")]["type"] != "shield":
+		var idx := arr.find(-1)
+		return idx if idx >= 0 and idx < int(GameData.SHIPS[ship_id]["gens"]) else -1
+	return arr.find(-1)
 
 
 func set_hotbar(slot: int, entry) -> void:
@@ -637,6 +649,7 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 		"turn": 1.0 + bonus["turn"],
 		"crit": bonus["crit"],
 		"elite_dmg": bonus["elite_dmg"],
+		"dr": GameData.special_dr(ship_id),
 		"repair_bonus": bonus["repair_bonus"],
 		"collision_res": minf(0.5, bonus["collision_res"]),
 		"shield_break": bonus["shield_break"],
@@ -676,7 +689,7 @@ func equipped_drone_lasers() -> Array:
 
 ## Daño por andanada de un láser: la cadencia del GDD se convierte en daño por andanada (VOLLEY_INTERVAL).
 static func laser_volley_damage(def: Dictionary, level: int) -> float:
-	return GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * float(def["rate"]) * GameData.component_mult(level) * GameData.VOLLEY_INTERVAL
+	return GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * float(def["rate"]) * GameData.laser_mult(level) * GameData.VOLLEY_INTERVAL
 
 
 ## DPS teórico con munición x1 contra objetivo sin resistencias (para comparar builds).

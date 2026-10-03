@@ -1639,7 +1639,9 @@ func _bot_nav(delta: float) -> void:
 	_bot_tick(delta)
 	var hp := player.hull / player.hull_max
 	var sh := player.shield / maxf(1.0, player.shield_max)
-	if objective_done or (hp < 0.15 and int(run_items.get("repair", 0)) == 0):
+	# Extrae como un jugador: objetivo cumplido, bodega casi llena, casco bajo sin reparaciones o tras 5 min con medio casco.
+	var want_out := objective_done or cargo_used >= cargo_capacity() * 0.85 or (hp < 0.3 and int(run_items.get("repair", 0)) == 0) or (elapsed > 300.0 and hp < 0.5)
+	if want_out:
 		collect_target = null
 		player.move_target = gate_pos
 		player.has_move_target = true

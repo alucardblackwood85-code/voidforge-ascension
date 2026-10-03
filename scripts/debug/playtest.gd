@@ -193,7 +193,7 @@ func _equip(ship_id: String, laser: String, lvl: int, gen: String, gen_lvl: int,
 		it["level"] = lvl
 		lo["lasers"][i] = int(it["uid"])
 	for i in lo["gens"].size():
-		var gid := gen if i % 2 == 0 else ("vg_comet" if gen_lvl >= 10 else "vg_thrust1")
+		var gid := gen if i % 2 == 0 or i >= int(GameData.SHIPS[ship_id]["gens"]) else ("vg_comet" if gen_lvl >= 10 else "vg_thrust1")
 		var g := GameState.add_generator(gid)
 		g["level"] = gen_lvl
 		lo["gens"][i] = int(g["uid"])
@@ -288,7 +288,7 @@ func _run_metrics(sc: Dictionary, s: Sector, xp_before: int, real_ms: int) -> Di
 	var p95: float = float(fr[int(fr.size() * 0.95)]) if fr.size() > 0 else 0.0
 	return {
 		"name": sc["name"], "biome": sc["biome"], "level": sc["level"], "ship": s.player.ship_id, "objective": s.objective,
-		"outcome": "death" if not s.player.alive else ("extract" if s.objective_done else "timeout"),
+		"outcome": "death" if not s.player.alive else ("extract" if s.ended and s.elapsed < SIM_LIMIT - 1.0 else "timeout"),
 		"sim_s": int(s.elapsed), "kills": s.kills, "kills_min": snappedf(s.kills / mins, 0.1),
 		"dmg_taken_min": int(s.stat_damage_taken / mins), "hull_end_pct": int(100.0 * s.player.hull / s.player.hull_max),
 		"xp": int(GameState.data["xp"]) - xp_before, "xp_min": int((int(GameState.data["xp"]) - xp_before) / mins),

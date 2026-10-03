@@ -77,7 +77,10 @@ func _ship_view() -> void:
 		for i in arr.size():
 			var uid := int(arr[i])
 			var it := GameState.find_item("modules" if key == "mods" else key, uid) if uid >= 0 else {}
-			var slot := DropSlot.make(key, i, uid, W.item_info(key, it) if not it.is_empty() else {}, "%s %d" % [SLOT_NAMES[key], i + 1])
+			var slot_name := "%s %d" % [SLOT_NAMES[key], i + 1]
+			if key == "gens" and i >= int(s["gens"]):
+				slot_name = "Escudo extra"
+			var slot := DropSlot.make(key, i, uid, W.item_info(key, it) if not it.is_empty() else {}, slot_name)
 			slot.dropped.connect(_on_drop)
 			slot.cleared.connect(func(sl): _equip(key, sl.index, -1))
 			slots.add_child(slot)
@@ -321,6 +324,9 @@ func _on_hotbar_drop(slot: DropSlot, data: Dictionary) -> void:
 func _on_drop(slot: DropSlot, data: Dictionary) -> void:
 	var from := int(data.get("from_slot", -1))
 	var uid := int(data["uid"])
+	if slot.kind == "gens" and (not _gen_fits(slot.index, uid) or (from >= 0 and slot.uid >= 0 and not _gen_fits(from, slot.uid))):
+		Sfx.play("ui_error")
+		return
 	if from >= 0 and from != slot.index and slot.uid >= 0:
 		# Mover entre slots: intercambia los objetos.
 		var other := slot.uid
@@ -337,7 +343,7 @@ func _equip(kind: String, index: int, uid: int, sound: bool = true) -> void:
 
 
 func _quick_equip(kind: String, uid: int) -> void:
-	var slot := GameState.first_free_slot(kind)
+	var slot := GameState.first_free_slot(kind, "", uid)
 	if slot < 0:
 		Sfx.play("ui_error")
 		return
@@ -395,3 +401,11 @@ func _item_value(filter: String, it: Dictionary) -> float:
 				lines += float(l["value"])
 			return float(it["main"]) + lines * 0.5
 	return 0.0
+
+
+## Los espacios extra de las naves pesadas sólo admiten generadores de escudo.
+func _gen_fits(index: int, uid: int) -> bool:
+	if index < int(GameData.SHIPS[GameState.data["current_ship"]]["gens"]):
+		return true
+	var it := GameState.find_item("gens", uid)
+	return not it.is_empty() and GameData.GENERATORS[it["id"]]["type"] == "shield"

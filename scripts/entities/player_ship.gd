@@ -294,6 +294,8 @@ func take_damage(amount: float) -> void:
 	if not alive or invulnerable:
 		return
 	amount *= 1.0 - float(stats["collision_res"])
+	# Blindaje de las naves especiales (reducción proporcional a su precio).
+	amount *= 1.0 - float(stats.get("dr", 0.0))
 	# SG-Quantum: 10% de reducir el impacto un 35% (CD 5 s).
 	if has_trait("sg_quantum") and not buffs.has("cd_quantum") and randf() < 0.1:
 		amount *= 0.65

@@ -318,9 +318,10 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 			return _keep_distance(p, dist, 300.0, 0.2)
 		"nest":
 			spawn_timer -= delta
-			if spawn_timer <= 0.0 and spawned < 10:
+			# Los nidos generan menos en niveles bajos (tope 4 + nivel/3, máximo 10).
+			if spawn_timer <= 0.0 and spawned < mini(10, 4 + level / 3):
 				spawn_timer = 9.0 - minf(sector.alert, 4.0)
-				sector.spawn_group_near(plane_pos, 2, level)
+				sector.spawn_group_near(plane_pos, 1 if level < 5 else 2, level)
 				spawned += 2
 				sfx("e_spawn")
 			return Vector2.ZERO

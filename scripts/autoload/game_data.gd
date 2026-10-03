@@ -533,6 +533,14 @@ static func level_reward(base: float, level: int) -> float:
 	return base * (1.0 + 0.045 * level)
 
 ## Multiplicador de componente por nivel: +1% por nivel sobre el valor base.
+## Los láseres ganan +3% por nivel de mejora (antes +1%: mejorar casi no se notaba).
+const LASER_LEVEL_STEP := 0.03
+
+
+static func laser_mult(level: int) -> float:
+	return 1.0 + LASER_LEVEL_STEP * level
+
+
 static func component_mult(level: int) -> float:
 	return 1.0 + 0.01 * level
 
@@ -626,3 +634,32 @@ static func recommended_power(level: int, biome_id: String, asc: int = 0) -> flo
 	var hp: float = f["hp"] * level_hp(1.0, e) / level_hp(1.0, 1) * pow(2.0, asc)
 	var dmg: float = f["dmg"] * level_dmg(1.0, e) / level_dmg(1.0, 1) * pow(1.55, asc)
 	return 1000.0 * pow(hp, 0.9) * pow(dmg, 0.5)
+
+
+# --- Naves pesadas y especiales ---------------------------------------------------------------
+## Las naves pesadas (lentas, esquivan peor) llevan espacios extra sólo para generadores de escudo.
+const HEAVY_SHIELD_SLOTS := {"tanque": 2, "batalla": 2}
+## Blindaje de las naves especiales: reducción de daño según su precio (escala logarítmica).
+const SPECIAL_DR_BASE := 0.03            # la especial más barata
+const SPECIAL_DR_PER_DOUBLING := 0.03    # +3% cada vez que el precio se duplica
+const SPECIAL_DR_MAX := 0.15
+
+
+static func shield_slots(ship_id: String) -> int:
+	return int(HEAVY_SHIELD_SLOTS.get(SHIPS[ship_id]["class"], 0))
+
+
+static func gen_slots_total(ship_id: String) -> int:
+	return int(SHIPS[ship_id]["gens"]) + shield_slots(ship_id)
+
+
+static func special_dr(ship_id: String) -> float:
+	var s: Dictionary = SHIPS[ship_id]
+	if not s.get("special", false):
+		return 0.0
+	var cheapest := INF
+	for id in SHIPS.keys():
+		if SHIPS[id].get("special", false):
+			cheapest = minf(cheapest, float(SHIPS[id]["cost"].get("credits", 1)))
+	var ratio := float(s["cost"].get("credits", 1)) / maxf(1.0, cheapest)
+	return clampf(SPECIAL_DR_BASE + SPECIAL_DR_PER_DOUBLING * log(ratio) / log(2.0), 0.0, SPECIAL_DR_MAX)

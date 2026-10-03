@@ -60,7 +60,9 @@ func _product(kind: String, id: String) -> Control:
 			var s: Dictionary = GameData.SHIPS[id]
 			name = ("★ " if s.get("special", false) else "") + s["name"]
 			sub = GameData.SHIP_CLASSES[s["class"]]["name"]
-			desc = "Casco %s · Vel %d · Daño x%.2f\n%d láseres · %d gen. · %d mód." % [GameData.format_num(s["hull"]), s["speed"], s["dmg"], s["lasers"], s["gens"], s["mods"]]
+			var gtxt := ("%d+%d" % [s["gens"], GameData.shield_slots(id)]) if GameData.shield_slots(id) > 0 else str(s["gens"])
+			var drtxt := ("  ·  blindaje -%d%%" % int(round(GameData.special_dr(id) * 100.0))) if GameData.special_dr(id) > 0.0 else ""
+			desc = "Casco %s · Vel %d · Daño x%.2f\n%d láseres · %s gen. · %d mód.%s" % [GameData.format_num(s["hull"]), s["speed"], s["dmg"], s["lasers"], gtxt, s["mods"], drtxt]
 			col = UiTheme.WARN if s.get("special", false) else UiTheme.BORDER
 			tex = W.icon("ship", id)
 			if GameState.data["ships"].has(id):

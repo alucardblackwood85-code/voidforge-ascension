@@ -229,7 +229,7 @@ func _show_reveal(m: Dictionary) -> void:
 
 # --- Mejoras 1-16 ----------------------------------------------------------------------------
 func _upgrades(list: VBoxContainer) -> void:
-	list.add_child(UiTheme.label("Cada nivel añade +1% al valor base del componente (máximo 16).", 14, UiTheme.MUTED))
+	list.add_child(UiTheme.label("Cada nivel añade +3% de daño a un láser o +1% al valor de un generador (máximo 16).", 14, UiTheme.MUTED))
 	for list_key in ["lasers", "gens"]:
 		for it in GameState.data[list_key]:
 			var info := W.item_info(list_key, it)
@@ -255,7 +255,7 @@ func _upgrades(list: VBoxContainer) -> void:
 				var uid := int(it["uid"])
 				var do_upgrade := func():
 					Sfx.play("craft" if GameState.upgrade_item(list_key, uid) else "ui_error")
-				var b := W.button("+1%%  → Nv %d" % (lvl + 1), do_upgrade, false, 130)
+				var b := W.button("%s  → Nv %d" % ["+3%" if list_key == "lasers" else "+1%", lvl + 1], do_upgrade, false, 130)
 				b.disabled = not GameState.can_afford(cost)
 				h.add_child(b)
 			else:

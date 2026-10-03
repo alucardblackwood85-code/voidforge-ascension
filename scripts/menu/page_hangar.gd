@@ -83,7 +83,13 @@ func _detail(id: String) -> Control:
 	_bar(stats, "Carga", float(s["cargo"]), float(cur["cargo"]), maxes["cargo"], Color("c8a0ff"), "%d u" % (int(s["cargo"]) * GameData.CARGO_UNIT))
 	v.add_child(stats)
 	var ab: Dictionary = GameData.ABILITIES[s.get("ability", GameData.SHIP_CLASSES[s["class"]]["ability"])]
-	v.add_child(UiTheme.rich("Slots: [b]%d[/b] láseres · [b]%d[/b] generadores · [b]%d[/b] módulos\nHabilidad [%s]: [b]%s[/b] — %s (CD %ds)" % [s["lasers"], s["gens"], s["mods"], Controls.key_label("ability"), ab["name"], ab["desc"], int(ab["cd"])], 15))
+	var gens_txt := "[b]%d[/b] generadores" % s["gens"]
+	if GameData.shield_slots(id) > 0:
+		gens_txt += " + [b]%d[/b] de escudo" % GameData.shield_slots(id)
+	var extra_txt := ""
+	if GameData.special_dr(id) > 0.0:
+		extra_txt = "\n[color=#ffb84a]Blindaje especial: [b]-%d%%[/b] de daño recibido[/color]" % int(round(GameData.special_dr(id) * 100.0))
+	v.add_child(UiTheme.rich("Slots: [b]%d[/b] láseres · %s · [b]%d[/b] módulos\nHabilidad [%s]: [b]%s[/b] — %s (CD %ds)%s" % [s["lasers"], gens_txt, s["mods"], Controls.key_label("ability"), ab["name"], ab["desc"], int(ab["cd"]), extra_txt], 15))
 	var buttons := W.hbox(10)
 	if owned:
 		var b := W.button("CONFIRMAR Y EQUIPAR  ›", func():
