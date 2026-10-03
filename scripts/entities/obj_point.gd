@@ -60,7 +60,7 @@ func _process(delta: float) -> void:
 				if not started:
 					started = true
 					sector.hud.toast("Activando baliza… mantente cerca", 2.0, COLORS[kind])
-					sector.spawn_group_near(plane_pos + Vector2.from_angle(randf() * TAU) * 500.0, 3 + sector.level / 8, sector.level)
+					sector.spawn_group_near(plane_pos + Vector2.from_angle(randf() * TAU) * 500.0, 2 + sector.level / 12, sector.level)
 					Sfx.play("e_pulse", plane_pos, -4.0)
 				progress = minf(1.0, progress + delta / 6.0)
 				if progress >= 1.0:

@@ -477,6 +477,9 @@ func in_shop(kind: String, id: String) -> bool:
 
 
 func buy(kind: String, id: String, qty: int = 1, currency: String = "credits") -> bool:
+	# Las cargas Mk-V y Mk-VI sólo se fabrican (GDD): la tienda no las vende.
+	if kind == "ammo" and not in_shop(kind, id):
+		return false
 	return _acquire(kind, id, qty, price_of(kind, id, currency))
 
 
