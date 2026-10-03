@@ -300,6 +300,8 @@ func take_damage(amount: float) -> void:
 		buffs["cd_quantum"] = 5.0
 		sector.fx_ring(plane_pos, radius * 1.3, Color("e0a8ff"))
 	sector.stat_damage_taken += amount
+	sector.dmg_by[sector.cur_src] = float(sector.dmg_by.get(sector.cur_src, 0.0)) + amount
+	sector.cur_src = "?"
 	since_damage = 0.0
 	var s := minf(shield, amount)
 	shield -= s

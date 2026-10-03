@@ -230,6 +230,7 @@ func _shoot_at(p: PlayerShip, bullet_speed: float, size: float, mult: float = 1.
 	heading = aim_dir.angle()
 	var dir := aim_dir.rotated(randf_range(-spread, spread))
 	# Disparos teledirigidos: persiguen a la nave con giro limitado y duran lo justo para su alcance.
+	sector.bullet_src = arch + ("-jefe" if is_boss else "")
 	sector.spawn_enemy_bullet(plane_pos + aim_dir * radius * 0.9, dir, bullet_speed, out_dmg() * mult, size, def["accent"], height, attack_range * 1.35 / bullet_speed)
 	if sound:
 		sfx(shot_sfx, -4.0)
@@ -376,6 +377,7 @@ func _behave(delta: float, p: PlayerShip, dist: float) -> Vector2:
 					sfx("e_pulse", -6.0)
 				if dist < radius + p.radius + 20.0 and attack_timer <= 0.0:
 					attack_timer = 0.8
+					sector.cur_src = arch + "-directo"
 					p.take_damage(out_dmg() * 0.6)
 			return (p.plane_pos - plane_pos).normalized() * 0.4
 	return Vector2.ZERO
@@ -391,6 +393,7 @@ func _charger(p: PlayerShip, dist: float) -> Vector2:
 			return Vector2.ZERO
 		"dash":
 			if plane_pos.distance_to(p.plane_pos) < radius + p.radius:
+				sector.cur_src = arch + "-directo"
 				p.take_damage(out_dmg() * 1.5)
 				sector.fx_ring(p.plane_pos, 60.0, def["accent"])
 				_set_state("recover")
@@ -417,6 +420,7 @@ func _drainer(delta: float, p: PlayerShip, dist: float) -> Vector2:
 			drain_tick -= delta
 			if drain_tick <= 0.0:
 				drain_tick = 0.5
+				sector.cur_src = arch + "-directo"
 				p.take_damage(out_dmg() * 0.3)
 				hp = minf(hp_max, hp + out_dmg() * 0.2)
 			if state_time > 1.2:
@@ -472,6 +476,7 @@ func _sniper(p: PlayerShip, dist: float) -> Vector2:
 			var along := to_p.dot(dir)
 			var off := absf(to_p.dot(dir.orthogonal()))
 			if along > 0.0 and along < 1100.0 and off < p.radius + 18.0:
+				sector.cur_src = arch + "-directo"
 				p.take_damage(out_dmg() * 2.0)
 			sector.ground.add_beam(plane_pos, plane_pos + dir * 1100.0, def["accent"])
 		return Vector2.ZERO
@@ -506,6 +511,7 @@ func take_hit(amount: float, info: Dictionary) -> void:
 		amount *= 0.25
 	if reflecting > 0.0:
 		# Reflejo: absorbe la mayor parte y devuelve parte del daño (telegrafiado con el anillo).
+		sector.cur_src = "reflejo"
 		sector.player.take_damage(amount * 0.15)
 		amount *= 0.3
 	match info.get("effect", ""):
@@ -806,6 +812,7 @@ func _boss_tick(delta: float, p: PlayerShip, dist: float) -> void:
 		var rot := anim * 0.7
 		for i in n:
 			var dir := Vector2.from_angle(rot + TAU * i / n)
+			sector.bullet_src = arch + ("-jefe" if is_boss else "")
 			sector.spawn_enemy_bullet(plane_pos + dir * radius, dir, 300.0, out_dmg() * 0.55, 8.0, def["accent"], height, 3.0)
 		sfx("e_heavy", -2.0)
 	if boss_phase >= 2 and boss_zone <= 0.0:

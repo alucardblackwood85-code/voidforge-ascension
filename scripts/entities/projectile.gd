@@ -17,6 +17,7 @@ var pierce_left := 0
 var hit_list: Array = []
 var trail := Vector2.ZERO
 var lift_h := 16.0   # altura visual (igual a la del que dispara)
+var src := "?"      # arquetipo que lo disparó (diagnóstico)
 var homing := 0.0   # rad/s de giro hacia la nave (proyectiles enemigos teledirigidos)
 
 
@@ -47,6 +48,7 @@ func _process(delta: float) -> void:
 				dir = -dir
 				sector.fx_spark(plane_pos, Color("9ad8ff"))
 				return
+			sector.cur_src = "disparo-" + src
 			p.take_damage(damage)
 			sector.fx_spark(plane_pos, color)
 			queue_free()

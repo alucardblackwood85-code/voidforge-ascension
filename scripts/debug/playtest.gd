@@ -298,7 +298,7 @@ func _run_metrics(sc: Dictionary, s: Sector, xp_before: int, real_ms: int) -> Di
 		"boxes_left": s.boxes.size(), "max_enemies": s.stat_max_enemies, "max_aggro": s.stat_max_aggro, "spawned": s.stat_spawned, "dps_theory": int(GameState.theoretical_dps()),
 		"boss": "muerto" if s.boss_dead else ("%d%%" % int(100.0 * s.boss.hp / s.boss.hp_max) if is_instance_valid(s.boss) else "-"),
 		"obj_progress": "%d/%d" % [s.objective_progress, s.objective_target], "clear_pct": s._clear_percent(),
-		"pois": s.run_pois, "events": s.run_events, "boxes": s.run_boxes, "elites": s.run_elites, "legendary": s.run_legendary,
+		"dmg_by": s.dmg_by, "pois": s.run_pois, "events": s.run_events, "boxes": s.run_boxes, "elites": s.run_elites, "legendary": s.run_legendary,
 		"power_pct": int(100.0 * _power() / _rec_power(int(sc["level"]))),
 		"frame_ms_avg": snappedf(avg / 1000.0, 0.01), "frame_ms_p95": snappedf(p95 / 1000.0, 0.01), "real_s": snappedf(real_ms / 1000.0, 0.1),
 	}

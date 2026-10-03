@@ -84,6 +84,9 @@ var xp_mult := 1.0                       # multiplicador de XP (eventos, Ascensi
 var shield_buff := {"pct": 0.0, "time": 0.0}
 var laser_buff := {"pct": 0.0, "charges": 0}
 var asc := 0                             # M9: nivel de Ascensión de la incursión
+var cur_src := "?"                       # diagnóstico: fuente del próximo daño al jugador
+var dmg_by: Dictionary = {}              # daño recibido por fuente (playtest)
+var bullet_src := "?"
 var eff_level := 1                       # nivel efectivo para vida/daño enemigo (relativo al bioma)
 var asc_reward := 1.0
 var commanders: Array = []               # enemigos con afijo Comandante (aura de daño)
@@ -322,7 +325,7 @@ func _populate_cell(c: Vector2i, is_start: bool) -> void:
 	if rng.randf() < float(mod.get("spawn", 1.0)) - 1.0:
 		groups += 1
 	for g in groups:
-		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 3) + mini(level / 10, 3), level, true)
+		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 3) + mini(level / 15, 2), level, true)
 
 
 func _add_asteroid(c: Vector2i, p: Vector2, r: float, ore: String) -> void:
@@ -778,6 +781,7 @@ func spawn_enemy_bullet(origin: Vector2, dir: Vector2, spd: float, dmg: float, s
 	b.lift_h = h
 	b.position = Iso.to_screen(origin)
 	b.add_to_group("enemy_bullets")
+	b.src = bullet_src
 	fx_top.add_child(b)
 
 
@@ -832,6 +836,7 @@ func nearest_ally(src: Enemy) -> Enemy:
 
 
 func explode(p: Vector2, r: float, dmg: float, color: Color, _src) -> void:
+	cur_src = ("explosión-" + _src.arch) if _src is Enemy else "zona"
 	fx_explosion(p, r, color)
 	Sfx.play("explosion_m", p, -2.0)
 	if player.alive and player.plane_pos.distance_to(p) < r + player.radius * 0.5:

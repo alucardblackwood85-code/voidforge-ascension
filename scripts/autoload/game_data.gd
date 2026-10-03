@@ -14,7 +14,7 @@ const DEATH_LOOT_LOSS := 0.9          # al morir se pierde el 90% de lo recolect
 const VOLLEY_INTERVAL := 1.2          # la nave dispara una andanada con todos sus láseres cada 1.2 s
 const ENEMY_DMG_MULT := 1.3           # con disparos teledirigidos (casi siempre aciertan) el daño efectivo ya es ~3x el de v0.3
 const ENEMY_HP_MULT := 1.2
-const ENEMY_BULLET_TURN := 2.0        # rad/s: persiguen a la nave; un impulso o un giro cerrado aún los esquiva
+const ENEMY_BULLET_TURN := 1.2        # rad/s: persiguen a la nave; un impulso o un giro cerrado aún los esquiva
 const ASC_UNLOCK_LEVEL := 50          # M9: limpiar este nivel abre la Ascensión
 const ASC_MAX := 10
 const NEXO_RATE := 587.0              # créditos equivalentes a 1 Cristal Nexo (Specter-X: 246.4K créditos o 420 Nexo)
@@ -592,7 +592,7 @@ static func mat_color(id: String) -> Color:
 # --- Escalado por bioma ---------------------------------------------------------------------
 ## Cada facción ya trae estadísticas base más altas según su bioma; el multiplicador de nivel se
 ## calcula desde el nivel mínimo del bioma (si no, la dificultad contaba dos veces).
-const EFF_LEVEL_OFFSET := 0.75
+const EFF_LEVEL_OFFSET := 1.0
 
 static var _biome_factor_cache: Dictionary = {}
 
