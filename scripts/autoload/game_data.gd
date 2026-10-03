@@ -373,7 +373,7 @@ static func ship_price_mult(id: String) -> float:
 ## El pet recibe el 25% de la XP del jugador; 12 niveles cortos (1→12 ≈ 10 h de juego).
 const PET_MAX_LEVEL := 12
 const PET_XP_SHARE := 0.25
-const PET_XP_BASE := 3950.0  # nivel 1 → 12 en ~10 h al ritmo inicial (playtest: 6700 daba ~17 h)
+const PET_XP_BASE := 5200.0  # nivel 1 → 12 en ~8-13 h según el ritmo (playtest: 6700 daba ~17 h, 3950 ~6 h)
 const PET_XP_GROWTH := 1.35
 const PET_DMG_PER_LEVEL := 0.08        # +8% de daño por nivel del pet
 const PET_RATE_PER_LEVEL := 0.03       # -3% de intervalo de disparo por nivel
