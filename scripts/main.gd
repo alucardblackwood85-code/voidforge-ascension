@@ -22,6 +22,9 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--playtest"):
 		add_child(PlaytestRunner.new())
 		return
+	if OS.get_cmdline_user_args().has("--orbit"):
+		add_child(OrbitShow.new())
+		return
 	if OS.get_cmdline_user_args().has("--viewtest"):
 		add_child(ViewTest.new())
 		return
