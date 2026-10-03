@@ -16,6 +16,10 @@
 #>
 param([string]$Only = "", [switch]$Force, [switch]$SkipModels, [int]$Frames = 32, [int]$Elev = 55)
 
+# Modelos que se renderizan sin refinar: formas altas u orgánicas que el recorte de grosor y la
+# simetría rompen (revisados a mano).
+$RawModels = @("enemies/campana_vacio", "enemies/monje_graviton")
+
 # Continue: TripoSR y Blender escriben su registro en stderr (en PowerShell 5.1 "Stop" lo trata como error)
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
@@ -60,7 +64,8 @@ foreach ($it in $inputs) {
     $out = Join-Path $root "build/3d_frames/$($it.key)"
     if (-not (Test-Path (Join-Path $it.model "mesh.obj"))) { continue }
     if (-not $Force -and (Test-Path (Join-Path $out ("{0:D2}.png" -f ($Frames - 1))))) { continue }
-    & $blender -b -P (Join-Path $PSScriptRoot "blender_ship.py") -- spin $it.model $out 0 -90 270 $Frames $Elev 2>&1 |
+    $extra = if ($RawModels -contains $it.key) { "raw" } else { "refine" }
+    & $blender -b -P (Join-Path $PSScriptRoot "blender_ship.py") -- spin $it.model $out 0 -90 270 $Frames $Elev $extra 2>&1 |
         Select-String "Error|Traceback" | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
     Write-Host "fotogramas OK $($it.key)" -ForegroundColor Green
 }
