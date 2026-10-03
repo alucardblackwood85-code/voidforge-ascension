@@ -35,6 +35,39 @@ ship.data.materials.clear(); ship.data.materials.append(mat)
 bpy.context.view_layer.objects.active = ship
 bpy.ops.object.shade_smooth()
 
+
+
+def polish():
+    """Material pulido: superficie lisa con barniz brillante, colores más saturados y emisión en las
+    zonas de color vivo (ventanas, luces, detalles), para naves que deben verse impecables."""
+    nt = mat.node_tree
+    tex = next((n for n in nt.nodes if n.type == "TEX_IMAGE"), None)
+    if tex is None:
+        return
+    bsdf.inputs["Roughness"].default_value = 0.12
+    bsdf.inputs["Metallic"].default_value = 0.55
+    for name in ("Coat Weight", "Clearcoat"):
+        if name in bsdf.inputs:
+            bsdf.inputs[name].default_value = 1.0
+    if "Coat Roughness" in bsdf.inputs:
+        bsdf.inputs["Coat Roughness"].default_value = 0.05
+    sat = nt.nodes.new("ShaderNodeHueSaturation"); sat.inputs["Saturation"].default_value = 1.3
+    nt.links.new(tex.outputs["Color"], sat.inputs["Color"])
+    nt.links.new(sat.outputs["Color"], bsdf.inputs["Base Color"])
+    # Emisión donde el color es vivo y luminoso (saturación x valor alto).
+    hsv = nt.nodes.new("ShaderNodeSeparateColor"); hsv.mode = "HSV"
+    nt.links.new(tex.outputs["Color"], hsv.inputs["Color"])
+    mul = nt.nodes.new("ShaderNodeMath"); mul.operation = "MULTIPLY"
+    nt.links.new(hsv.outputs[1], mul.inputs[0]); nt.links.new(hsv.outputs[2], mul.inputs[1])
+    rng = nt.nodes.new("ShaderNodeMapRange")
+    rng.inputs["From Min"].default_value = 0.30; rng.inputs["From Max"].default_value = 0.65
+    rng.inputs["To Min"].default_value = 0.0; rng.inputs["To Max"].default_value = 4.0
+    nt.links.new(mul.outputs[0], rng.inputs["Value"])
+    ec = "Emission Color" if "Emission Color" in bsdf.inputs else "Emission"
+    nt.links.new(sat.outputs["Color"], bsdf.inputs[ec])
+    nt.links.new(rng.outputs["Result"], bsdf.inputs["Emission Strength"])
+
+
 def normalize():
     # Centra la malla en el origen y la escala a 2 unidades midiendo los vértices reales
     # (bound_box puede quedar desactualizado tras editar la malla).
@@ -143,7 +176,14 @@ elif mode == "spin":
     ship.rotation_mode = "XYZ"
     ship.rotation_euler = Euler((rx, ry, rz))
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-    if not (len(argv) > 8 and argv[8] == "raw"):
+    profile = argv[8].split("+") if len(argv) > 8 else ["refine"]
+    if "polish" in profile:
+        polish()
+    if "soft" in profile:
+        refine(thickness=0.7, smooth_iter=10)  # orgánicos: sin recortar el cuerpo
+    elif "smooth" in profile:
+        refine(smooth_iter=14)  # superficie extra lisa
+    elif "raw" not in profile:
         refine()  # simetría, sin piezas sueltas ni partes colgando, superficie suavizada
     normalize()
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=True)
