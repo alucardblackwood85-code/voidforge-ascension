@@ -1,10 +1,10 @@
 class_name OrbitShow
 extends Node2D
-## Demostración del movimiento (--orbit): cada nave con vistas 3D orbita 10 s alrededor de un
+## Demostración del movimiento (--orbit [--orbit-time=N]): cada nave con modelo 3D orbita N s (10) alrededor de un
 ## alien, apuntándole siempre y disparándole. A mitad de vuelta invierte el sentido para mostrar
 ## la oscilación hacia ambos lados. Al terminar la lista vuelve a empezar.
 
-const SHIP_TIME := 10.0
+var ship_time := 10.0            # segundos por nave (--orbit-time=N)
 const ORBIT_R := 230.0
 const RADIUS := 34.0
 const TARGET_ID := "xenomita"
@@ -45,6 +45,9 @@ class TargetView extends Node2D:
 
 
 func _ready() -> void:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--orbit-time="):
+			ship_time = maxf(1.0, float(a.get_slice("=", 1)))
 	for id in GameData.SHIPS.keys():
 		if SpriteLib.has_frames("ships", id):
 			ids.append(id)
@@ -89,12 +92,12 @@ func _next_ship(i: int) -> void:
 
 func _process(delta: float) -> void:
 	t += delta
-	if t >= SHIP_TIME:
+	if t >= ship_time:
 		_next_ship(idx + 1)
 	# Velocidad angular: sentido horario la primera mitad, antihorario la segunda (con transición).
 	var speed := ship.max_speed / ORBIT_R
-	var dir := 1.0 if t < SHIP_TIME * 0.5 else -1.0
-	var ramp := clampf(absf(t - SHIP_TIME * 0.5) / 0.8, 0.0, 1.0)
+	var dir := 1.0 if t < ship_time * 0.5 else -1.0
+	var ramp := clampf(absf(t - ship_time * 0.5) / 0.8, 0.0, 1.0)
 	var prev := ship.plane_pos
 	orbit_ang += speed * dir * ramp * delta
 	ship.plane_pos = target_pos + Vector2.from_angle(orbit_ang) * ORBIT_R
