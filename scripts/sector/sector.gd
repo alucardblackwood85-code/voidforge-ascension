@@ -84,6 +84,7 @@ var xp_mult := 1.0                       # multiplicador de XP (eventos, Ascensi
 var shield_buff := {"pct": 0.0, "time": 0.0}
 var laser_buff := {"pct": 0.0, "charges": 0}
 var asc := 0                             # M9: nivel de Ascensión de la incursión
+var eff_level := 1                       # nivel efectivo para vida/daño enemigo (relativo al bioma)
 var asc_reward := 1.0
 var commanders: Array = []               # enemigos con afijo Comandante (aura de daño)
 var boss: Enemy = null                   # M6: jefe del sector
@@ -121,6 +122,7 @@ func _ready() -> void:
 	biome_id = params.get("biome", "ferron")
 	biome = GameData.BIOMES[biome_id]
 	asc = int(params.get("asc", 0))
+	eff_level = GameData.eff_level(level, biome_id)
 	asc_reward = pow(1.75, asc)
 	xp_mult *= asc_reward
 	mod = Prog.weekly_mod() if not (demo or showcase) else {}
@@ -431,7 +433,7 @@ func _update_alert(delta: float) -> void:
 	if alert >= 1.0:
 		wave_timer -= delta
 		if wave_timer <= 0.0:
-			wave_timer = maxf(10.0, 28.0 - floorf(alert) * 3.5)
+			wave_timer = maxf(15.0, 30.0 - floorf(alert) * 3.0)
 			_spawn_wave()
 
 
@@ -441,7 +443,7 @@ func _spawn_wave() -> void:
 	# Llegan desde fuera del campo visual, en una dirección aleatoria.
 	var dir := Vector2.from_angle(rng.randf() * TAU)
 	var pos := constrain(player.plane_pos + dir * 900.0, 40.0)
-	var count := 2 + int(floorf(alert)) + level / 6
+	var count := 2 + int(floorf(alert) * 0.6) + level / 10
 	for i in count:
 		var e := spawn_enemy(_weighted(biome["enemies"]), pos + Vector2.from_angle(rng.randf() * TAU) * 120.0, level, _roll_variant())
 		e.aggro = true
@@ -669,6 +671,8 @@ func use_hotbar(i: int) -> void:
 
 ## Usa un consumible instantáneo (barra rápida o bot de playtest). Devuelve false si no se pudo.
 func activate_item(id: String) -> bool:
+	if not player.alive or ended:
+		return false
 	if int(run_items.get(id, 0)) <= 0 or item_cd.get(id, 0.0) > 0.0:
 		return false
 	match id:
@@ -1004,7 +1008,7 @@ func _update_events(delta: float) -> void:
 			if event_tick <= 0.0:
 				event_tick = 0.6
 				var p := player.plane_pos + player.velocity * 0.8 + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(0.0, 380.0)
-				telegraph_circle(p, 90.0, 1.1, GameData.level_dmg(160.0, level), Color("ff9a4a"))
+				telegraph_circle(p, 90.0, 1.1, GameData.level_dmg(160.0, eff_level) * float(GameData.biome_factor(biome_id)["dmg"]), Color("ff9a4a"))
 			if event_time <= 0.0:
 				_end_event(player.alive, "Lluvia de meteoritos superada")
 		"convoy":
@@ -1048,6 +1052,7 @@ func _end_event(ok: bool, text: String) -> void:
 		for e in enemies.duplicate():
 			if e.has_meta("convoy") and e.alive and not e.aggro:
 				e.alive = false
+				commanders.erase(e)
 				enemies.erase(e)
 				e.queue_free()
 	event = ""
@@ -1398,15 +1403,9 @@ func _finish(outcome: String) -> void:
 func _demo_autopilot(delta: float) -> void:
 	demo_timer -= delta
 	if bot:
-		_bot_tick(delta)
-		if objective_done or (player.hull / player.hull_max < 0.15 and int(run_items.get("repair", 0)) == 0):
-			collect_target = null
-			player.target = null
-			player.move_target = gate_pos
-			player.has_move_target = true
-			if player.plane_pos.distance_to(gate_pos) < 200.0:
-				request_extract()
-			return
+		if player.alive:
+			_bot_nav(delta)
+		return
 	if not player.target_valid():
 		var best: Enemy = null
 		var best_d := INF
@@ -1622,3 +1621,113 @@ func _update_music(delta: float) -> void:
 		Music.play(biome_id + "_combat")
 	else:
 		Music.play(biome_id)
+
+
+# --- Playtest: piloto que juega como una persona ------------------------------------------------
+# Mantiene distancia (el láser llega a 620 u y casi todos los enemigos disparan a menos de 500),
+# se retira a recargar escudo, persigue el objetivo del sector y recoge cajas cuando hay calma.
+var bot_retreat := false
+var bot_think := 0.0
+
+
+func _bot_nav(delta: float) -> void:
+	_bot_tick(delta)
+	var hp := player.hull / player.hull_max
+	var sh := player.shield / maxf(1.0, player.shield_max)
+	if objective_done or (hp < 0.15 and int(run_items.get("repair", 0)) == 0):
+		collect_target = null
+		player.move_target = gate_pos
+		player.has_move_target = true
+		if player.plane_pos.distance_to(gate_pos) < 200.0:
+			request_extract()
+		return
+	bot_think -= delta
+	if bot_think > 0.0:
+		return
+	bot_think = 0.3
+	# Amenazas cercanas
+	var threat := Vector2.ZERO
+	var n_threat := 0
+	var nearest: Enemy = null
+	var nd := INF
+	for e in enemies:
+		if not e.alive or e.is_nest:
+			continue
+		var d := e.plane_pos.distance_to(player.plane_pos)
+		if e.aggro and d < 900.0:
+			threat += e.plane_pos
+			n_threat += 1
+		if e.aggro and d < nd:
+			nd = d
+			nearest = e
+	# Retirada para recargar escudo
+	if hp < 0.4 or (sh <= 0.02 and hp < 0.75):
+		bot_retreat = true
+	elif bot_retreat and (sh > 0.7 or n_threat == 0 and sh > 0.4):
+		bot_retreat = false
+	if bot_retreat and n_threat > 0:
+		var away := (player.plane_pos - threat / n_threat).normalized()
+		var to_gate := (gate_pos - player.plane_pos).normalized()
+		player.move_target = constrain(player.plane_pos + (away * 0.7 + to_gate * 0.3).normalized() * 500.0, 60.0)
+		player.has_move_target = true
+		if nearest and nd < GameData.LASER_RANGE:
+			player.target = nearest
+		return
+	# Objetivo del sector
+	var goal := Vector2.INF
+	var goal_r := 0.0
+	var goal_target: Enemy = null
+	for pt in points:
+		if not is_instance_valid(pt) or pt.done or not pt.is_objective():
+			continue
+		if pt.kind == "baliza" or pt.kind == "socorro":
+			var d: float = pt.plane_pos.distance_to(player.plane_pos)
+			if goal == Vector2.INF or d < goal.distance_to(player.plane_pos):
+				goal = pt.plane_pos
+				goal_r = 120.0 if pt.kind == "baliza" else 350.0
+		elif pt.kind == "convoy":
+			goal = pt.plane_pos
+			goal_r = 300.0
+	if objective == "comandante" and is_instance_valid(commander):
+		goal_target = commander
+	elif objective == "nidos":
+		var bn := INF
+		for e in enemies:
+			if e.is_nest and e.alive and e.plane_pos.distance_to(player.plane_pos) < bn:
+				bn = e.plane_pos.distance_to(player.plane_pos)
+				goal_target = e
+	# Elección de blanco: amenazas cercanas primero, luego el objetivo.
+	if nearest and nd < 700.0:
+		player.target = nearest
+	elif goal_target:
+		player.target = goal_target
+	elif not player.target_valid() and nearest:
+		player.target = nearest
+	# Movimiento
+	if goal != Vector2.INF and player.plane_pos.distance_to(goal) > goal_r and (nd > 450.0 or goal_r >= 300.0):
+		player.move_target = goal
+	elif player.target_valid():
+		var t := player.target
+		var box := _nearest_box_demo(600.0)
+		if nd > 650.0 and box:
+			collect_target = box
+			player.move_target = box.plane_pos
+		else:
+			var ang := (player.plane_pos - t.plane_pos).angle() + 0.35
+			var want := 540.0 if t is Enemy and not (t as Enemy).is_nest else 300.0
+			var p := t.plane_pos + Vector2.from_angle(ang) * want
+			if goal != Vector2.INF:
+				p = p.lerp(goal, 0.3)
+			player.move_target = constrain(p, 60.0)
+	else:
+		# Explorar: hacia celdas no visitadas.
+		var best := gate_pos
+		var bd := INF
+		for c in cells.keys():
+			if not cells[c]["visited"]:
+				var d := cell_center(c).distance_to(player.plane_pos)
+				if d < bd:
+					bd = d
+					best = cell_center(c)
+		player.move_target = best
+	player.has_move_target = true

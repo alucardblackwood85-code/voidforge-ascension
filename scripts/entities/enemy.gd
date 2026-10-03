@@ -53,6 +53,8 @@ var atk_mult := 1.0
 var dmg_taken_mult := 1.0
 var affix_timer := 4.0
 var swarmed := false
+var phase_t := 0.0          # afijo Fásico: segundos de fase restantes
+var leash_t := 0.0          # segundos con el jugador lejos (abandona la persecución a los 5 s)
 # M6: jefe con fases
 var is_boss := false
 var boss_phase := 1
@@ -85,9 +87,9 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 		def = GameData.ENEMIES[id]
 	var v: Dictionary = GameData.VARIANTS[variant]
 	arch = def["arch"]
-	hp_max = GameData.level_hp(float(def["hp"]), level) * float(v["hp"]) * GameData.ENEMY_HP_MULT
+	hp_max = GameData.level_hp(float(def["hp"]), sector.eff_level) * float(v["hp"]) * GameData.ENEMY_HP_MULT
 	hp = hp_max
-	dmg = GameData.level_dmg(float(def["dmg"]), level) * float(v["dmg"]) * GameData.ENEMY_DMG_MULT
+	dmg = GameData.level_dmg(float(def["dmg"]), sector.eff_level) * float(v["dmg"]) * GameData.ENEMY_DMG_MULT
 	# M9: Ascensión (vida x2^A, daño x1,55^A).
 	if sector.asc > 0:
 		hp_max *= pow(2.0, sector.asc)
@@ -120,7 +122,7 @@ func set_aggro() -> void:
 	aggro = true
 	# Avisa sólo a los vecinos directos (sin cadena: antes se activaba medio mapa en cascada).
 	for e in sector.enemies:
-		if e != self and not e.aggro and not e.is_nest and e.plane_pos.distance_to(plane_pos) < 450.0:
+		if e != self and not e.aggro and not e.is_nest and e.plane_pos.distance_to(plane_pos) < 350.0:
 			e.aggro = true
 
 
@@ -152,8 +154,20 @@ func _process(delta: float) -> void:
 	_affix_tick(delta, p, dist)
 	if is_boss and aggro and p.alive:
 		_boss_tick(delta, p, dist)
-	if not aggro and not sector.showcase and (dist < 700.0 or sector.alert >= 3.0):
+	# Detección: 700 u, +80 u por nivel de alerta (antes, con alerta 3 se activaba todo el mapa).
+	if not aggro and not sector.showcase and dist < 700.0 + 80.0 * sector.alert:
 		set_aggro()
+	# Abandona la persecución si el jugador se aleja (permite retirarse a recargar escudo).
+	if aggro and not is_nest and not has_meta("objective"):
+		if dist > 1500.0:
+			leash_t += delta
+			if leash_t > 5.0:
+				aggro = false
+				leash_t = 0.0
+				draining = false
+				_set_state("move")
+		else:
+			leash_t = 0.0
 	var move := Vector2.ZERO
 	if aggro and p.alive:
 		move = _behave(delta, p, dist)
@@ -658,7 +672,7 @@ func _setup_shield() -> void:
 		return
 	shield_max = hp_max * frac * float(sector.mod.get("shield", 1.0))
 	shield = shield_max
-	shield_armor = 18.0 * GameData.level_dmg(1.0, level) * (1.3 if frac >= 0.4 else 1.0)
+	shield_armor = 18.0 * GameData.level_dmg(1.0, sector.eff_level) * (1.3 if frac >= 0.4 else 1.0)
 
 
 ## Daño de un impacto contra el escudo y el casco (devuelve el daño que llega al casco).
@@ -723,6 +737,10 @@ func affix_text() -> String:
 
 func _affix_tick(delta: float, p: PlayerShip, dist: float) -> void:
 	since_hit += delta
+	if phase_t > 0.0:
+		phase_t -= delta
+		if phase_t <= 0.0:
+			phased = false
 	if shield_max > 0.0 and since_hit > 3.0 and shield < shield_max:
 		shield = minf(shield_max, shield + shield_max * 0.08 * delta)
 	if affixes.is_empty() or not aggro:
@@ -738,7 +756,7 @@ func _affix_tick(delta: float, p: PlayerShip, dist: float) -> void:
 		sfx("e_reflect", -4.0)
 	if affixes.has("fasico") and not phased:
 		phased = true
-		get_tree().create_timer(1.5).timeout.connect(func(): phased = false)
+		phase_t = 1.5
 		sfx("e_phase", -4.0)
 	if affixes.has("gravitatorio") and dist < 520.0:
 		p.external_pull += (plane_pos - p.plane_pos).normalized() * 280.0

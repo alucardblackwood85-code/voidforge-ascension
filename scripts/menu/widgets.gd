@@ -20,7 +20,7 @@ static func icon(kind: String, id: String) -> Texture2D:
 		"mat":
 			return SpriteLib.get_icon("mats", id)
 		"ship":
-			var t := SpriteLib.get_tex("ships", id)
+			var t := SpriteLib.get_cropped("ships", id)
 			return t if t else SpriteLib.get_tex("ships", GameData.SHIPS[id]["class"])
 	return null
 

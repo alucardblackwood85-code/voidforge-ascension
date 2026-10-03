@@ -587,3 +587,42 @@ static func mat_color(id: String) -> Color:
 		return Color("ff4fd8")
 	var r: int = MATERIALS.get(id, {}).get("rarity", 0)
 	return RARITY_COLORS[r]
+
+
+# --- Escalado por bioma ---------------------------------------------------------------------
+## Cada facción ya trae estadísticas base más altas según su bioma; el multiplicador de nivel se
+## calcula desde el nivel mínimo del bioma (si no, la dificultad contaba dos veces).
+const EFF_LEVEL_OFFSET := 0.75
+
+static var _biome_factor_cache: Dictionary = {}
+
+
+static func eff_level(level: int, biome_id: String) -> int:
+	var mn := int(BIOMES.get(biome_id, {}).get("min_level", 1))
+	return maxi(1, level - int(mn * EFF_LEVEL_OFFSET))
+
+
+## Vida y daño medios de las especies de un bioma respecto a Ferron.
+static func biome_factor(biome_id: String) -> Dictionary:
+	if _biome_factor_cache.has(biome_id):
+		return _biome_factor_cache[biome_id]
+	var avg := func(bid: String) -> Vector2:
+		var s := Vector2.ZERO
+		var ids: Array = BIOMES[bid].get("enemies", {}).keys()
+		for id in ids:
+			s += Vector2(float(ENEMIES[id]["hp"]), float(ENEMIES[id]["dmg"]))
+		return s / maxf(1.0, ids.size())
+	var base: Vector2 = avg.call("ferron")
+	var mine: Vector2 = avg.call(biome_id) if BIOMES.get(biome_id, {}).has("enemies") else base
+	var f := {"hp": mine.x / base.x, "dmg": mine.y / base.y}
+	_biome_factor_cache[biome_id] = f
+	return f
+
+
+## Poder recomendado para un bioma, nivel y Ascensión (mismas potencias que el índice de poder).
+static func recommended_power(level: int, biome_id: String, asc: int = 0) -> float:
+	var e := eff_level(level, biome_id)
+	var f := biome_factor(biome_id)
+	var hp: float = f["hp"] * level_hp(1.0, e) / level_hp(1.0, 1) * pow(2.0, asc)
+	var dmg: float = f["dmg"] * level_dmg(1.0, e) / level_dmg(1.0, 1) * pow(1.55, asc)
+	return 1000.0 * pow(hp, 0.9) * pow(dmg, 0.5)

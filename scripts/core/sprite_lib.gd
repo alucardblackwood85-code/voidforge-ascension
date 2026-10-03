@@ -31,3 +31,27 @@ static func get_icon(group: String, id: String) -> Texture2D:
 		var path := "res://assets/%s.png" % key
 		_cache[key] = load(path) if ResourceLoader.exists(path) else null
 	return _cache[key]
+
+
+## Versión recortada al contenido visible (para iconos del menú: algunas naves traían mucho margen).
+static func get_cropped(group: String, id: String) -> Texture2D:
+	var key := "crop/" + group + "/" + id
+	if _cache.has(key):
+		return _cache[key]
+	var tex := get_tex(group, id)
+	var out: Texture2D = tex
+	if tex:
+		var img := tex.get_image()
+		if img and not img.is_compressed():
+			var r := img.get_used_rect()
+			if r.size.x > 0 and r.size.y > 0:
+				# Región cuadrada centrada en el contenido, con un pequeño margen.
+				var side := int(maxf(r.size.x, r.size.y) * 1.08)
+				var c := r.get_center()
+				var at := AtlasTexture.new()
+				at.atlas = tex
+				at.region = Rect2(c.x - side * 0.5, c.y - side * 0.5, side, side)
+				at.filter_clip = true
+				out = at
+	_cache[key] = out
+	return out

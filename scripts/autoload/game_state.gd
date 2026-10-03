@@ -20,7 +20,7 @@ var last_result: Dictionary = {}
 
 func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--playtest"):
-		save_path = PLAYTEST_SAVE_PATH
+		save_path = PLAYTEST_SAVE_PATH.replace(".json", "_%d.json" % OS.get_process_id())
 	load_game()
 
 

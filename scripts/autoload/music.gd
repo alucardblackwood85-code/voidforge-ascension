@@ -25,7 +25,7 @@ func _ready() -> void:
 
 
 func _load(track: String) -> AudioStream:
-	for ext in ["mp3", "wav"]:
+	for ext in ["ogg", "mp3", "wav"]:
 		var path: String = DIR + track + "." + ext
 		if ResourceLoader.exists(path):
 			return load(path)
@@ -46,6 +46,8 @@ func play(track: String) -> void:
 		w.loop_begin = 0
 		# Contamos muestras por duración (la importación puede comprimir los datos).
 		w.loop_end = int(w.get_length() * w.mix_rate)
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
 	elif stream is AudioStreamMP3:
 		(stream as AudioStreamMP3).loop = false
 		_self_loop = true

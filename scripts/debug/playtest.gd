@@ -13,15 +13,20 @@ var _sector: Sector = null
 var _done := false
 var _frame_us: Array = []
 var _last_us := 0
-var _only := -1
+var _only: Array = []
+var _out := "res://build/playtest_report.json"
 
 
 func _ready() -> void:
 	await get_tree().process_frame
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--pt-only="):
-			_only = int(a.get_slice("=", 1))
+			for x in a.get_slice("=", 1).split(","):
+				_only.append(int(x))
+		if a.begins_with("--pt-out="):
+			_out = a.get_slice("=", 1)
 	_phase_economy()
+	_phase_features()
 	await _phase_combat()
 	_phase_pacing()
 	_write()
@@ -214,6 +219,10 @@ const SCENARIOS := [
 	{"name": "Centurion P · L-09 nv12 · Vacío 24", "ship": "centurion_p", "laser": "l09", "lvl": 12, "gen": "sg_quantum", "glvl": 12, "mods": 2, "biome": "vacio", "level": 24},
 	{"name": "Titan B1 · L-10 nv14 · Leviatán 32", "ship": "titan_b1", "laser": "l10", "lvl": 14, "gen": "sg_fortress", "glvl": 14, "mods": 3, "biome": "leviatan", "level": 32},
 	{"name": "Event Horizon · L-18 nv16 · Leviatán 40", "ship": "event_horizon", "laser": "l18", "lvl": 16, "gen": "sg_fortress", "glvl": 16, "mods": 4, "biome": "leviatan", "level": 40},
+	{"name": "Objetivo balizas · Raptor V2 L-02 nv6 · Ferron 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron", "level": 5, "objective": "baliza"},
+	{"name": "Objetivo socorro · Raptor V2 L-02 nv6 · Ferron 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron", "level": 5, "objective": "socorro"},
+	{"name": "Objetivo escolta · Raptor V2 L-02 nv6 · Ferron 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron", "level": 5, "objective": "escolta"},
+	{"name": "Objetivo comandante · Raptor V2 L-02 nv6 · Ferron 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron", "level": 5, "objective": "comandante"},
 ]
 
 
@@ -221,7 +230,7 @@ func _phase_combat() -> void:
 	var seed_i := 100
 	for sc in SCENARIOS:
 		seed_i += 1
-		if _only >= 0 and SCENARIOS.find(sc) != _only:
+		if not _only.is_empty() and not _only.has(SCENARIOS.find(sc)):
 			continue
 		if sc.get("stock", false):
 			GameState.new_profile()
@@ -234,11 +243,14 @@ func _phase_combat() -> void:
 			GameState.data["items"]["shield_cell"] = 6
 		GameState.data["sector_max"] = 99
 		var xp_before := int(GameState.data["xp"])
+		_biome = sc["biome"]
 		var t0 := Time.get_ticks_msec()
 		_frame_us.clear()
 		_done = false
 		_sector = Sector.new()
 		_sector.params = {"level": sc["level"], "biome": sc["biome"], "seed": seed_i, "bot": true}
+		if sc.has("objective"):
+			_sector.params["objective"] = sc["objective"]
 		_sector.finished.connect(func(_r): _done = true)
 		get_tree().root.add_child(_sector)
 		_last_us = Time.get_ticks_usec()
@@ -284,6 +296,10 @@ func _run_metrics(sc: Dictionary, s: Sector, xp_before: int, real_ms: int) -> Di
 		"materials": mats, "cargo_cap": s.cargo_capacity(), "cargo_full_s": int(s.stat_cargo_full_t), "objective_s": int(s.stat_objective_t),
 		"ammo_used": ammo, "ammo_min": int(ammo / mins), "items_used": s.stat_items_used, "refined": s.stat_refined,
 		"boxes_left": s.boxes.size(), "max_enemies": s.stat_max_enemies, "max_aggro": s.stat_max_aggro, "spawned": s.stat_spawned, "dps_theory": int(GameState.theoretical_dps()),
+		"boss": "muerto" if s.boss_dead else ("%d%%" % int(100.0 * s.boss.hp / s.boss.hp_max) if is_instance_valid(s.boss) else "-"),
+		"obj_progress": "%d/%d" % [s.objective_progress, s.objective_target], "clear_pct": s._clear_percent(),
+		"pois": s.run_pois, "events": s.run_events, "boxes": s.run_boxes, "elites": s.run_elites, "legendary": s.run_legendary,
+		"power_pct": int(100.0 * _power() / _rec_power(int(sc["level"]))),
 		"frame_ms_avg": snappedf(avg / 1000.0, 0.01), "frame_ms_p95": snappedf(p95 / 1000.0, 0.01), "real_s": snappedf(real_ms / 1000.0, 0.1),
 	}
 
@@ -299,6 +315,7 @@ func _phase_pacing() -> void:
 	var cr_h := float(early["credits_min"]) * 60.0
 	pace["early_xp_per_hour"] = int(xp_h)
 	pace["early_credits_per_hour"] = int(cr_h)
+	pace["pet_h_to_12"] = snappedf(GameData.pet_xp_for_level(GameData.PET_MAX_LEVEL) / maxf(1.0, xp_h * GameData.PET_XP_SHARE), 0.1)
 	# Horas hasta cada rango con el ritmo de cada fase (usa la incursión de equipo más cercano).
 	var ranks := []
 	for lvl in range(2, GameData.MAX_LEVEL + 1):
@@ -318,8 +335,88 @@ func _phase_pacing() -> void:
 func _write() -> void:
 	var txt := JSON.stringify(report, "  ")
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build"))
-	var f := FileAccess.open(ProjectSettings.globalize_path("res://build/playtest_report.json"), FileAccess.WRITE)
+	var f := FileAccess.open(ProjectSettings.globalize_path(_out), FileAccess.WRITE)
 	f.store_string(txt)
 	print("PLAYTEST_JSON_BEGIN")
 	print(JSON.stringify(report))
 	print("PLAYTEST_JSON_END")
+
+
+# --- Fase 1b: funciones de progresión (misiones, temporada, logros, copia, Ascensión) ----------
+func _phase_features() -> void:
+	var feat := {}
+	GameState.new_profile()
+	Prog.ensure()
+	var m: Dictionary = GameState.data["missions"]
+	if m["daily"].size() != 3 or m["weekly"].size() != 3:
+		err("Misiones: se esperaban 3 diarias y 3 semanales (%d/%d)" % [m["daily"].size(), m["weekly"].size()])
+	for mi in m["daily"]:
+		if mi["type"] == "boss":
+			err("Misión diaria de jefe con sector máximo 1 (no hay jefes hasta el nivel 4)")
+	# Incursión simulada que completa todo lo posible.
+	var fake := {"outcome": "extract", "level": 5, "loot": {"credits": 5000}, "kills": 400, "kills_by": {"chatarrax": 120},
+		"objective_done": true, "time": 300, "xp": 1000, "biome": "ferron", "elites": 50, "boss_killed": true,
+		"boxes": 60, "pois": 10, "events": 3, "legendary": 1, "modules": [], "asc": 0}
+	var nexo0 := int(GameState.data["nexo"])
+	GameState.apply_run_result(fake.duplicate(true))
+	GameState.apply_run_result(fake.duplicate(true))
+	var claimed := 0
+	for i in 3:
+		if Prog.claim_mission(false, i):
+			claimed += 1
+	feat["daily_claimable_after_big_run"] = claimed
+	feat["streak_after_claims"] = int(m["streak"])
+	if claimed == 3 and int(m["streak"]) != 1:
+		err("Racha: al reclamar las 3 diarias debería pasar a 1 (está en %d)" % int(m["streak"]))
+	if Prog.claim_mission(false, 0):
+		err("Misiones: se pudo reclamar dos veces la misma misión")
+	feat["achievements"] = GameState.data["achievements"].size()
+	feat["nexo_gained"] = int(GameState.data["nexo"]) - nexo0
+	feat["mastery"] = Prog.has_mastery("chatarrax")
+	if not Prog.has_mastery("chatarrax"):
+		err("Maestría: 120 bajas de chatarrax no dan maestría")
+	feat["season_tier"] = Prog.season_tier()
+	var got := Prog.claim_season()
+	feat["season_claimed"] = got.size()
+	if Prog.season_tier() > 0 and got.is_empty():
+		err("Temporada: niveles alcanzados sin poder reclamar")
+	# Copia de seguridad
+	var code := GameState.export_code()
+	var xp_before := int(GameState.data["xp"])
+	GameState.data["xp"] = 0
+	if not GameState.import_code(code) or int(GameState.data["xp"]) != xp_before:
+		err("Copia de seguridad: importar el código exportado no restaura la partida")
+	if GameState.import_code("basura"):
+		err("Copia de seguridad: acepta un código no válido")
+	feat["export_len"] = code.length()
+	# Ascensión: limpiar el nivel 50 la desbloquea
+	GameState.apply_run_result({"outcome": "extract", "level": 50, "objective_done": true, "loot": {}, "asc": 0})
+	feat["asc_max_after_50"] = int(GameState.data["asc_max"])
+	if int(GameState.data["asc_max"]) != 1:
+		err("Ascensión: limpiar el nivel 50 no la desbloquea")
+	# Bloqueo de módulos antes del nivel 5
+	GameState.new_profile()
+	var mod := GameState.roll_module(1)
+	GameState.data["modules"].append(mod)
+	GameState.equip("mods", 0, int(mod["uid"]))
+	if int(GameState.current_loadout()["mods"][0]) >= 0:
+		err("Módulos: se pueden equipar antes del nivel 5")
+	feat["pet_unlocked_new_profile"] = GameState.data["unlocks"]["pet"]
+	# Pet: horas hasta el nivel 12 con el ritmo de XP de la primera incursión (se rellena al final)
+	feat["pet_xp_to_12"] = GameData.pet_xp_for_level(GameData.PET_MAX_LEVEL)
+	report["features"] = feat
+	print("PT|FEAT|", JSON.stringify(feat))
+
+
+## Mismas fórmulas que el mapa estelar (poder propio y recomendado).
+func _power() -> float:
+	var st := GameState.ship_stats()
+	var dps := maxf(1.0, GameState.theoretical_dps())
+	return pow(st["hull"], 0.45) * pow(st["speed"], 0.2) * pow(dps, 0.7) * pow(st["shield"], 0.35) / 100.0
+
+
+var _biome := "ferron"
+
+
+func _rec_power(level: int) -> float:
+	return GameData.recommended_power(level, _biome)

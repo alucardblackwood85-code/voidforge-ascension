@@ -145,7 +145,8 @@ func power_index() -> float:
 
 
 func recommended_power(level: int) -> float:
-	return 1000.0 * pow(GameData.level_hp(1.0, level) / GameData.level_hp(1.0, 1), 0.9) * pow(GameData.level_dmg(1.0, level) / GameData.level_dmg(1.0, 1), 0.5)
+	var asc := int(menu.state.get("asc", 0)) if menu else 0
+	return GameData.recommended_power(level, menu.state.get("biome", "ferron") if menu else "ferron", asc)
 
 
 func _details(id: String, level: int, asc: int = 0) -> String:
@@ -158,11 +159,13 @@ func _details(id: String, level: int, asc: int = 0) -> String:
 		res.append(GameData.mat_name(k))
 	var s := "[b]%s[/b] — %s  Peligros: %s\nRecursos frecuentes: %s.\n\n" % [b["name"], b["desc"], b["hazards"], ", ".join(res)]
 	s += "Poder recomendado: [b]%s[/b]   ·   Tu poder: [color=#%s][b]%s[/b][/color]   ·   Nave: [b]%s[/b]\n" % [GameData.format_num(rec), col, GameData.format_num(mine), GameData.SHIPS[GameState.data["current_ship"]]["name"]]
-	s += "Vida enemiga x%.2f · Daño enemigo x%.2f · Recompensas x%.2f\n" % [GameData.level_hp(1.0, level), GameData.level_dmg(1.0, level), GameData.level_reward(1.0, level)]
+	var bf := GameData.biome_factor(id)
+	var el := GameData.eff_level(level, id)
+	s += "Vida enemiga x%.2f · Daño enemigo x%.2f · Recompensas x%.2f\n" % [bf["hp"] * GameData.level_hp(1.0, el), bf["dmg"] * GameData.level_dmg(1.0, el), GameData.level_reward(1.0, level)]
 	if asc > 0:
 		s += "[color=#ff4fd8]Ascensión %d: vida x%.0f · daño x%.2f · recompensas x%.2f[/color]\n" % [asc, pow(2.0, asc), pow(1.55, asc), pow(1.75, asc)]
 	var vs := "Boss" + (", Mega" if level >= 3 else "") + (", Ultra" if level >= 20 else "") + (", Uber" if level >= 40 else "")
-	s += "Objetivo procedural: Limpieza o Destruir nidos. Variantes élite: %s.%s\n" % [vs, " Jefe con 3 fases." if level >= 4 else ""]
+	s += "Objetivo aleatorio: limpieza, nidos, balizas o señal de socorro%s. Variantes élite: %s.%s\n" % [" (también escolta y comandante)" if level >= 3 else "", vs, " Jefe con 3 fases." if level >= 4 else ""]
 	if level >= 20 or id in ["prismaticos", "vacio"]:
 		s += "[color=#4ab8ff]Enemigos con escudo blindado: usa munición alta o láseres Ion.[/color]\n"
 	if GameState.data["sector_cleared"].has(level):
