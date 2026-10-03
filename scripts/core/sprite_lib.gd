@@ -62,7 +62,11 @@ static func get_cropped(group: String, id: String) -> Texture2D:
 ## las direcciones w, nw y sw son su espejo. Índice por ángulo en pantalla (y hacia abajo).
 const VIEW_DIRS := ["e", "se", "s", "se", "e", "ne", "n", "ne"]
 const VIEW_MIRROR := [false, false, false, true, true, true, false, false]
-const VIEW_HYSTERESIS := 0.12   # rad extra antes de cambiar de vista (evita parpadeo en la frontera)
+const VIEW_TURN_RATE := 5.5     # rad/s máximos del giro visual (los cambios bruscos se ven como curva)
+const VIEW_BLEND := 0.35        # fracción del hueco entre dos vistas en la que se funden
+const VIEW_BANK_TILT := 0.16    # rad de inclinación con alabeo máximo
+const VIEW_BANK_SQUASH := 0.10  # estrechamiento horizontal con alabeo máximo
+const VIEW_BOB := 1.2           # px de balanceo vertical en vuelo
 const VIEW_SIZE := 2.1          # tamaño de la vista respecto al radio visual (iguala al sprite cenital)
 ## Correcciones por modelo: una dirección usa otra vista girada (grados, horario en pantalla).
 ## Para vistas que la generación dejó con el rumbo equivocado.
@@ -93,36 +97,65 @@ static func get_view(group: String, id: String, dir: String) -> Texture2D:
 
 
 ## Dibuja una entidad con su vista direccional si existe; si no, el sprite cenital girado.
-## `angle` es el rumbo en el plano lógico. La vista se elige por el rumbo proyectado en pantalla.
+## `angle` es el rumbo en el plano lógico. Giro suave:
+##  - el rumbo visual sigue al real con velocidad de giro limitada (los virajes bruscos se ven como curva);
+##  - la vista más cercana se gira el ángulo residual (±22,5°) para seguir el rumbo exacto;
+##  - cerca de la frontera entre dos vistas, la siguiente se funde encima de la anterior;
+##  - al virar, la nave se inclina hacia el giro (alabeo) y flota con un balanceo sutil.
 static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color = Color.WHITE) -> void:
 	if not has_views(group, id):
 		if fallback:
 			draw(ci, fallback, radius, angle, h, modulate)
 		return
-	var a := Iso.to_screen(Vector2.from_angle(angle)).angle()
+	var target := Iso.to_screen(Vector2.from_angle(angle)).angle()
+	var now := Time.get_ticks_msec() / 1000.0
+	var dt := clampf(now - float(ci.get_meta("_vt", now)), 0.0, 0.1)
+	var a: float = ci.get_meta("_va", target)
+	var prev := a
+	a = rotate_toward(a, target, VIEW_TURN_RATE * dt)
+	# Alabeo: proporcional a la velocidad angular, suavizado.
+	var w := angle_difference(prev, a) / maxf(dt, 0.001)
+	var bank: float = ci.get_meta("_vbank", 0.0)
+	bank = lerpf(bank, clampf(w / VIEW_TURN_RATE, -1.0, 1.0), clampf(dt * 6.0, 0.0, 1.0))
+	ci.set_meta("_vt", now)
+	ci.set_meta("_va", a)
+	ci.set_meta("_vbank", bank)
 	var step := PI / 4.0
-	var idx := posmod(roundi(a / step), 8)
-	var last: int = ci.get_meta("_vdir", -1)
-	if last >= 0 and last != idx:
-		# Histéresis: sólo cambia si se aleja claramente del centro de la vista anterior.
-		var d := absf(angle_difference(a, last * step))
-		if d < step * 0.5 + VIEW_HYSTERESIS:
-			idx = last
-	ci.set_meta("_vdir", idx)
+	var pos := a / step
+	var i0 := floori(pos)
+	var t := pos - i0
+	# Fundido sólo en la franja central entre dos vistas: el resto del tiempo se ve una sola.
+	var blend := smoothstep(0.5 - VIEW_BLEND * 0.5, 0.5 + VIEW_BLEND * 0.5, t)
+	var main_i := i0 if blend < 0.5 else i0 + 1
+	var other_i := i0 + 1 if main_i == i0 else i0
+	var other_w := blend if main_i == i0 else 1.0 - blend
+	var s := radius * VISUAL_SCALE * VIEW_SIZE
+	var bob := sin(now * 2.2 + float(ci.get_instance_id() % 97)) * VIEW_BOB
+	var origin := Vector2(0.0, -h - s * 0.08 + bob)
+	_draw_view(ci, group, id, fallback, radius, angle, h, modulate, posmod(main_i, 8), a - main_i * step, bank, s, origin, 1.0)
+	if other_w > 0.01:
+		_draw_view(ci, group, id, fallback, radius, angle, h, modulate, posmod(other_i, 8), a - other_i * step, bank, s, origin, other_w)
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+static func _draw_view(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color, idx: int, residual: float, bank: float, s: float, origin: Vector2, alpha: float) -> void:
 	var dir: String = VIEW_DIRS[idx]
-	var rot := 0.0
+	var rot := residual
 	var fix: Array = VIEW_FIX.get(group + "/" + id, {}).get(dir, [])
+	var flip := -1.0 if VIEW_MIRROR[idx] else 1.0
 	if not fix.is_empty():
 		dir = fix[0]
-		rot = deg_to_rad(float(fix[1]))
+		# La corrección se expresa sobre la vista sin espejo: en las espejadas se invierte.
+		rot += deg_to_rad(float(fix[1])) * flip
 	var tex := get_view(group, id, dir)
 	if tex == null:
-		if fallback:
+		if fallback and alpha >= 1.0:
 			draw(ci, fallback, radius, angle, h, modulate)
 		return
-	var s := radius * VISUAL_SCALE * VIEW_SIZE
-	var flip := -1.0 if VIEW_MIRROR[idx] else 1.0
-	# Espejo de una vista girada = giro opuesto y luego espejo.
-	ci.draw_set_transform(Vector2(0.0, -h - s * 0.08), rot * flip, Vector2(flip, 1.0))
-	ci.draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, modulate)
-	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+	# Alabeo: inclinación hacia el giro y leve estrechamiento (la nave "rueda" sobre su eje).
+	rot += bank * VIEW_BANK_TILT
+	var sx := (1.0 - absf(bank) * VIEW_BANK_SQUASH) * flip
+	ci.draw_set_transform(origin, rot, Vector2(sx, 1.0))
+	var m := modulate
+	m.a *= alpha
+	ci.draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, m)

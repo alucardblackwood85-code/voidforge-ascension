@@ -59,3 +59,38 @@ func _ready() -> void:
 		h.text = ["E", "SE", "S", "SO", "O", "NO", "N", "NE", "antiguo"][c]
 		h.position = Vector2(185 + c * CELL.x, 4)
 		add_child(h)
+
+
+# --- Modo animado (--viewspin): giro continuo y zigzag brusco, con capturas en serie ----------
+var spin := false
+var t := 0.0
+var frames := 0
+
+
+func _enter_tree() -> void:
+	spin = OS.get_cmdline_user_args().has("--viewspin")
+
+
+func _process(delta: float) -> void:
+	if not spin:
+		return
+	t += delta
+	for c in get_children():
+		if c is Cell and not c.old:
+			var row := int((c.position.y - 70.0) / CELL.y)
+			# Filas pares: giro continuo; impares: zigzag brusco de ±90° cada 0,6 s.
+			if row % 2 == 0:
+				c.heading = t * 1.6 + c.position.x * 0.01
+			else:
+				c.heading = (1.0 if int(t / 0.6) % 2 == 0 else -1.0) * PI * 0.5 + c.position.x * 0.01
+			c.queue_redraw()
+	# Serie de capturas para revisar la transición (cada 0,12 s durante 2,4 s).
+	var dir := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--frames="):
+			dir = a.get_slice("=", 1)
+	if dir != "" and t > 0.5 and frames < 20 and t > 0.5 + frames * 0.12:
+		get_viewport().get_texture().get_image().save_png("%s/f%02d.png" % [dir, frames])
+		frames += 1
+		if frames == 20:
+			get_tree().quit()
