@@ -10,7 +10,7 @@
 .EXAMPLE
   .\tools\preview_options.ps1 -Group enemies
 #>
-param([string]$Group = "enemies", [string]$Only = "")
+param([string]$Group = "enemies", [string]$Only = "", [switch]$SheetsOnly)
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 $tsr = "D:\Proyectos\herramientas\TripoSR"
@@ -22,6 +22,7 @@ $dir = Join-Path $root "build/redesign/$Group"
 $soft = @("leviatan_genesis", "monje_graviton", "campana_vacio")
 $opts = @(Get-ChildItem $dir -Filter "*_?.png" | Where-Object { $_.BaseName -match '^(.+)_(\d)$' -and (-not $Only -or $Matches[1] -eq $Only) })
 # 1. Modelos (una tanda por cada 12 imágenes)
+if (-not $SheetsOnly) {
 for ($i = 0; $i -lt $opts.Count; $i += 12) {
     $batch = @($opts[$i..([Math]::Min($i + 11, $opts.Count - 1))])
     $tmp = Join-Path $dir "_tanda"
@@ -44,11 +45,13 @@ foreach ($o in $opts) {
     & $blender -b -P (Join-Path $PSScriptRoot "blender_ship.py") -- spin (Join-Path $dir "modelos/$($o.BaseName)") (Join-Path $dir "frames/$($o.BaseName)") 0 -90 270 8 55 $profile 2>&1 | Out-Null
     Write-Host "render $($o.BaseName)"
 }
+}
 # 3. Hoja de opciones por enemigo
 Add-Type -AssemblyName System.Drawing
 foreach ($id in ($opts | ForEach-Object { $null = $_.BaseName -match '^(.+)_(\d)$'; $Matches[1] } | Sort-Object -Unique)) {
     $mine = @($opts | Where-Object { $_.BaseName -like "$($id)_*" } | Sort-Object Name)
-    $bmp = New-Object Drawing.Bitmap(1300, 30 + 250 * $mine.Count)
+    $h = 30 + 250 * $mine.Count
+    $bmp = New-Object Drawing.Bitmap(1300, $h)
     $g = [Drawing.Graphics]::FromImage($bmp)
     $g.Clear([Drawing.Color]::FromArgb(14, 18, 30))
     $fT = New-Object Drawing.Font("Arial", 16, [Drawing.FontStyle]::Bold)

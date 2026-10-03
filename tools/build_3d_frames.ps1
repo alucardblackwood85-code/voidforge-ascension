@@ -22,8 +22,9 @@ $Profiles = @{
     "ships/mule_c1" = "raw"
     "ships/specter_x" = "smooth+polish"
     "ships/seraph_prime" = "smooth+polish"
-    "enemies/campana_vacio" = "raw"
-    "enemies/monje_graviton" = "raw"
+    "enemies/campana_vacio" = "soft"
+    "enemies/leviatan_genesis" = "soft"
+    "enemies/monje_graviton" = "soft"
 }
 
 # Continue: TripoSR y Blender escriben su registro en stderr (en PowerShell 5.1 "Stop" lo trata como error)

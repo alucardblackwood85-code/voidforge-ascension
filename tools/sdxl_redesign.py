@@ -31,6 +31,8 @@ CONCEPTS = {
                            "glowing red energy cracks, red energy chains, hexagonal shield wings, bilateral symmetry",
     "leviatan_genesis": "colossal organic space whale creature, deep blue whale body, pale bone-white external ribs, "
                         "biomechanical city with towers embedded on its back, glowing fins, long tail, bilateral symmetry",
+    "leviatan_genesis_v2": "majestic organic space whale, streamlined smooth whale body, broad pectoral fins, wide horizontal tail flukes, "
+                           "bio-armor with flowing ribbed grooves in deep blue and pearl white like a manta ray, glowing blue lines, bilateral symmetry",
     "monje_graviton": "hooded faceless mechanical monk floating inside a glowing purple gravity ring halo, dark flowing robes, "
                       "long thin mechanical arms emitting gravity waves",
 }
@@ -56,6 +58,10 @@ def _load(cls):
 
 def main() -> None:
     ids = [a for a in sys.argv[1:] if not a.startswith("--")] or list(CONCEPTS)
+    # --init=<png>: imagen de partida para la fase 1 (por defecto el sprite actual);
+    # --offset=N: numeración de las propuestas a partir de N+1 (para no pisar tandas anteriores).
+    init_path = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--init=")), "")
+    offset = int(next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--offset=")), "0"))
     force = "--force" in sys.argv
     os.makedirs(OUT, exist_ok=True)
     torch.set_num_threads(8)
@@ -65,11 +71,12 @@ def main() -> None:
     # chocan y cada paso tarda ~20 s en lugar de <1 s.
     pipe = _load(StableDiffusionXLImg2ImgPipeline)
     for sid in ids:
-        old = Image.open(os.path.join(ROOT, "assets", "sprites", "enemies", f"{sid}.png")).convert("RGBA")
+        name = sid.replace("_v2", "")
+        old = Image.open(init_path or os.path.join(ROOT, "assets", "sprites", "enemies", f"{name}.png")).convert("RGBA")
         base = Image.new("RGBA", old.size, (0, 0, 0, 255)); base.alpha_composite(old)
         init = base.convert("RGB").resize((1024, 1024), Image.LANCZOS)
         for k in range(2):
-            path = os.path.join(OUT, f"{sid}_{k + 1}.png")
+            path = os.path.join(OUT, f"{sid.replace('_v2', '')}_{k + 1 + offset}.png")
             if os.path.exists(path) and not force:
                 continue
             g = torch.Generator("cpu").manual_seed(500 + k * 31 + len(sid))
@@ -83,7 +90,7 @@ def main() -> None:
     pipe = _load(StableDiffusionXLPipeline)
     for sid in ids:
         for k in range(2):
-            path = os.path.join(OUT, f"{sid}_{k + 3}.png")
+            path = os.path.join(OUT, f"{sid.replace('_v2', '')}_{k + 3 + offset}.png")
             if os.path.exists(path) and not force:
                 continue
             g = torch.Generator("cpu").manual_seed(900 + k * 53 + len(sid) * 7)
