@@ -222,9 +222,9 @@ func _draw_canvas() -> void:
 		if t is Enemy and t.shield_max > 0.0:
 			canvas.draw_rect(Rect2(cx - 140, 110, 280 * t.shield / t.shield_max, 5), Color("4ab8ff"))
 		if t is Enemy and not t.affixes.is_empty():
-			_text(Vector2(cx - 300, 112 if in_range else 110), t.affix_text(), 13, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 600)
+			_text(Vector2(cx - 300, 130), t.affix_text(), 13, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 600)
 		if not in_range:
-			_text(Vector2(cx - 200, 126), "Fuera de alcance", 14, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 400)
+			_text(Vector2(cx - 200, 148 if (t is Enemy and not t.affixes.is_empty()) else 130), "Fuera de alcance", 14, UiTheme.WARN, HORIZONTAL_ALIGNMENT_CENTER, 400)
 
 	# M6: barra del jefe (cuando está cerca o en combate)
 	var boss: Enemy = sector.boss
