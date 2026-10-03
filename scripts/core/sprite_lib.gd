@@ -64,9 +64,9 @@ const VIEW_DIRS := ["e", "se", "s", "se", "e", "ne", "n", "ne"]
 const VIEW_MIRROR := [false, false, false, true, true, true, false, false]
 const VIEW_TURN_RATE := 7.5     # rad/s máximos del giro visual (rápido, como en DarkOrbit)
 const VIEW_BLEND := 0.35        # fracción del hueco entre dos vistas en la que se funden
-const VIEW_BANK_TILT := 0.05    # rad de inclinación con giro máximo (rastro mínimo de oscilación)
-const VIEW_BANK_SQUASH := 0.03  # estrechamiento horizontal con giro máximo
-const VIEW_BOB := 0.6           # px de balanceo vertical en vuelo
+const VIEW_BANK_TILT := 0.14    # rad de inclinación con oscilación máxima
+const VIEW_BANK_SQUASH := 0.07  # estrechamiento horizontal con oscilación máxima
+const VIEW_BOB := 1.0           # px de balanceo vertical en vuelo
 const VIEW_SIZE := 2.1          # tamaño de la vista respecto al radio visual (iguala al sprite cenital)
 ## Correcciones por modelo: una dirección usa otra vista girada (grados, horario en pantalla).
 ## Para vistas que la generación dejó con el rumbo equivocado.
@@ -76,9 +76,9 @@ const VIEW_FIX := {
 }
 
 
-## Sólo se usan las vistas laterales y desde arriba (e, ne, n), como en DarkOrbit: la nave siempre
-## muestra su parte superior. Hacia abajo = "n" girada 180°; abajo-derecha = "ne" girada 90°.
-const VIEW_DERIVED := {"s": ["n", 180.0], "se": ["ne", 90.0]}
+## Sólo se usan las vistas desde arriba (ne, n): la nave nunca se ve de lado ni por debajo.
+## Este = "ne" girada 45°; abajo-derecha = "ne" girada 90°; abajo = "n" girada 180°.
+const VIEW_DERIVED := {"e": ["ne", 45.0], "s": ["n", 180.0], "se": ["ne", 90.0]}
 
 
 ## Vista base y giro (grados, horario) para una dirección sin espejo, aplicando las correcciones.
@@ -97,7 +97,7 @@ static func _resolve_view(group: String, id: String, dir: String) -> Array:
 static func has_views(group: String, id: String) -> bool:
 	var key := "views?/" + group + "/" + id
 	if not _cache.has(key):
-		# Sólo si están las 3 vistas base: un modelo a medio generar sigue usando el sprite cenital.
+		# Sólo modelos con el juego completo (e, ne, n) y revisados; uno a medio generar sigue con el sprite cenital.
 		var ok := true
 		for d in ["e", "ne", "n"]:
 			ok = ok and ResourceLoader.exists("res://assets/sprites/views/%s/%s/%s.png" % [group, id, d])
@@ -119,7 +119,7 @@ static func get_view(group: String, id: String, dir: String) -> Texture2D:
 ##  - la vista más cercana se gira el ángulo residual (±22,5°) para seguir el rumbo exacto;
 ##  - cerca de la frontera entre dos vistas, la siguiente se funde encima de la anterior;
 ##  - al virar, la nave se inclina hacia el giro (alabeo) y flota con un balanceo sutil.
-static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color = Color.WHITE) -> void:
+static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color = Color.WHITE, strafe: float = 0.0) -> void:
 	if not has_views(group, id):
 		if fallback:
 			draw(ci, fallback, radius, angle, h, modulate)
@@ -133,7 +133,8 @@ static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Textur
 	# Alabeo: proporcional a la velocidad angular, suavizado.
 	var w := angle_difference(prev, a) / maxf(dt, 0.001)
 	var bank: float = ci.get_meta("_vbank", 0.0)
-	bank = lerpf(bank, clampf(w / VIEW_TURN_RATE, -1.0, 1.0), clampf(dt * 6.0, 0.0, 1.0))
+	# Oscilación: por el giro y, sobre todo, por el desplazamiento lateral respecto a donde apunta.
+	bank = lerpf(bank, clampf(w / VIEW_TURN_RATE * 0.5 + strafe, -1.0, 1.0), clampf(dt * 5.0, 0.0, 1.0))
 	ci.set_meta("_vt", now)
 	ci.set_meta("_va", a)
 	ci.set_meta("_vbank", bank)
@@ -173,3 +174,11 @@ static func _draw_view(ci: CanvasItem, group: String, id: String, fallback: Text
 	var m := modulate
 	m.a *= alpha
 	ci.draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, m)
+
+
+## Desplazamiento lateral (−1..1) respecto al rumbo, medido en pantalla: positivo si la nave se
+## mueve hacia su derecha. Con la proa fija en el objetivo, moverse de lado la inclina hacia ese lado.
+static func strafe_of(angle: float, velocity: Vector2, max_speed: float) -> float:
+	var fwd := Iso.to_screen(Vector2.from_angle(angle)).normalized()
+	var v := Iso.to_screen(velocity)
+	return clampf(fwd.cross(v) / maxf(1.0, max_speed * Iso.K), -1.0, 1.0)

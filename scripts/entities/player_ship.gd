@@ -118,9 +118,9 @@ func _move(delta: float) -> void:
 	plane_pos += (velocity + external_pull) * delta
 	external_pull = external_pull.move_toward(Vector2.ZERO, 500.0 * delta)
 	plane_pos = sector.constrain(plane_pos, radius)
-	# Como en DarkOrbit: la proa mira hacia donde se mueve; quieta, gira hacia el objetivo.
+	# Con objetivo fijado la proa apunta siempre a él; si no, hacia donde se mueve.
 	var face_dir := velocity
-	if target_valid() and velocity.length() < max_speed() * 0.3:
+	if target_valid():
 		face_dir = target.plane_pos - plane_pos
 	if face_dir.length() > 5.0:
 		var turn: float = 9.0 * stats["turn"]
@@ -348,7 +348,7 @@ func _draw() -> void:
 	if tex == null:
 		tex = SpriteLib.get_tex("ships", ship_class)
 	if tex:
-		SpriteLib.draw_dir(self, "ships", ship_id, tex, radius, heading, height, Color(1, 1, 1, col.a))
+		SpriteLib.draw_dir(self, "ships", ship_id, tex, radius, heading, height, Color(1, 1, 1, col.a), SpriteLib.strafe_of(heading, velocity, max_speed()))
 	else:
 		Shapes.draw_hull(self, pts, radius, heading, height, col.darkened(0.25), col, Color("4affff"))
 	# Burbuja de escudo
