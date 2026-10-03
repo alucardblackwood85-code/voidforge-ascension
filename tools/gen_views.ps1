@@ -7,8 +7,7 @@
   para que todas las vistas conserven el mismo diseño. Se generan 5 vistas por modelo
   (e, ne, n, se, s); las otras 3 (w, nw, sw) son su espejo y las resuelve el motor.
   Salida: assets/sprites/views/<grupo>/<id>/<dir>.png (256x256). Requiere OPENAI_API_KEY.
-  Después: .	ools
-ormalize_views.ps1 (iguala el brillo), revisar con `godot -- --viewtest`,
+  Después: tools/normalize_views.ps1 (iguala el brillo), revisar con `godot -- --viewtest`,
   corregir rumbos con SpriteLib.VIEW_FIX y poner compress/mode=1 en los .import (pesan menos).
 
 .EXAMPLE
