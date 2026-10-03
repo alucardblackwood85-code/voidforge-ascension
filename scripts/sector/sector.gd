@@ -1351,7 +1351,7 @@ func fx_explosion(p: Vector2, r: float, color: Color) -> void:
 
 
 func fx_number(p: Vector2, amount: float, crit: bool) -> void:
-	var f := _fx("number", p + Vector2(randf_range(-10, 10), randf_range(-10, 10)), 0.0, Color("ffe04a") if crit else Color.WHITE, 0.7)
+	var f := _fx("number", p + Vector2(randf_range(-32, 32), randf_range(-32, 32)), 0.0, Color("ffe04a") if crit else Color.WHITE, 0.7)
 	f.text = GameData.format_num(amount)
 
 
