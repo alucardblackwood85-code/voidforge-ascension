@@ -41,7 +41,7 @@ if (-not $SkipModels) {
         $tmp = Join-Path $root "build/3d_models/_tanda"
         if (Test-Path $tmp) { Remove-Item -Recurse -Force -LiteralPath $tmp }
         Push-Location $tsr
-        & $py run.py @($batch | ForEach-Object { $_.path }) --output-dir $tmp --model-save-format glb --bake-texture --texture-resolution 1024 --mc-resolution 320 2>&1 |
+        & $py run.py @($batch | ForEach-Object { $_.path }) --output-dir $tmp --model-save-format glb --bake-texture --texture-resolution 2048 --mc-resolution 384 2>&1 |
             Select-String "Exporting mesh and texture finished|Error|Traceback" | ForEach-Object { Write-Host "  $_" }
         Pop-Location
         for ($k = 0; $k -lt $batch.Count; $k++) {

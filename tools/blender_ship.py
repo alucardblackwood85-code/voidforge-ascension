@@ -36,18 +36,80 @@ bpy.context.view_layer.objects.active = ship
 bpy.ops.object.shade_smooth()
 
 def normalize():
-    # Centra el modelo en el origen y lo escala a un tamaño de 2 unidades.
-    bpy.context.view_layer.update()
-    ws = [ship.matrix_world @ Vector(v) for v in ship.bound_box]
-    mn = Vector([min(w[i] for w in ws) for i in range(3)]); mx = Vector([max(w[i] for w in ws) for i in range(3)])
-    ship.location -= (mn + mx) / 2
+    # Centra la malla en el origen y la escala a 2 unidades midiendo los vértices reales
+    # (bound_box puede quedar desactualizado tras editar la malla).
+    from mathutils import Matrix
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    vs = [v.co for v in ship.data.vertices]
+    mn = Vector([min(v[i] for v in vs) for i in range(3)]); mx = Vector([max(v[i] for v in vs) for i in range(3)])
     s = 2.0 / max(mx - mn)
-    ship.scale *= s
+    ship.data.transform(Matrix.Scale(s, 4) @ Matrix.Translation(-(mn + mx) / 2))
+    ship.data.update()
     bpy.context.view_layer.update()
+
+
+def _bounds():
+    bpy.context.view_layer.update()
+    vs = [ship.matrix_world @ v.co for v in ship.data.vertices]
+    mn = Vector([min(v[i] for v in vs) for i in range(3)]); mx = Vector([max(v[i] for v in vs) for i in range(3)])
+    return mn, mx, vs
+
+
+def refine(thickness: float = 0.32, min_part: float = 0.03, smooth_iter: int = 6):
+    """Limpia un modelo de TripoSR ya orientado (proa +X, arriba +Z):
+    quita piezas sueltas pequeñas, suaviza las abolladuras, recorta lo que cuelga por debajo de un
+    grosor razonable (fracción de la mayor dimensión en planta) y lo hace simétrico de izquierda a derecha
+    quedándose con la mitad más limpia."""
+    global ship
+    bpy.ops.object.select_all(action="DESELECT")
+    ship.select_set(True); bpy.context.view_layer.objects.active = ship
+    # 1. Piezas sueltas: se separan y se borran las que tienen menos de min_part de los vértices.
+    bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+    # Une los vértices duplicados en las costuras de la textura (si no, cada isla UV parece una pieza suelta).
+    bpy.ops.mesh.remove_doubles(threshold=0.0005)
+    bpy.ops.mesh.separate(type="LOOSE"); bpy.ops.object.mode_set(mode="OBJECT")
+    parts = [o for o in scene.objects if o.type == "MESH"]
+    total = sum(len(o.data.vertices) for o in parts)
+    keep = [o for o in parts if len(o.data.vertices) >= total * min_part] or [max(parts, key=lambda o: len(o.data.vertices))]
+    for o in parts:
+        if o not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in keep:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = keep[0]
+    if len(keep) > 1:
+        bpy.ops.object.join()
+    ship = bpy.context.view_layer.objects.active
+    # 2. Suavizado de las abolladuras (conserva la forma general).
+    sm = ship.modifiers.new("suave", "SMOOTH"); sm.factor = 0.5; sm.iterations = smooth_iter
+    bpy.ops.object.modifier_apply(modifier=sm.name)
+    # 3. Grosor: todo lo que queda por debajo de (techo - grosor) se recorta y el corte se cierra.
+    mn, mx, vs = _bounds()
+    plan = max(mx.x - mn.x, mx.y - mn.y)
+    z_cut = mx.z - thickness * plan
+    if z_cut > mn.z:
+        bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.bisect(plane_co=(0, 0, z_cut), plane_no=(0, 0, 1), clear_inner=True, use_fill=True)
+        bpy.ops.object.mode_set(mode="OBJECT")
+    # 4. Simetría izquierda/derecha: eje en el centro de la planta; se conserva la mitad que menos cuelga.
+    mn, mx, vs = _bounds()
+    cy = (mn.y + mx.y) / 2
+    pos = [v.z for v in vs if v.y > cy]; neg = [v.z for v in vs if v.y < cy]
+    keep_pos = (min(pos) if pos else 0) >= (min(neg) if neg else 0)
+    ship.location.y -= cy
+    bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+    bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.bisect(plane_co=(0, 0, 0), plane_no=(0, 1, 0), clear_inner=keep_pos, clear_outer=not keep_pos)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    mi = ship.modifiers.new("simetria", "MIRROR"); mi.use_axis = (False, True, False)
+    mi.use_mirror_merge = True; mi.merge_threshold = 0.004
+    bpy.ops.object.modifier_apply(modifier=mi.name)
+    bpy.ops.object.shade_smooth()
 
 scene.render.engine = "BLENDER_EEVEE"
 scene.render.film_transparent = True
-scene.render.resolution_x = scene.render.resolution_y = 256
+scene.render.resolution_x = scene.render.resolution_y = 384   # se reduce a 192 al empaquetar: más nitidez
 scene.view_settings.view_transform = "Standard"
 world = bpy.data.worlds.new("w"); scene.world = world; world.color = (0.55, 0.57, 0.62)
 cam_data = bpy.data.cameras.new("cam"); cam_data.type = "ORTHO"; cam_data.ortho_scale = 2.6
@@ -57,6 +119,9 @@ key = bpy.data.objects.new("key", bpy.data.lights.new("key", "SUN")); scene.coll
 key.data.energy = 5.5; key.rotation_euler = Euler((math.radians(35), 0, math.radians(-135)))
 fill = bpy.data.objects.new("fill", bpy.data.lights.new("fill", "SUN")); scene.collection.objects.link(fill)
 fill.data.energy = 2.0; fill.rotation_euler = Euler((math.radians(60), 0, math.radians(60)))
+# Luz de contorno desde detrás de la nave (hacia la cámara): recorta la silueta y marca los volúmenes.
+rim = bpy.data.objects.new("rim", bpy.data.lights.new("rim", "SUN")); scene.collection.objects.link(rim)
+rim.data.energy = 2.5; rim.rotation_euler = Euler((math.radians(-70), 0, 0))
 
 def look_from(direction: Vector, dist: float = 6.0):
     cam.location = direction.normalized() * dist
@@ -78,6 +143,8 @@ elif mode == "spin":
     ship.rotation_mode = "XYZ"
     ship.rotation_euler = Euler((rx, ry, rz))
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+    if not (len(argv) > 8 and argv[8] == "raw"):
+        refine()  # simetría, sin piezas sueltas ni partes colgando, superficie suavizada
     normalize()
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=True)
     # Cámara fija mirando desde el sur de la pantalla (-Y), elevada `elev`.
@@ -86,4 +153,18 @@ elif mode == "spin":
     for i in range(frames):
         ship.rotation_euler = Euler((0, 0, 2 * math.pi * i / frames))
         scene.render.filepath = os.path.join(out, f"{i:02d}.png")
+        bpy.ops.render.render(write_still=True)
+elif mode == "inspect":
+    # Orientación de juego (proa +X, arriba +Z) y 4 vistas: arriba, abajo, lado y frente.
+    out = argv[2]
+    rx, ry, rz = (math.radians(float(a)) for a in argv[3:6])
+    ship.rotation_mode = "XYZ"
+    ship.rotation_euler = Euler((rx, ry, rz))
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+    if len(argv) > 6 and argv[6] == "refine":
+        refine()
+    normalize()
+    for name, d in {"arriba": (0, 0, 1), "abajo": (0, 0, -1), "lado": (0, -1, 0), "frente": (1, 0, 0)}.items():
+        look_from(Vector(d))
+        scene.render.filepath = f"{out}_{name}.png"
         bpy.ops.render.render(write_still=True)
