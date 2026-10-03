@@ -63,6 +63,14 @@ static func get_cropped(group: String, id: String) -> Texture2D:
 const VIEW_DIRS := ["e", "se", "s", "se", "e", "ne", "n", "ne"]
 const VIEW_MIRROR := [false, false, false, true, true, true, false, false]
 const VIEW_HYSTERESIS := 0.12   # rad extra antes de cambiar de vista (evita parpadeo en la frontera)
+const VIEW_SIZE := 2.1          # tamaño de la vista respecto al radio visual (iguala al sprite cenital)
+## Correcciones por modelo: una dirección usa otra vista girada (grados, horario en pantalla).
+## Para vistas que la generación dejó con el rumbo equivocado.
+const VIEW_FIX := {
+	"ships/falcon_r": {"ne": ["e", -45.0], "n": ["e", -90.0], "se": ["e", 45.0], "s": ["e", 90.0]},
+	"ships/bulwark_t1": {"ne": ["n", 45.0]},
+	"ships/kestrel_a1": {"s": ["s", -20.0]},
+}
 
 
 static func has_views(group: String, id: String) -> bool:
@@ -101,13 +109,20 @@ static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Textur
 		if d < step * 0.5 + VIEW_HYSTERESIS:
 			idx = last
 	ci.set_meta("_vdir", idx)
-	var tex := get_view(group, id, VIEW_DIRS[idx])
+	var dir: String = VIEW_DIRS[idx]
+	var rot := 0.0
+	var fix: Array = VIEW_FIX.get(group + "/" + id, {}).get(dir, [])
+	if not fix.is_empty():
+		dir = fix[0]
+		rot = deg_to_rad(float(fix[1]))
+	var tex := get_view(group, id, dir)
 	if tex == null:
 		if fallback:
 			draw(ci, fallback, radius, angle, h, modulate)
 		return
-	var s := radius * VISUAL_SCALE * 2.6
+	var s := radius * VISUAL_SCALE * VIEW_SIZE
 	var flip := -1.0 if VIEW_MIRROR[idx] else 1.0
-	ci.draw_set_transform(Vector2(0.0, -h - s * 0.08), 0.0, Vector2(flip, 1.0))
+	# Espejo de una vista girada = giro opuesto y luego espejo.
+	ci.draw_set_transform(Vector2(0.0, -h - s * 0.08), rot * flip, Vector2(flip, 1.0))
 	ci.draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, modulate)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)

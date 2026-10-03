@@ -22,6 +22,9 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--playtest"):
 		add_child(PlaytestRunner.new())
 		return
+	if OS.get_cmdline_user_args().has("--viewtest"):
+		add_child(ViewTest.new())
+		return
 	if OS.get_cmdline_user_args().has("--aimtest"):
 		goto_sector({"level": 1, "seed": 7, "aimtest": true, "biome": "ferron"})
 		return
