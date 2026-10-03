@@ -73,6 +73,14 @@ const VIEW_SIZE := 2.1          # tamaño de la vista respecto al radio visual (
 const VIEW_FIX := {
 	"ships/falcon_r": {"ne": ["e", -45.0], "n": ["e", -90.0]},
 	"ships/bulwark_t1": {"ne": ["n", 45.0]},
+	# Vista superior descartada en la revisión: el norte sale de la diagonal girada.
+	"ships/bastion_h": {"n": ["ne", -45.0]},
+	"ships/aegis_r": {"n": ["ne", -45.0]},
+	"ships/atlas_c4": {"n": ["ne", -45.0]},
+	"ships/centurion_p": {"n": ["ne", -45.0]},
+	"ships/fortress_omega": {"n": ["ne", -45.0]},
+	"ships/ark_meridian": {"n": ["ne", -45.0]},
+	"ships/event_horizon": {"n": ["ne", -45.0]},
 }
 
 
@@ -94,13 +102,22 @@ static func _resolve_view(group: String, id: String, dir: String) -> Array:
 	return [dir, rot]
 
 
+## Modelos cuyas vistas se revisaron una a una (las perspectivas con problemas se borraron).
+## Un modelo nuevo se añade aquí tras revisarlo con --viewtest.
+const VIEW_VERIFIED := [
+	"ships/kestrel_a1", "ships/falcon_r", "ships/bulwark_t1", "ships/bastion_h", "ships/aegis_r",
+	"ships/atlas_c4", "ships/centurion_p", "ships/fortress_omega", "ships/ark_meridian", "ships/event_horizon",
+]
+
+
 static func has_views(group: String, id: String) -> bool:
 	var key := "views?/" + group + "/" + id
 	if not _cache.has(key):
-		# Sólo modelos con el juego completo (e, ne, n) y revisados; uno a medio generar sigue con el sprite cenital.
-		var ok := true
-		for d in ["e", "ne", "n"]:
-			ok = ok and ResourceLoader.exists("res://assets/sprites/views/%s/%s/%s.png" % [group, id, d])
+		var ok: bool = VIEW_VERIFIED.has(group + "/" + id)
+		# Comprueba que existan las imágenes base a las que se resuelven las direcciones.
+		for d in ["ne", "n", "e"]:
+			var base: String = _resolve_view(group, id, d)[0]
+			ok = ok and ResourceLoader.exists("res://assets/sprites/views/%s/%s/%s.png" % [group, id, base])
 		_cache[key] = ok
 	return _cache[key]
 
