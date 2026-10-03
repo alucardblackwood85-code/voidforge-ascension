@@ -1,0 +1,10 @@
+{
+  "styles": {
+    "sprite": "High-quality pre-rendered 3D CGI game sprite for a sci-fi browser MMO space shooter, NOT pixel art, NOT flat vector, NOT cartoon. Semi-realistic glossy hull with fine panel lines, specular highlights, ambient occlusion and soft cinematic studio lighting from the top-left, smooth anti-aliased edges, glowing emissive engines and lights. Strict top-down view seen from directly above, the front/nose of the ship pointing to the RIGHT side of the image, the engines at the LEFT side, perfect left-right bilateral symmetry along the horizontal axis, centered, filling about 80% of the canvas, fully transparent background, no ground shadow, no text, no frame, single object only."
+  },
+  "assets": [
+    {"out": "sprites/ships/bulwark_t1", "prompt": "Bulwark T1: heavy armored assault tank-ship, elongated hexagonal hull about twice as long as it is wide, a clearly pointed reinforced armored prow at the front, layered olive-green armor plates with dark gunmetal trim, two heavy twin-cannon turrets on the top deck, a raised armored command bridge in the middle, four large rectangular engines glowing orange at the rear."},
+    {"out": "sprites/ships/mammoth_k", "prompt": "Mammoth K: colossal siege tank-ship shaped like a flying fortress, long and broad, clearly elongated along the left-right axis, a massive wedge-shaped battering-ram prow at the front, rust-red and black heavy armor plating with yellow hazard stripes, three rows of turret batteries on the top deck, thick armored side skirts, six huge engines glowing orange at the rear."},
+    {"out": "sprites/ships/mule_c1", "prompt": "Mule C1: industrial cargo hauler, clearly elongated along the left-right axis, a compact armored cockpit section at the front with a glowing blue windscreen, a long central spine carrying two rows of stacked cargo containers in orange and grey clamped along both sides, yellow-and-black industrial paint, two big engines glowing cyan at the rear."}
+  ]
+}
