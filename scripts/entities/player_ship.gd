@@ -105,21 +105,22 @@ func _move(delta: float) -> void:
 		if dist < 8.0:
 			has_move_target = false
 		else:
-			desired = to / dist * clampf(dist / 120.0, 0.25, 1.0)
+			# Como en DarkOrbit: velocidad constante y frenada seca al llegar.
+			desired = to / dist * clampf(dist / 40.0, 0.35, 1.0)
 	var top := max_speed()
 	if boost_time > 0.0:
 		boost_time -= delta
 		top *= 2.6
 		if desired == Vector2.ZERO:
 			desired = Vector2.from_angle(heading)
-	var accel: float = 900.0 * stats["accel"] * (1.6 if ship_class == "caza" else 1.0)
+	var accel: float = 1800.0 * stats["accel"] * (1.3 if ship_class == "caza" else 1.0)
 	velocity = velocity.move_toward(desired * top, accel * delta)
 	plane_pos += (velocity + external_pull) * delta
 	external_pull = external_pull.move_toward(Vector2.ZERO, 500.0 * delta)
 	plane_pos = sector.constrain(plane_pos, radius)
-	# Con objetivo fijado la proa apunta siempre al objetivo; si no, hacia donde se mueve.
+	# Como en DarkOrbit: la proa mira hacia donde se mueve; quieta, gira hacia el objetivo.
 	var face_dir := velocity
-	if target_valid():
+	if target_valid() and velocity.length() < max_speed() * 0.3:
 		face_dir = target.plane_pos - plane_pos
 	if face_dir.length() > 5.0:
 		var turn: float = 9.0 * stats["turn"]
@@ -174,10 +175,6 @@ func _fire(delta: float) -> void:
 	volley_timer = maxf(0.0, volley_timer - delta)
 	firing = target != null and plane_pos.distance_to(target.plane_pos) <= GameData.LASER_RANGE
 	if not firing or volley_timer > 0.0 or lasers.is_empty():
-		return
-	# Sólo dispara cuando la proa ya apunta al objetivo (evita disparos "de lado").
-	var aim := (target.plane_pos - plane_pos).angle()
-	if absf(angle_difference(heading, aim)) > 0.6:
 		return
 	var cost := 0.0
 	for l in lasers:

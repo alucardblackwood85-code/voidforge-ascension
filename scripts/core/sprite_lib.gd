@@ -62,27 +62,44 @@ static func get_cropped(group: String, id: String) -> Texture2D:
 ## las direcciones w, nw y sw son su espejo. Índice por ángulo en pantalla (y hacia abajo).
 const VIEW_DIRS := ["e", "se", "s", "se", "e", "ne", "n", "ne"]
 const VIEW_MIRROR := [false, false, false, true, true, true, false, false]
-const VIEW_TURN_RATE := 5.5     # rad/s máximos del giro visual (los cambios bruscos se ven como curva)
+const VIEW_TURN_RATE := 7.5     # rad/s máximos del giro visual (rápido, como en DarkOrbit)
 const VIEW_BLEND := 0.35        # fracción del hueco entre dos vistas en la que se funden
-const VIEW_BANK_TILT := 0.16    # rad de inclinación con alabeo máximo
-const VIEW_BANK_SQUASH := 0.10  # estrechamiento horizontal con alabeo máximo
-const VIEW_BOB := 1.2           # px de balanceo vertical en vuelo
+const VIEW_BANK_TILT := 0.05    # rad de inclinación con giro máximo (rastro mínimo de oscilación)
+const VIEW_BANK_SQUASH := 0.03  # estrechamiento horizontal con giro máximo
+const VIEW_BOB := 0.6           # px de balanceo vertical en vuelo
 const VIEW_SIZE := 2.1          # tamaño de la vista respecto al radio visual (iguala al sprite cenital)
 ## Correcciones por modelo: una dirección usa otra vista girada (grados, horario en pantalla).
 ## Para vistas que la generación dejó con el rumbo equivocado.
 const VIEW_FIX := {
-	"ships/falcon_r": {"ne": ["e", -45.0], "n": ["e", -90.0], "se": ["e", 45.0], "s": ["e", 90.0]},
+	"ships/falcon_r": {"ne": ["e", -45.0], "n": ["e", -90.0]},
 	"ships/bulwark_t1": {"ne": ["n", 45.0]},
-	"ships/kestrel_a1": {"s": ["s", -20.0]},
 }
+
+
+## Sólo se usan las vistas laterales y desde arriba (e, ne, n), como en DarkOrbit: la nave siempre
+## muestra su parte superior. Hacia abajo = "n" girada 180°; abajo-derecha = "ne" girada 90°.
+const VIEW_DERIVED := {"s": ["n", 180.0], "se": ["ne", 90.0]}
+
+
+## Vista base y giro (grados, horario) para una dirección sin espejo, aplicando las correcciones.
+static func _resolve_view(group: String, id: String, dir: String) -> Array:
+	var rot := 0.0
+	if VIEW_DERIVED.has(dir):
+		rot = VIEW_DERIVED[dir][1]
+		dir = VIEW_DERIVED[dir][0]
+	var fix: Array = VIEW_FIX.get(group + "/" + id, {}).get(dir, [])
+	if not fix.is_empty():
+		dir = fix[0]
+		rot += float(fix[1])
+	return [dir, rot]
 
 
 static func has_views(group: String, id: String) -> bool:
 	var key := "views?/" + group + "/" + id
 	if not _cache.has(key):
-		# Sólo si están las 5 vistas: un modelo a medio generar seguiría usando el sprite cenital.
+		# Sólo si están las 3 vistas base: un modelo a medio generar sigue usando el sprite cenital.
 		var ok := true
-		for d in ["e", "ne", "n", "se", "s"]:
+		for d in ["e", "ne", "n"]:
 			ok = ok and ResourceLoader.exists("res://assets/sprites/views/%s/%s/%s.png" % [group, id, d])
 		_cache[key] = ok
 	return _cache[key]
@@ -139,14 +156,11 @@ static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Textur
 
 
 static func _draw_view(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color, idx: int, residual: float, bank: float, s: float, origin: Vector2, alpha: float) -> void:
-	var dir: String = VIEW_DIRS[idx]
-	var rot := residual
-	var fix: Array = VIEW_FIX.get(group + "/" + id, {}).get(dir, [])
 	var flip := -1.0 if VIEW_MIRROR[idx] else 1.0
-	if not fix.is_empty():
-		dir = fix[0]
-		# La corrección se expresa sobre la vista sin espejo: en las espejadas se invierte.
-		rot += deg_to_rad(float(fix[1])) * flip
+	var res := _resolve_view(group, id, VIEW_DIRS[idx])
+	var dir: String = res[0]
+	# El giro se expresa sobre la vista sin espejo: en las espejadas se invierte.
+	var rot := residual + deg_to_rad(float(res[1])) * flip
 	var tex := get_view(group, id, dir)
 	if tex == null:
 		if fallback and alpha >= 1.0:
