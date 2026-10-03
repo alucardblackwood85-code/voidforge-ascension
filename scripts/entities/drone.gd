@@ -169,7 +169,6 @@ func pickup_bonus() -> float:
 
 
 func _draw() -> void:
-	draw_shadow(9.0, 0.25)
 	var tex := SpriteLib.get_tex("drone", "drone")
 	if tex:
 		SpriteLib.draw_dir(self, "drone", "drone", tex, 14.0, heading, height)

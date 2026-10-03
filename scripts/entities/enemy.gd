@@ -573,7 +573,6 @@ func die(by_player: bool) -> void:
 func _draw() -> void:
 	var v: Dictionary = GameData.VARIANTS[variant]
 	var alpha := 0.18 + 0.1 * sin(anim * 20.0) if phased else 1.0
-	draw_shadow(radius * 0.9, 0.3 * alpha)
 	if variant != "base":
 		var pulse := 0.6 + 0.4 * sin(anim * 4.0)
 		draw_ring(radius * 1.35, Color(v["color"], 0.5 * pulse * alpha), 3.0, height)

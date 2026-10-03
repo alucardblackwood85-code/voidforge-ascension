@@ -329,7 +329,6 @@ func repair(frac: float) -> void:
 
 
 func _draw() -> void:
-	draw_shadow(radius * 0.9)
 	var col := Color("b8c8e0")
 	if invulnerable:
 		col.a = 0.4

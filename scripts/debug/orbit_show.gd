@@ -29,9 +29,6 @@ class ShipView extends Node2D:
 
 	func _draw() -> void:
 		var tex := SpriteLib.get_tex("ships", ship_id)
-		draw_set_transform(Vector2(0, 6), 0.0, Vector2(1.0, 0.5))
-		draw_circle(Vector2.ZERO, 34.0, Color(0, 0, 0, 0.35))
-		draw_set_transform_matrix(Transform2D.IDENTITY)
 		SpriteLib.draw_dir(self, "ships", ship_id, tex, OrbitShow.RADIUS, heading, 22.0, Color.WHITE, SpriteLib.strafe_of(heading, velocity, max_speed))
 
 
@@ -43,9 +40,6 @@ class TargetView extends Node2D:
 		queue_redraw()
 
 	func _draw() -> void:
-		draw_set_transform(Vector2(0, 6), 0.0, Vector2(1.0, 0.5))
-		draw_circle(Vector2.ZERO, 40.0, Color(0, 0, 0, 0.35))
-		draw_set_transform_matrix(Transform2D.IDENTITY)
 		draw_arc(Vector2(0, -16), 58.0, 0, TAU, 48, Color(1, 0.3, 0.3, 0.8), 2.0)
 		SpriteLib.draw(self, SpriteLib.get_tex("enemies", OrbitShow.TARGET_ID), 40.0, anim * 0.4, 16.0)
 

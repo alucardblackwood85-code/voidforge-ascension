@@ -151,7 +151,6 @@ func _draw() -> void:
 	var pulse := 0.6 + 0.4 * sin(anim * 3.0)
 	if done and kind != "convoy":
 		col = col.darkened(0.6)
-	draw_shadow(radius * 0.8, 0.3)
 	match kind:
 		"baliza":
 			draw_ring(170.0, Color(col, 0.18 + 0.12 * pulse), 2.0)
