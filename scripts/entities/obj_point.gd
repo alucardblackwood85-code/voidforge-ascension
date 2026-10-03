@@ -15,6 +15,7 @@ var kind := "baliza"
 var progress := 0.0        # 0..1 (baliza, socorro) o fracción de ruta (convoy)
 var done := false
 var started := false
+var wave2 := false          # baliza: segunda oleada lanzada
 var anim := 0.0
 var wave_t := 0.0
 var hp := 1.0
@@ -60,9 +61,13 @@ func _process(delta: float) -> void:
 				if not started:
 					started = true
 					sector.hud.toast("Activando baliza… mantente cerca", 2.0, COLORS[kind])
-					sector.spawn_group_near(plane_pos + Vector2.from_angle(randf() * TAU) * 500.0, 2 + sector.level / 12, sector.level)
+					_beacon_wave()
 					Sfx.play("e_pulse", plane_pos, -4.0)
 				progress = minf(1.0, progress + delta / 6.0)
+				# Segunda oleada a mitad de la activación (dos oleadas fijas, no un goteo continuo).
+				if progress >= 0.5 and not wave2:
+					wave2 = true
+					_beacon_wave()
 				if progress >= 1.0:
 					_complete()
 			else:
@@ -107,11 +112,19 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+## Oleada de la baliza, con tope de enemigos vivos invocados por todas las balizas.
+func _beacon_wave() -> void:
+	sector.beacon_spawned = sector.beacon_spawned.filter(func(e): return is_instance_valid(e) and e.alive)
+	var n := mini(2 + sector.level / 12, GameData.BEACON_SPAWN_CAP - sector.beacon_spawned.size())
+	if n > 0:
+		sector.beacon_spawned.append_array(sector.spawn_group_near(plane_pos + Vector2.from_angle(randf() * TAU) * 500.0, n, sector.level))
+
+
 func _convoy(delta: float, dist: float) -> void:
 	# Daño de los enemigos que lo rodean (los que ya te persiguen se fijan también en él).
 	var dps := 0.0
 	for e in sector.enemies:
-		if e.alive and e.aggro and not e.is_nest and e.plane_pos.distance_squared_to(plane_pos) < 420.0 * 420.0:
+		if e.alive and e.aggro and e.engaged and not e.is_nest and e.plane_pos.distance_squared_to(plane_pos) < 420.0 * 420.0:
 			dps += e.out_dmg() * 0.3
 	if dps > 0.0:
 		hp -= dps * delta

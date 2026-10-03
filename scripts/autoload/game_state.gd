@@ -56,14 +56,16 @@ func new_profile() -> Dictionary:
 		"stats": {"kills": 0, "runs": 0, "deaths": 0, "extractions": 0, "time": 0, "credits_earned": 0, "boxes": 0},
 		"settings": {"auto_fire_touch": true, "audio": default_audio()},
 	}
-	for i in 3:
+	# La Kestrel inicial sale con todos sus slots de láser llenos.
+	var n_lasers := int(GameData.SHIPS["kestrel_a1"]["lasers"])
+	for i in n_lasers:
 		add_laser("l01")
 	add_generator("sg_aegis1")
 	add_generator("vg_thrust1")
 	var dl := add_drone_laser("pet_pulse")
 	data["drone"]["lasers"][0] = dl["uid"]
 	var lo := ensure_loadout("kestrel_a1")
-	for i in 3:
+	for i in n_lasers:
 		lo["lasers"][i] = data["lasers"][i]["uid"]
 	lo["gens"][0] = data["gens"][0]["uid"]
 	lo["gens"][1] = data["gens"][1]["uid"]
@@ -337,7 +339,9 @@ func ensure_loadout(ship_id: String) -> Dictionary:
 			return a
 		data["loadouts"][ship_id] = {"lasers": mk.call(int(ship["lasers"])), "gens": mk.call(GameData.gen_slots_total(ship_id)), "mods": mk.call(int(ship["mods"])), "hotbar": default_hotbar()}
 	var lo: Dictionary = data["loadouts"][ship_id]
-	# Partidas antiguas: añade los espacios de escudo de las naves pesadas.
+	# Partidas antiguas: añade los láseres extra (+75%) y los espacios de escudo de las naves pesadas.
+	while lo["lasers"].size() < int(ship["lasers"]):
+		lo["lasers"].append(-1)
 	while lo["gens"].size() < GameData.gen_slots_total(ship_id):
 		lo["gens"].append(-1)
 	var hb: Array = lo["hotbar"]

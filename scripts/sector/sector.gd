@@ -67,6 +67,9 @@ var stat_cargo_full_t := -1.0
 var stat_objective_t := -1.0
 var stat_max_enemies := 0
 var stat_max_aggro := 0
+var stat_max_engaged := 0
+var beacon_spawned: Array = []           # enemigos invocados por las balizas (con tope de vivos)
+var engage_t := 0.0
 var stat_spawned := 0
 var stat_items_used := 0
 var stat_refined := 0
@@ -208,9 +211,12 @@ func _generate() -> void:
 	gate_pos = cell_center(start_cell)
 
 	# M5: seis tipos de objetivo (escolta y comandante desde el nivel 3).
-	var kinds := ["limpieza", "nidos", "baliza", "socorro"]
+	var kinds := ["limpieza", "baliza", "socorro"]
 	if level >= 3:
 		kinds += ["comandante", "escolta"]
+	# Los nidos aguantan mucho: con la nave inicial sin mejorar no salen antes del nivel 4.
+	if level >= 4:
+		kinds.append("nidos")
 	objective = params.get("objective", kinds[rng.randi() % kinds.size()])
 	var far_cells: Array = cells.keys()
 	far_cells.erase(start_cell)
@@ -386,12 +392,15 @@ func spawn_group_at(pos: Vector2, count: int, lvl: int, initial: bool, pool: Arr
 			initial_enemies[e.get_instance_id()] = true
 
 
-func spawn_group_near(pos: Vector2, count: int, lvl: int) -> void:
+func spawn_group_near(pos: Vector2, count: int, lvl: int) -> Array:
+	var out: Array = []
 	if enemies.size() >= GameData.MAX_ENEMIES:
-		return
+		return out
 	for i in count:
 		var e := spawn_enemy(_weighted(biome["enemies"]), pos + Vector2.from_angle(rng.randf() * TAU) * 90.0, lvl, _roll_variant())
 		e.aggro = true
+		out.append(e)
+	return out
 
 
 # --- Bucle ------------------------------------------------------------------------
@@ -408,6 +417,10 @@ func _process(delta: float) -> void:
 	for k in item_cd.keys():
 		item_cd[k] = maxf(0.0, item_cd[k] - delta)
 	_separate_enemies()
+	engage_t -= delta
+	if engage_t <= 0.0:
+		engage_t = 0.25
+		_update_engagement()
 	_update_mines()
 	var c := cell_of(player.plane_pos)
 	if cells.has(c) and not cells[c]["visited"]:
@@ -421,6 +434,38 @@ func _process(delta: float) -> void:
 	camera.position = player.position + Vector2(0, -20)
 	camera.zoom = camera.zoom.lerp(Vector2.ONE * zoom_level, clampf(8.0 * delta, 0.0, 1.0))
 	_check_gate()
+
+
+## Tope de atacantes simultáneos: atacan los más cercanos (y los que el jugador está golpeando);
+## el resto espera a distancia sin disparar y entra cuando cae uno. Los jefes siempre atacan.
+func _update_engagement() -> void:
+	var cands: Array = []
+	for e in enemies:
+		if not e.alive or not e.aggro or e.is_nest or e.arch in ["trap", "miner"]:
+			continue
+		var d: float = e.plane_pos.distance_to(player.plane_pos)
+		if e.engaged:
+			d *= 0.75   # histéresis: no alternan a cada instante
+		if e.since_hit < 3.0:
+			d *= 0.5
+		if e.is_boss:
+			d = -1.0
+		cands.append([d, e])
+	cands.sort_custom(func(a, b): return a[0] < b[0])
+	var cap := GameData.engage_cap(level, asc)
+	var n := 0
+	var mothers := 0
+	for c in cands:
+		var e: Enemy = c[1]
+		var on := n < cap
+		if on and objective == "escolta" and e.arch == "mother":
+			on = mothers < GameData.ESCORT_MAX_MOTHERS
+			if on:
+				mothers += 1
+		if on:
+			n += 1
+		e.set_engaged(on)
+	stat_max_engaged = maxi(stat_max_engaged, n)
 
 
 func _update_alert(delta: float) -> void:
@@ -983,6 +1028,13 @@ func on_point_done(pt: ObjPoint) -> void:
 	objective_progress += 1
 	if pt.kind == "convoy":
 		_gain("credits", int(GameData.level_reward(4000.0, level) * GameData.CREDIT_MULT * asc_reward))
+	elif pt.kind == "baliza":
+		# El objetivo más exigente: cada baliza paga créditos y deja una caja rara.
+		_gain("credits", int(GameData.level_reward(1500.0, level) * GameData.CREDIT_MULT * asc_reward))
+		var mats := {}
+		for k in biome["resources"].keys():
+			mats[k] = int(GameData.level_reward(6.0, level))
+		spawn_box(mats, pt.plane_pos, true)
 	if objective_progress < objective_target:
 		hud.toast("%s completada (%d/%d)" % [pt.label(), objective_progress, objective_target], 2.5, UiTheme.GOOD)
 	_check_objective()
@@ -1640,7 +1692,9 @@ func _bot_nav(delta: float) -> void:
 	var hp := player.hull / player.hull_max
 	var sh := player.shield / maxf(1.0, player.shield_max)
 	# Extrae como un jugador: objetivo cumplido, bodega casi llena, casco bajo sin reparaciones o tras 5 min con medio casco.
-	var want_out := objective_done or cargo_used >= cargo_capacity() * 0.85 or (hp < 0.3 and int(run_items.get("repair", 0)) == 0) or (elapsed > 300.0 and hp < 0.5)
+	# Bajo el 30% de casco sin reparación disponible ya (sin unidades o en recarga) se retira a extraer, como haría una persona.
+	var repair_ready: bool = int(run_items.get("repair", 0)) > 0 and item_cd.get("repair", 0.0) <= 0.0
+	var want_out: bool = objective_done or cargo_used >= cargo_capacity() * 0.85 or (hp < 0.3 and not repair_ready) or (elapsed > 300.0 and hp < 0.5)
 	if want_out:
 		collect_target = null
 		player.move_target = gate_pos

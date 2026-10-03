@@ -21,6 +21,7 @@ var arch := ""
 var heading := 0.0
 var home := Vector2.ZERO
 var aggro := false
+var engaged := true        # dentro del tope de atacantes; si no, espera a distancia sin disparar
 var is_nest := false
 var is_elite := false
 var shot_sfx := "e_shot_light"
@@ -96,6 +97,9 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 		hp = hp_max
 		dmg *= pow(1.55, sector.asc)
 	dmg *= float(sector.mod.get("enemy_dmg", 1.0))
+	# Acosadores: son la principal causa de muerte temprana; -20% de daño en el nivel 1 que se recupera en el 7.
+	if arch == "harasser" and level < 7:
+		dmg *= 0.8 + 0.2 * float(level - 1) / 6.0
 	# Alcance de disparo propio de cada especie (arquetipo ± pequeña variación estable por especie).
 	attack_range = float(def.get("range", GameData.ARCH_RANGE.get(def["arch"], 450.0))) * (0.92 + 0.16 * float(abs(hash(id)) % 100) / 100.0)
 	speed = float(def["vel"]) * GameData.SPEED_UNIT * 0.75
@@ -113,6 +117,18 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	if level >= 5:
 		_roll_affixes({"boss": 1, "mega": 2, "ultra": randi_range(2, 3), "uber": 3}.get(variant, 0))
 	sync_screen()
+
+
+## Entra o sale del grupo de atacantes; al salir corta la maniobra en curso (fase, embestida, apunte).
+func set_engaged(v: bool) -> void:
+	if v == engaged:
+		return
+	engaged = v
+	if not v:
+		phased = false
+		draining = false
+		if state in ["phase", "burst", "reveal", "dash", "aim", "windup"]:
+			_set_state("move")
 
 
 ## Al detectar al jugador avisa a su grupo cercano (los enemigos atacan en manada).
@@ -169,8 +185,11 @@ func _process(delta: float) -> void:
 		else:
 			leash_t = 0.0
 	var move := Vector2.ZERO
-	if aggro and p.alive:
+	if aggro and p.alive and engaged:
 		move = _behave(delta, p, dist)
+	elif aggro and p.alive:
+		move = _keep_distance(p, dist, maxf(attack_range, 500.0) + 220.0, 0.5)
+		draining = false
 	else:
 		move = _wander(delta)
 		draining = false
@@ -442,13 +461,18 @@ func _ambusher(p: PlayerShip, dist: float) -> Vector2:
 			var flank := p.plane_pos + Vector2.from_angle(p.heading + PI * 0.6 * strafe_sign) * 180.0
 			if state_time > 2.5 or plane_pos.distance_to(flank) < 40.0:
 				phased = false
-				_set_state("burst")
+				_set_state("reveal")
 				sfx("e_phase", -2.0)
 			return (flank - plane_pos).normalized() * 1.3
+		"reveal":
+			# Aviso: 0.6 s visible y brillando antes de disparar (da tiempo a reaccionar).
+			if state_time > 0.6:
+				_set_state("burst")
+			return Vector2.ZERO
 		"burst":
 			if attack_timer <= 0.0:
 				attack_timer = 0.22
-				_shoot_at(p, 560.0, 5.0, 0.8, 0.1)
+				_shoot_at(p, 560.0, 5.0, 0.56, 0.1)
 			if state_time > 0.9:
 				_set_state("retreat")
 			return Vector2.ZERO
@@ -609,6 +633,10 @@ func _draw() -> void:
 		draw_line(eye, a + eye, Color(1, 0.2, 0.2, 0.25 + 0.5 * state_time), 6.0)
 	if state == "aim" and arch == "tank":
 		draw_circle(eye, radius * 0.4 * state_time / 0.7, Color(def["accent"], 0.7))
+	if state == "reveal":
+		# Emboscador a punto de disparar: anillo que se cierra sobre él.
+		var k := clampf(state_time / 0.6, 0.0, 1.0)
+		draw_ring(radius * (2.2 - 1.0 * k), Color(1, 0.25, 0.25, 0.4 + 0.5 * k), 3.0, height)
 	if state == "aim" and arch == "sniper":
 		var tgt := Iso.to_screen(aim_point - plane_pos)
 		var locked := state_time >= 1.05
