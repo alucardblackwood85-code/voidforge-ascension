@@ -72,7 +72,7 @@ const VIEW_SIZE := 2.1          # tamaño de la vista respecto al radio visual (
 ## Para vistas que la generación dejó con el rumbo equivocado.
 const VIEW_FIX := {
 	"ships/falcon_r": {"ne": ["e", -45.0], "n": ["e", -90.0]},
-	"ships/bulwark_t1": {"ne": ["n", 45.0]},
+	"ships/kestrel_a1": {"ne": ["n", 45.0]},
 	# Vista superior descartada en la revisión: el norte sale de la diagonal girada.
 	"ships/bastion_h": {"n": ["ne", -45.0]},
 	"ships/aegis_r": {"n": ["ne", -45.0]},
@@ -105,7 +105,7 @@ static func _resolve_view(group: String, id: String, dir: String) -> Array:
 ## Modelos cuyas vistas se revisaron una a una (las perspectivas con problemas se borraron).
 ## Un modelo nuevo se añade aquí tras revisarlo con --viewtest.
 const VIEW_VERIFIED := [
-	"ships/kestrel_a1", "ships/falcon_r", "ships/bulwark_t1", "ships/bastion_h", "ships/aegis_r",
+	"ships/kestrel_a1", "ships/falcon_r", "ships/bastion_h", "ships/aegis_r",
 	"ships/atlas_c4", "ships/centurion_p", "ships/fortress_omega", "ships/ark_meridian", "ships/event_horizon",
 ]
 
