@@ -130,6 +130,74 @@ static func get_view(group: String, id: String, dir: String) -> Texture2D:
 	return _cache[key]
 
 
+# --- Fotogramas 3D (32 ángulos) ---------------------------------------------------------------
+## Modelos 3D renderizados con cámara ortográfica fija a FRAME_ELEV grados (tools/build_3d_frames.ps1):
+## el fotograma i tiene la proa a i*360/FRAME_COUNT grados (antihorario visto desde arriba, empezando
+## por la derecha). Como en DarkOrbit, la nave nunca se gira como imagen: se muestra el fotograma de su
+## rumbo, así la perspectiva y la luz siempre son coherentes. Tienen prioridad sobre las vistas.
+const FRAME_COUNT := 32
+const FRAME_ELEV := 55.0
+const FRAME_SIZE := 2.3          # tamaño del fotograma respecto al radio visual
+const FRAME_TURN_RATE := 9.0     # rad/s del giro visual (media vuelta en ~0,35 s)
+## Modelos descartados tras revisarlos (se queda el sprite cenital o sus vistas).
+const FRAME_EXCLUDED := []
+
+
+const FRAME_COLS := 8             # hoja WebP de 8x4 fotogramas (tools/pack_frames.ps1)
+
+
+static func has_frames(group: String, id: String) -> bool:
+	var key := "frames?/" + group + "/" + id
+	if not _cache.has(key):
+		_cache[key] = not FRAME_EXCLUDED.has(group + "/" + id) and ResourceLoader.exists("res://assets/sprites/frames/%s/%s.webp" % [group, id])
+	return _cache[key]
+
+
+static func get_frame(group: String, id: String, i: int) -> Texture2D:
+	var key := "frames/%s/%s/%d" % [group, id, i]
+	if not _cache.has(key):
+		var sheet_key := "frames/%s/%s" % [group, id]
+		if not _cache.has(sheet_key):
+			var path := "res://assets/sprites/frames/%s/%s.webp" % [group, id]
+			_cache[sheet_key] = load(path) if ResourceLoader.exists(path) else null
+		var sheet: Texture2D = _cache[sheet_key]
+		if sheet == null:
+			_cache[key] = null
+		else:
+			var fs := sheet.get_width() / FRAME_COLS
+			var at := AtlasTexture.new()
+			at.atlas = sheet
+			at.region = Rect2((i % FRAME_COLS) * fs, (i / FRAME_COLS) * fs, fs, fs)
+			at.filter_clip = true
+			_cache[key] = at
+	return _cache[key]
+
+
+## Ángulo del modelo (antihorario visto desde arriba) cuya proa se ve con el ángulo `a` en pantalla.
+static func _model_angle(a: float) -> float:
+	return atan2(-sin(a) / sin(deg_to_rad(FRAME_ELEV)), cos(a))
+
+
+## Ángulo en pantalla de la proa del fotograma i.
+static func _frame_screen_angle(i: int) -> float:
+	var phi := TAU * i / FRAME_COUNT
+	return atan2(-sin(phi) * sin(deg_to_rad(FRAME_ELEV)), cos(phi))
+
+
+static func _draw_frame(ci: CanvasItem, group: String, id: String, radius: float, a: float, h: float, modulate: Color) -> bool:
+	var i := posmod(roundi(_model_angle(a) / (TAU / FRAME_COUNT)), FRAME_COUNT)
+	var tex := get_frame(group, id, i)
+	if tex == null:
+		return false
+	var s := radius * VISUAL_SCALE * FRAME_SIZE
+	# Giro residual mínimo (≤ medio paso) para que el rumbo no avance a saltos.
+	var residual := angle_difference(_frame_screen_angle(i), a)
+	ci.draw_set_transform(Vector2(0.0, -h), residual, Vector2.ONE)
+	ci.draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, modulate)
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+	return true
+
+
 ## Dibuja una entidad con su vista direccional si existe; si no, el sprite cenital girado.
 ## `angle` es el rumbo en el plano lógico. Giro suave:
 ##  - el rumbo visual sigue al real con velocidad de giro limitada (los virajes bruscos se ven como curva);
@@ -137,6 +205,17 @@ static func get_view(group: String, id: String, dir: String) -> Texture2D:
 ##  - cerca de la frontera entre dos vistas, la siguiente se funde encima de la anterior;
 ##  - al virar, la nave se inclina hacia el giro (alabeo) y flota con un balanceo sutil.
 static func draw_dir(ci: CanvasItem, group: String, id: String, fallback: Texture2D, radius: float, angle: float, h: float, modulate: Color = Color.WHITE, strafe: float = 0.0) -> void:
+	if has_frames(group, id):
+		# Fotogramas 3D: giro rápido y continuo hacia el rumbo, sin alabeo (como en DarkOrbit).
+		var tgt := Iso.to_screen(Vector2.from_angle(angle)).angle()
+		var t_now := Time.get_ticks_msec() / 1000.0
+		var dtf := clampf(t_now - float(ci.get_meta("_vt", t_now)), 0.0, 0.1)
+		var av: float = ci.get_meta("_va", tgt)
+		av = rotate_toward(av, tgt, FRAME_TURN_RATE * dtf)
+		ci.set_meta("_vt", t_now)
+		ci.set_meta("_va", av)
+		if _draw_frame(ci, group, id, radius, av, h, modulate):
+			return
 	if not has_views(group, id):
 		if fallback:
 			draw(ci, fallback, radius, angle, h, modulate)

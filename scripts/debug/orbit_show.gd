@@ -46,7 +46,7 @@ class TargetView extends Node2D:
 
 func _ready() -> void:
 	for id in GameData.SHIPS.keys():
-		if SpriteLib.has_views("ships", id):
+		if SpriteLib.has_frames("ships", id) or SpriteLib.has_views("ships", id):
 			ids.append(id)
 	var bg := TextureRect.new()
 	bg.texture = load("res://assets/backgrounds/ferron.png") if ResourceLoader.exists("res://assets/backgrounds/ferron.png") else null

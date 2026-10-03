@@ -32,7 +32,7 @@ class Cell extends Node2D:
 
 func _ready() -> void:
 	for id in GameData.SHIPS.keys():
-		if SpriteLib.has_views("ships", id):
+		if SpriteLib.has_frames("ships", id) or SpriteLib.has_views("ships", id):
 			ids.append(id)
 	var bg := ColorRect.new()
 	bg.color = Color(0.05, 0.06, 0.1)
