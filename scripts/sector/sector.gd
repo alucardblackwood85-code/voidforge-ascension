@@ -1655,7 +1655,7 @@ func _bot_nav(delta: float) -> void:
 	# Esquiva las zonas marcadas (artillería, explosiones, meteoritos) como haría una persona.
 	for fxn in fx_ground.get_children():
 		if fxn is Fx and fxn.kind == "telegraph" and fxn.plane_pos.distance_to(player.plane_pos) < fxn.r + player.radius + 10.0:
-			var out := (player.plane_pos - fxn.plane_pos).normalized()
+			var out: Vector2 = (player.plane_pos - fxn.plane_pos).normalized()
 			if out == Vector2.ZERO:
 				out = Vector2.RIGHT.rotated(randf() * TAU)
 			player.move_target = constrain(fxn.plane_pos + out * (fxn.r + player.radius + 70.0), 60.0)
