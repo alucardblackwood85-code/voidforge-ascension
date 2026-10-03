@@ -63,8 +63,8 @@ func _ready() -> void:
 	inv_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	inv_btn.offset_left = -236
 	inv_btn.offset_right = -16
-	inv_btn.offset_top = 290
-	inv_btn.offset_bottom = 322
+	inv_btn.offset_top = 310
+	inv_btn.offset_bottom = 342
 	root.add_child(inv_btn)
 
 	if Controls.is_touch:
@@ -247,7 +247,7 @@ func _draw_canvas() -> void:
 	_text(Vector2(rx, 278), "Bodega  %d / %d" % [sector.cargo_used, sector.cargo_capacity()], 15, UiTheme.WARN if sector.cargo_used >= sector.cargo_capacity() else UiTheme.TEXT)
 	if sector.loot.get("nexo", 0) > 0:
 		_text(Vector2(rx, 298), "Cristales Nexo  %d" % sector.loot["nexo"], 15, GameData.mat_color("nexo"))
-	var py := 345.0
+	var py := 365.0
 	for pk in pickups:
 		var a := clampf(pk["t"], 0.0, 1.0)
 		_text(Vector2(rx, py), "+%s %s" % [GameData.format_num(pk["amount"]), GameData.mat_name(pk["item"])], 14, Color(GameData.mat_color(pk["item"]), a))
