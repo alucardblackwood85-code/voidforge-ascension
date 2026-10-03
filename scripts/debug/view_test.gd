@@ -1,6 +1,6 @@
 class_name ViewTest
 extends Node2D
-## Banco de pruebas de las vistas direccionales (--viewtest): cada nave con vistas completas
+## Banco de pruebas de los fotogramas 3D (--viewtest): cada nave con fotogramas
 ## dibujada en las 8 direcciones (columnas) con una flecha del rumbo real proyectado en isométrico,
 ## y en la última columna el sprite cenital antiguo para comparar el tamaño.
 
@@ -32,7 +32,7 @@ class Cell extends Node2D:
 
 func _ready() -> void:
 	for id in GameData.SHIPS.keys():
-		if SpriteLib.has_frames("ships", id) or SpriteLib.has_views("ships", id):
+		if SpriteLib.has_frames("ships", id):
 			ids.append(id)
 	var bg := ColorRect.new()
 	bg.color = Color(0.05, 0.06, 0.1)

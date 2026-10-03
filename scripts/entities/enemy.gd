@@ -597,7 +597,7 @@ func _draw() -> void:
 		if is_nest or arch == "trap":
 			SpriteLib.draw(self, tex, radius, rot, height, mod)
 		else:
-			SpriteLib.draw_dir(self, "enemies", id, tex, radius, rot, height, mod, SpriteLib.strafe_of(rot, velocity, maxf(1.0, speed)))
+			SpriteLib.draw_dir(self, "enemies", id, tex, radius, rot, height, mod)
 	else:
 		fill.a = alpha
 		Shapes.draw_hull(self, pts, radius, rot, height, fill, edge, def["accent"])

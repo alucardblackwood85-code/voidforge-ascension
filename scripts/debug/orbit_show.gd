@@ -29,7 +29,7 @@ class ShipView extends Node2D:
 
 	func _draw() -> void:
 		var tex := SpriteLib.get_tex("ships", ship_id)
-		SpriteLib.draw_dir(self, "ships", ship_id, tex, OrbitShow.RADIUS, heading, 22.0, Color.WHITE, SpriteLib.strafe_of(heading, velocity, max_speed))
+		SpriteLib.draw_dir(self, "ships", ship_id, tex, OrbitShow.RADIUS, heading, 22.0, Color.WHITE)
 
 
 class TargetView extends Node2D:
@@ -46,7 +46,7 @@ class TargetView extends Node2D:
 
 func _ready() -> void:
 	for id in GameData.SHIPS.keys():
-		if SpriteLib.has_frames("ships", id) or SpriteLib.has_views("ships", id):
+		if SpriteLib.has_frames("ships", id):
 			ids.append(id)
 	var bg := TextureRect.new()
 	bg.texture = load("res://assets/backgrounds/ferron.png") if ResourceLoader.exists("res://assets/backgrounds/ferron.png") else null

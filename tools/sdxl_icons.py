@@ -11,7 +11,7 @@ Uso (entorno D:\\Proyectos\\herramientas\\sdxl_env):
 import argparse, os, glob
 import torch
 from diffusers import StableDiffusionXLImg2ImgPipeline
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops, ImageFilter
 from rembg import remove, new_session
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -48,9 +48,9 @@ def fit(img: Image.Image, size: int = 256, fill: float = 0.88) -> Image.Image:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("groups", nargs="*", default=list(GROUPS))
-    ap.add_argument("--strength", type=float, default=0.45)
+    ap.add_argument("--strength", type=float, default=0.62)
     ap.add_argument("--steps", type=int, default=30)
-    ap.add_argument("--only", default="")
+    ap.add_argument("--only", default="", help="lista grupo/id separada por comas")
     args = ap.parse_args()
     pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
         "stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, variant="fp16", use_safetensors=True)
@@ -63,7 +63,7 @@ def main() -> None:
         pairs = []
         for path in files:
             iid = os.path.splitext(os.path.basename(path))[0]
-            if args.only and args.only != f"{grp}/{iid}":
+            if args.only and f"{grp}/{iid}" not in args.only.split(","):
                 continue
             old = Image.open(path).convert("RGBA")
             base = Image.new("RGBA", old.size, (16, 20, 30, 255))
@@ -73,7 +73,12 @@ def main() -> None:
             g = torch.Generator("cpu").manual_seed(abs(hash(f"{grp}/{iid}")) % 100000)
             img = pipe(prompt=f"{GROUPS[grp]} ({name}), {STYLE}", negative_prompt=NEGATIVE, image=init,
                        strength=args.strength, num_inference_steps=args.steps, guidance_scale=6.0, generator=g).images[0]
-            new = fit(remove(img, session=session).convert("RGBA"))
+            # Recorte: une el del modelo con la silueta del icono original (ampliada un poco), así no se
+            # pierden brillos ni partes translúcidas; y mantiene el encuadre del original.
+            cut = remove(img, session=session).convert("RGBA").resize((256, 256), Image.LANCZOS)
+            old_a = old.getchannel("A").resize((256, 256), Image.LANCZOS).filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1.2))
+            new = img.resize((256, 256), Image.LANCZOS).convert("RGBA")
+            new.putalpha(ImageChops.lighter(cut.getchannel("A"), old_a))
             new.save(os.path.join(OUT, grp, f"{iid}.png"))
             pairs.append((iid, old, new))
             print(f"OK {grp}/{iid}", flush=True)

@@ -347,7 +347,7 @@ func _draw() -> void:
 	if tex == null:
 		tex = SpriteLib.get_tex("ships", ship_class)
 	if tex:
-		SpriteLib.draw_dir(self, "ships", ship_id, tex, radius, heading, height, Color(1, 1, 1, col.a), SpriteLib.strafe_of(heading, velocity, max_speed()))
+		SpriteLib.draw_dir(self, "ships", ship_id, tex, radius, heading, height, Color(1, 1, 1, col.a))
 	else:
 		Shapes.draw_hull(self, pts, radius, heading, height, col.darkened(0.25), col, Color("4affff"))
 	# Burbuja de escudo
