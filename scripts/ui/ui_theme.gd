@@ -1,7 +1,7 @@
 class_name UiTheme
 ## Tema visual de la interfaz: consola militar sci-fi oscura y legible (19.1), al estilo de los MMO de naves.
-## Tipografía propia «Voidforge Tech» (assets/fonts, generada con tools/make_font.py) para títulos, botones,
-## pestañas y cifras; el texto corrido usa la fuente por defecto, más legible a tamaño pequeño.
+## Tipografía Chakra Petch (assets/fonts, licencia SIL OFL): SemiBold en mayúsculas para títulos, botones,
+## pestañas y cifras; Medium para el texto corrido.
 ## Botones y paneles biselados: degradado vertical, borde luminoso y esquinas cortadas en diagonal.
 
 const BG := Color("070b14")
@@ -17,24 +17,36 @@ const BAD := Color("ff5a5a")
 const WARN := Color("ffb84a")
 const GOLD := Color("ffd27a")
 
-const DISPLAY_FONT := "res://assets/fonts/voidforge_tech.fnt"
-const DISPLAY_MIN := 15          # desde este tamaño las etiquetas usan la tipografía propia
+const DISPLAY_FONT := "res://assets/fonts/ChakraPetch-SemiBold.ttf"
+const BODY_FONT := "res://assets/fonts/ChakraPetch-Medium.ttf"
+const DISPLAY_MIN := 15          # desde este tamaño las etiquetas usan la tipografía de títulos
 
 static var _display: Font
+static var _body: Font
 static var _bevels: Dictionary = {}
 
 
-## Tipografía propia; los caracteres que no tiene (★, ✔, flechas…) caen en la fuente por defecto.
+## Tipografía de títulos; los caracteres que no tiene (★, ✔, flechas…) caen en la fuente de Godot.
 static func display_font() -> Font:
 	if _display == null:
-		if ResourceLoader.exists(DISPLAY_FONT):
-			var f: Font = load(DISPLAY_FONT)
-			if f is FontFile:
-				(f as FontFile).fallbacks = [ThemeDB.fallback_font]
-			_display = f
-		else:
-			_display = ThemeDB.fallback_font
+		_display = _load_font(DISPLAY_FONT)
 	return _display
+
+
+## Tipografía del texto corrido (tema por defecto de toda la interfaz).
+static func body_font() -> Font:
+	if _body == null:
+		_body = _load_font(BODY_FONT)
+	return _body
+
+
+static func _load_font(path: String) -> Font:
+	if not ResourceLoader.exists(path):
+		return ThemeDB.fallback_font
+	var f: Font = load(path)
+	if f is FontFile:
+		(f as FontFile).fallbacks = [ThemeDB.fallback_font]
+	return f
 
 
 static func box(bg: Color, border: Color = BORDER, radius: int = 6, bw: int = 1, pad: int = 8) -> StyleBoxFlat:
@@ -119,6 +131,7 @@ static func style_button(b: Button, kind: String = "normal") -> void:
 static func build() -> Theme:
 	var t := Theme.new()
 	t.default_font_size = 16
+	t.default_font = body_font()
 	t.set_color("font_color", "Label", TEXT)
 	t.set_stylebox("panel", "PanelContainer", box(PANEL))
 	t.set_stylebox("panel", "Panel", box(PANEL))
