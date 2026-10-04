@@ -16,8 +16,7 @@ func _ready() -> void:
 		var b := Button.new()
 		b.text = "  %s  " % t[1]
 		b.focus_mode = Control.FOCUS_NONE
-		if menu.state["equip_tab"] == t[0]:
-			b.add_theme_stylebox_override("normal", UiTheme.box(Color(0.1, 0.2, 0.3), UiTheme.ACCENT, 4, 2, 8))
+		UiTheme.style_button(b, "primary" if menu.state["equip_tab"] == t[0] else "normal")
 		var id: String = t[0]
 		b.pressed.connect(func():
 			menu.state["equip_tab"] = id
@@ -109,8 +108,7 @@ func _inventory(filter: String, ship_id: String) -> Control:
 		var b := Button.new()
 		b.text = f[1]
 		b.focus_mode = Control.FOCUS_NONE
-		if f[0] == filter:
-			b.add_theme_stylebox_override("normal", UiTheme.box(Color(0.1, 0.2, 0.3), UiTheme.ACCENT, 4, 1, 6))
+		UiTheme.style_button(b, "primary" if f[0] == filter else "normal")
 		var id: String = f[0]
 		b.pressed.connect(func():
 			menu.state["equip_filter"] = id
@@ -137,8 +135,7 @@ func _inventory(filter: String, ship_id: String) -> Control:
 		ob.text = o[1]
 		ob.focus_mode = Control.FOCUS_NONE
 		ob.add_theme_font_size_override("font_size", 13)
-		if key == sub:
-			ob.add_theme_stylebox_override("normal", UiTheme.box(Color(0.1, 0.2, 0.3), UiTheme.ACCENT, 4, 1, 4))
+		UiTheme.style_button(ob, "primary" if key == sub else "normal")
 		ob.pressed.connect(func():
 			menu.state["equip_sub"] = key
 			menu.refresh())

@@ -85,7 +85,7 @@ func _ready() -> void:
 			dlg.popup_centered()
 		else:
 			do_launch.call()
-	var launch := W.button("   LANZAR INCURSIÓN   ", on_launch, true, 320)
+	var launch := W.btn("Lanzar incursión  >", on_launch, "gold", 340, 24)
 	lv_row.add_child(insure)
 	launch.custom_minimum_size.y = 60
 	launch.add_theme_font_size_override("font_size", 24)

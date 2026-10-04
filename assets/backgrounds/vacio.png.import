@@ -15,9 +15,9 @@ dest_files=["res://.godot/imported/vacio.png-f6a9c00cbfa2b20d62a1feccd5ff1dfd.ct
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
-compress/lossy_quality=0.7
+compress/lossy_quality=0.8
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1

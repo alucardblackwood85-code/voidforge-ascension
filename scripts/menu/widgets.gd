@@ -62,8 +62,9 @@ static func gen_stats(stats: Dictionary) -> String:
 
 
 static func card(bg: Color = Color(0.07, 0.10, 0.16, 0.92), border: Color = UiTheme.BORDER, pad: int = 10) -> PanelContainer:
+	# Panel biselado (degradado y esquinas cortadas), como el resto de la interfaz.
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.box(bg, border, 8, 1, pad))
+	p.add_theme_stylebox_override("panel", UiTheme.bevel(bg.lightened(0.04), bg.darkened(0.35), border, pad, 7))
 	return p
 
 

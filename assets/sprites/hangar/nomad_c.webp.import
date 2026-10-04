@@ -15,9 +15,9 @@ dest_files=["res://.godot/imported/nomad_c.webp-d41bd4ebbf63ad1ac18245b6ba0fdc00
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
-compress/lossy_quality=0.7
+compress/lossy_quality=0.8
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
