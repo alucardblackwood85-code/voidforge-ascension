@@ -7,7 +7,7 @@ extends SceneTree
 
 const SR := 44100
 const OUT_DIR := "res://assets/audio/sfx/"
-const AMMO_STYLE := "plasma"   # pew | beam | plasma (láseres por munición que usa el juego)
+const AMMO_STYLE := "pew"   # pew | beam | plasma (láseres por munición que usa el juego)
 
 
 func L(w: String, f0: float, f1: float, d: float, v: float = 1.0, extra: Dictionary = {}) -> Dictionary:
@@ -90,6 +90,12 @@ func sounds() -> Dictionary:
 	base.merge(modern(), true)
 	# Motor v2 (estéreo, sin aliasing): el láser suena según la munición, como en los MMO de naves.
 	base.merge(ammo_set(AMMO_STYLE), true)
+	# Resto de efectos rehechos en el mismo estilo (A: pulso con cuerpo, golpe grave y estéreo).
+	base.merge(fx_v2(), true)
+	# Los láseres por modelo (laser_l01…l18) ya no se usan: el sonido lo marca la munición.
+	for k in base.keys():
+		if k.begins_with("laser_l"):
+			base.erase(k)
 	return base
 
 
@@ -637,4 +643,90 @@ func ammo_plasma() -> Dictionary:
 		# Mk-VI: el más masivo: núcleo ancho, doble impacto y cola corta.
 		"laser_mk6": {"layers": plasma({"d": 0.28, "f0": 660.0, "f1": 360.0, "voices": 7, "det": 26.0, "ratio": 0.5, "index": 7.0, "crk": 0.6, "sizzle": 0.38, "sub": 0.22, "stages": 90, "ap": 0.7, "cut0": 5200.0, "cut1": 1200.0}) + plasma({"t": 0.055, "v": 0.5, "d": 0.2, "f0": 620.0, "f1": 340.0, "voices": 5, "sub": 0.1, "chirp": 0.4}), "drive": 2.2, "rev": 0.2, "tail": 0.24},
 	}
+	return m
+
+
+
+# --- Resto de efectos en estilo A ------------------------------------------------------------------
+## Explosión por capas: estallido de ruido que se oscurece, retumbo grave, crepitar de restos y aire.
+func boom(size: float, o: Dictionary = {}) -> Array:
+	var t: float = o.get("t", 0.0)
+	var d := 0.35 + 0.55 * size
+	var layers := [
+		V("noise", 0, 0, 0.03, 0.6, {"t": t, "cut0": 8000, "mode": "hp", "k": 9.0, "a": 0.0005, "voices": 2, "spread": 0.9}),
+		V("noise", 0, 0, d, 0.9, {"t": t, "cut0": 6000 - 2500 * size, "cut1": 260, "cr": 6.0 - 3.0 * size, "q": 0.15, "k": 3.2 - size, "a": 0.002, "voices": 2, "spread": 0.8}),
+		V("sine", 120 - 40 * size, 32, d * 0.8, 0.55 + 0.35 * size, {"t": t, "pr": 9.0, "k": 3.0}),
+		# Expansión: soplo grave que se abre y se apaga.
+		V("noise", 0, 0, d * 1.3, 0.3 + 0.15 * size, {"t": t + 0.03, "cut0": 300, "cut1": 1800, "cr": 5.0, "q": 0.1, "a": 0.08, "k": 2.2, "voices": 2, "spread": 1.0}),
+	]
+	# Restos: golpes cortos de metal repartidos en el tiempo y en el estéreo.
+	for r in int(2 + 4 * size):
+		var rt := t + 0.06 + 0.11 * r + 0.03 * sin(r * 7.3)
+		layers.append(V("noise", 0, 0, 0.05, 0.22 + 0.08 * size, {"t": rt, "cut0": 2200 + 900 * sin(r * 3.1), "mode": "bp", "q": 0.6, "k": 7.0, "pan": 0.8 * sin(r * 2.3)}))
+	if size >= 0.6:
+		layers.append(V("saw", 70, 35, d, 0.25, {"t": t + 0.02, "pr": 4.0, "voices": 3, "det": 25.0, "spread": 0.6, "cut0": 400, "q": 0.2, "k": 2.4}))
+	return layers
+
+
+## Campanilla suave de interfaz (FM con poco índice, estéreo): reemplaza los pitidos de onda cuadrada.
+func chime(f: float, t: float, d: float, v: float) -> Dictionary:
+	return V("fm", f, f, d, v, {"t": t, "ratio": 2.0, "index": 1.2, "ik": 6.0, "voices": 2, "det": 6.0, "spread": 0.6, "k": 4.5, "a": 0.008})
+
+
+func fx_v2() -> Dictionary:
+	var m := {
+		# Pet: pulso pequeño y agudo.
+		"laser_drone": {"layers": pew(2400, 900, 0.1, {"voices": 2, "det": 8.0, "q": 0.25, "cut0": 7000.0, "cut1": 2500.0, "sub": 0.0, "air": 0.06, "v": 0.8}), "rev": 0.1, "tail": 0.15},
+		# Disparos alienígenas: más graves y oscuros que los del jugador; cada facción con su textura.
+		"e_shot_light": {"layers": pew(900, 200, 0.18, {"voices": 2, "det": 12.0, "q": 0.3, "cut0": 4500.0, "cut1": 900.0, "sub": 0.25}) + [V("saw", 450, 110, 0.16, 0.35, {"pr": 18.0, "voices": 3, "det": 16.0, "spread": 0.5, "cut0": 2200, "cut1": 600, "cr": 12.0, "k": 4.0})], "drive": 1.3, "rev": 0.14, "tail": 0.2},
+		"e_shot_swarm": {"layers": pew(1500, 700, 0.09, {"voices": 2, "det": 10.0, "q": 0.2, "cut0": 6000.0, "sub": 0.0, "air": 0.05, "v": 0.8}), "rev": 0.08, "tail": 0.12},
+		"e_shot_bio": {"layers": pew(520, 240, 0.2, {"w": "tri", "voices": 3, "det": 20.0, "q": 0.5, "cut0": 2500.0, "cut1": 700.0, "sub": 0.2}) + [V("noise", 0, 0, 0.18, 0.2, {"cut0": 900, "mode": "bp", "q": 0.6, "vib": 22.0, "vd": 0.7, "k": 3.0})], "rev": 0.18, "tail": 0.22},
+		"e_shot_crystal": {"layers": pew(2600, 1700, 0.14, {"w": "square", "voices": 2, "det": 9.0, "q": 0.55, "cut0": 8000.0, "cut1": 3000.0, "sub": 0.0, "shine": 0.2, "shine_f": 5600.0}), "rev": 0.22, "tail": 0.25},
+		"e_shot_void": {"layers": pew(600, 130, 0.24, {"voices": 3, "det": 28.0, "q": 0.6, "cut0": 2600.0, "cut1": 500.0, "sub": 0.3, "air": 0.2}), "drive": 1.4, "rev": 0.24, "tail": 0.28},
+		"e_heavy": {"layers": pew(480, 70, 0.34, {"voices": 4, "det": 22.0, "q": 0.4, "cut0": 3000.0, "cut1": 500.0, "sub": 0.8, "sub_f": 120.0}) + [V("noise", 0, 0, 0.06, 0.45, {"cut0": 6000, "mode": "hp", "k": 7.0, "voices": 2, "spread": 0.9}), V("noise", 0, 0, 0.25, 0.2, {"cut0": 4500, "cut1": 1500, "cr": 8.0, "mode": "bp", "q": 0.3, "k": 4.0})], "drive": 1.6, "rev": 0.2, "tail": 0.26},
+		"e_snipe_fire": {"layers": pew(3000, 260, 0.3, {"voices": 3, "det": 14.0, "q": 0.45, "sub": 0.6, "air": 0.35}) + [V("noise", 0, 0, 0.06, 0.6, {"cut0": 9000, "mode": "hp", "k": 8.0, "voices": 2, "spread": 1.0})], "drive": 1.5, "rev": 0.28, "tail": 0.35},
+		# Avisos de ataque (telegraphs): subidas claras para que se oigan venir.
+		"e_charge": {"layers": [V("saw", 90, 700, 0.9, 0.55, {"voices": 4, "det": 18.0, "spread": 0.7, "cut0": 500, "cut1": 4000, "cr": 3.0, "q": 0.5, "a": 0.6, "k": 0.5}), V("noise", 0, 0, 0.9, 0.15, {"cut0": 1500, "mode": "bp", "q": 0.5, "a": 0.7, "k": 0.4})], "rev": 0.15, "tail": 0.2},
+		"e_snipe_charge": {"layers": [V("sine", 600, 2600, 1.3, 0.4, {"voices": 2, "det": 7.0, "spread": 0.8, "a": 1.1, "k": 0.4}), V("noise", 0, 0, 1.3, 0.12, {"cut0": 4000, "mode": "bp", "q": 0.6, "a": 1.1, "k": 0.4})], "rev": 0.2, "tail": 0.25},
+		"e_arm": {"layers": [chime(1050, 0.0, 0.08, 0.5), chime(1050, 0.3, 0.08, 0.5), chime(1400, 0.6, 0.12, 0.6)], "rev": 0.12, "tail": 0.15},
+		"e_launch": {"layers": [V("sine", 150, 55, 0.2, 0.8, {"pr": 14.0, "k": 4.0}), V("noise", 0, 0, 0.6, 0.35, {"t": 0.06, "cut0": 3000, "cut1": 600, "cr": 4.0, "k": 1.4, "voices": 2, "spread": 0.7})], "rev": 0.2, "tail": 0.25},
+		"e_dash": {"layers": [V("noise", 0, 0, 0.45, 0.65, {"cut0": 5000, "cut1": 500, "cr": 6.0, "q": 0.3, "a": 0.03, "k": 3.0, "voices": 2, "spread": 0.9}), V("saw", 300, 120, 0.3, 0.2, {"pr": 8.0, "voices": 3, "det": 20.0, "cut0": 1500, "k": 3.0})], "rev": 0.12, "tail": 0.15},
+		"e_heal": {"layers": [chime(520, 0.0, 0.2, 0.4), chime(660, 0.08, 0.2, 0.4), chime(880, 0.16, 0.3, 0.45)], "rev": 0.3, "tail": 0.35},
+		"e_spawn": {"layers": [V("saw", 160, 360, 0.5, 0.45, {"voices": 3, "det": 25.0, "spread": 0.7, "vib": 8.0, "vd": 0.15, "cut0": 1200, "q": 0.4, "a": 0.08, "k": 2.0}), V("noise", 0, 0, 0.45, 0.25, {"cut0": 700, "mode": "bp", "q": 0.5, "k": 2.0})], "rev": 0.25, "tail": 0.3},
+		"e_drain": {"layers": [V("saw", 140, 110, 0.7, 0.45, {"voices": 3, "det": 30.0, "spread": 0.6, "vib": 16.0, "vd": 0.18, "cut0": 900, "q": 0.5, "a": 0.1, "k": 1.5}), V("sine", 880, 440, 0.7, 0.15, {"a": 0.1, "k": 2.0})], "rev": 0.2, "tail": 0.25},
+		"e_phase": {"layers": [V("noise", 0, 0, 0.45, 0.4, {"cut0": 600, "cut1": 6000, "cr": 3.0, "mode": "bp", "q": 0.6, "a": 0.3, "k": 0.8, "voices": 2, "spread": 1.0}), V("sine", 400, 1600, 0.45, 0.25, {"voices": 2, "det": 15.0, "spread": 0.9, "a": 0.3, "k": 0.8})], "rev": 0.3, "tail": 0.3},
+		"e_reflect": {"layers": [chime(1700, 0.0, 0.4, 0.5), chime(2550, 0.0, 0.35, 0.3), V("noise", 0, 0, 0.05, 0.3, {"cut0": 7000, "mode": "hp", "k": 8.0})], "rev": 0.25, "tail": 0.3},
+		"e_pulse": {"layers": [V("sine", 130, 55, 0.6, 0.8, {"pr": 6.0, "vib": 6.0, "vd": 0.2, "k": 2.0}), V("noise", 0, 0, 0.5, 0.35, {"cut0": 1200, "cut1": 300, "cr": 5.0, "k": 2.0, "voices": 2, "spread": 0.8})], "drive": 1.3, "rev": 0.25, "tail": 0.3},
+		"e_nova": {"layers": [V("saw", 80, 900, 0.5, 0.5, {"voices": 4, "det": 20.0, "spread": 0.7, "cut0": 600, "q": 0.4, "a": 0.4, "k": 0.6})] + boom(0.6, {"t": 0.45}), "drive": 1.4, "rev": 0.25, "tail": 0.4},
+		# Explosiones.
+		"explosion_s": {"layers": boom(0.2), "drive": 1.3, "rev": 0.18, "tail": 0.3},
+		"explosion_m": {"layers": boom(0.5), "drive": 1.5, "rev": 0.22, "tail": 0.4},
+		"explosion_l": {"layers": boom(0.85), "drive": 1.7, "rev": 0.28, "tail": 0.6},
+		"ship_explode": {"layers": boom(1.0) + boom(0.5, {"t": 0.22}), "drive": 1.8, "rev": 0.3, "tail": 0.7},
+		# Impactos.
+		"hit_shield": {"layers": [V("sine", 900, 1300, 0.14, 0.35, {"voices": 2, "det": 12.0, "spread": 0.8, "vib": 45.0, "vd": 0.15, "k": 5.0}), V("noise", 0, 0, 0.06, 0.25, {"cut0": 6000, "mode": "hp", "k": 8.0})], "rev": 0.15, "tail": 0.15},
+		"hit_hull": {"layers": [V("noise", 0, 0, 0.2, 0.7, {"cut0": 2500, "cut1": 400, "cr": 14.0, "q": 0.3, "k": 5.0}), V("sine", 150, 60, 0.15, 0.6, {"pr": 20.0, "k": 5.0}), V("noise", 0, 0, 0.12, 0.3, {"cut0": 3200, "mode": "bp", "q": 0.7, "k": 6.0})], "drive": 1.5, "rev": 0.12, "tail": 0.15},
+		"hit_enemy": {"layers": [V("noise", 0, 0, 0.05, 0.4, {"cut0": 5000, "mode": "bp", "q": 0.4, "k": 8.0}), V("sine", 300, 120, 0.05, 0.3, {"pr": 40.0, "k": 7.0})], "rev": 0.06, "tail": 0.08},
+		# Nave y pet.
+		"boost": {"layers": [V("noise", 0, 0, 0.45, 0.6, {"cut0": 800, "cut1": 5000, "cr": 3.0, "q": 0.3, "a": 0.03, "k": 2.5, "voices": 2, "spread": 0.9}), V("saw", 120, 300, 0.4, 0.3, {"voices": 3, "det": 18.0, "cut0": 2000, "a": 0.05, "k": 2.5})], "rev": 0.15, "tail": 0.2},
+		"ability": {"layers": [V("saw", 200, 800, 0.45, 0.4, {"voices": 4, "det": 15.0, "spread": 0.7, "cut0": 3000, "q": 0.4, "k": 2.0}), chime(1200, 0.12, 0.35, 0.3)], "rev": 0.25, "tail": 0.3},
+		"drone_ability": {"layers": [chime(900, 0.0, 0.15, 0.4), chime(1350, 0.1, 0.2, 0.4), V("noise", 0, 0, 0.2, 0.15, {"cut0": 5000, "mode": "hp", "k": 4.0})], "rev": 0.2, "tail": 0.25},
+		"item_use": {"layers": [chime(600, 0.0, 0.2, 0.45), chime(900, 0.08, 0.25, 0.4)], "rev": 0.2, "tail": 0.25},
+		"deploy": {"layers": [V("sine", 220, 110, 0.15, 0.6, {"pr": 15.0, "k": 5.0}), V("noise", 0, 0, 0.08, 0.35, {"cut0": 3000, "mode": "bp", "q": 0.5, "k": 7.0}), chime(900, 0.15, 0.1, 0.3)], "rev": 0.15, "tail": 0.2},
+		"warp": {"tail": 0.9, "layers": [V("saw", 120, 1600, 1.0, 0.45, {"voices": 5, "det": 22.0, "spread": 0.9, "cut0": 800, "q": 0.5, "a": 0.6, "k": 0.8}), V("noise", 0, 0, 1.0, 0.3, {"cut0": 500, "cut1": 7000, "cr": 3.0, "mode": "bp", "q": 0.5, "a": 0.6, "k": 0.8, "voices": 2, "spread": 1.0}), V("noise", 0, 0, 1.2, 0.25, {"t": 0.95, "cut0": 6000, "cut1": 400, "cr": 3.0, "k": 2.0, "voices": 2, "spread": 1.0})], "rev": 0.42},
+		# Botín, objetivos y alertas.
+		"pickup": {"layers": [chime(1300, 0.0, 0.08, 0.4), chime(1750, 0.045, 0.12, 0.4)], "rev": 0.15, "tail": 0.15},
+		"pickup_rare": {"layers": [chime(1046, 0.0, 0.4, 0.35), chime(1318, 0.06, 0.4, 0.35), chime(1568, 0.12, 0.4, 0.35), chime(2093, 0.18, 0.6, 0.4), V("noise", 0, 0, 0.5, 0.08, {"t": 0.1, "cut0": 8000, "mode": "hp", "a": 0.05, "k": 2.5})], "rev": 0.32, "tail": 0.4},
+		"jackpot": {"layers": [chime(784, 0.0, 0.1, 0.45), chime(1046, 0.06, 0.1, 0.45), chime(1318, 0.12, 0.1, 0.45), chime(1568, 0.18, 0.1, 0.45), chime(2093, 0.24, 0.6, 0.5), V("noise", 0, 0, 0.6, 0.12, {"t": 0.24, "cut0": 7000, "mode": "hp", "k": 2.5})], "rev": 0.35, "tail": 0.45},
+		"objective": {"layers": [chime(523, 0.0, 0.18, 0.5), chime(659, 0.13, 0.18, 0.5), chime(784, 0.26, 0.18, 0.5), chime(1046, 0.39, 0.6, 0.55), V("saw", 261, 261, 0.7, 0.18, {"t": 0.39, "voices": 3, "det": 10.0, "spread": 0.8, "cut0": 1500, "a": 0.05, "k": 2.5})], "rev": 0.3, "tail": 0.4},
+		# Alerta: dos tonos suaves tipo sirena de cabina (triangulares y filtrados, sin timbre de altavoz de PC).
+		"alert": {"layers": [V("tri", 700, 700, 0.28, 0.45, {"voices": 3, "det": 8.0, "spread": 0.7, "cut0": 1600, "a": 0.02, "k": 0.8}), V("tri", 525, 525, 0.28, 0.45, {"t": 0.3, "voices": 3, "det": 8.0, "spread": 0.7, "cut0": 1600, "a": 0.02, "k": 0.8}), V("tri", 700, 700, 0.28, 0.45, {"t": 0.6, "voices": 3, "det": 8.0, "spread": 0.7, "cut0": 1600, "a": 0.02, "k": 0.8}), V("sine", 175, 175, 0.9, 0.2, {"a": 0.05, "k": 1.2})], "rev": 0.22, "tail": 0.3},
+		# Interfaz: suave y corta.
+		"ui_click": {"layers": [V("noise", 0, 0, 0.025, 0.4, {"cut0": 4000, "mode": "bp", "q": 0.5, "k": 9.0}), chime(1800, 0.0, 0.04, 0.2)], "rev": 0.05, "tail": 0.05},
+		"ui_select": {"layers": [chime(900, 0.0, 0.08, 0.4), chime(1350, 0.04, 0.1, 0.35)], "rev": 0.1, "tail": 0.12},
+		"ui_error": {"layers": [V("saw", 220, 190, 0.14, 0.4, {"voices": 2, "det": 20.0, "cut0": 1300, "q": 0.3, "k": 2.0}), V("saw", 180, 150, 0.16, 0.4, {"t": 0.12, "voices": 2, "det": 20.0, "cut0": 1300, "q": 0.3, "k": 2.0})], "rev": 0.08, "tail": 0.1},
+		"craft": {"layers": [V("noise", 0, 0, 0.05, 0.45, {"cut0": 3500, "mode": "bp", "q": 0.5, "k": 8.0}), V("sine", 180, 90, 0.08, 0.4, {"pr": 20.0, "k": 6.0}), chime(1050, 0.06, 0.25, 0.4)], "rev": 0.2, "tail": 0.25},
+	}
+	for k in m.keys():
+		m[k]["v2"] = true
 	return m
