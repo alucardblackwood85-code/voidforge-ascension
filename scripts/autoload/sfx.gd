@@ -68,7 +68,7 @@ func _stream(path: String) -> AudioStream:
 
 
 ## Reproduce un efecto. Si se da `pos` (plano) se atenúa por distancia al oyente (la nave).
-func play(name: String, pos = null, vol: float = 0.0, pitch_var: float = 0.05) -> void:
+func play(name: String, pos = null, vol: float = 0.0, pitch_var: float = 0.05, pitch: float = 1.0) -> void:
 	var s := _stream(DIR + name + ".wav")
 	if s == null:
 		return
@@ -97,7 +97,7 @@ func play(name: String, pos = null, vol: float = 0.0, pitch_var: float = 0.05) -
 	free.stream = s
 	free.bus = "Lasers" if name.begins_with("laser_") else "SFX"
 	free.volume_db = db
-	free.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+	free.pitch_scale = pitch + randf_range(-pitch_var, pitch_var)
 	free.play()
 
 

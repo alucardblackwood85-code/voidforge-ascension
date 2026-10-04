@@ -212,7 +212,10 @@ func _fire(delta: float) -> void:
 	for i in lasers.size():
 		_shoot_laser(i, lasers[i])
 	if not lasers.is_empty():
-		Sfx.play("laser_" + lasers[0]["id"], plane_pos, -2.0)
+		# Como en DarkOrbit, el sonido lo marca la munición; el modelo de láser sólo cambia algo el tono
+		# (los más avanzados suenan un poco más graves).
+		var li := GameData.LASERS.keys().find(lasers[0]["id"])
+		Sfx.play("laser_" + sector.active_ammo, plane_pos, -2.0, 0.03, 1.06 - 0.012 * maxi(0, li))
 
 
 func _shoot_laser(i: int, l: Dictionary) -> void:

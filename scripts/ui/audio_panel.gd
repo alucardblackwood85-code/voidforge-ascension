@@ -30,7 +30,7 @@ func _ready() -> void:
 			Sfx.set_volume(key, v)
 			pct.text = "%d%%" % int(v * 100)
 			if key == "lasers":
-				Sfx.play("laser_l01", null, 0.0, 0.0)
+				Sfx.play("laser_mk1", null, 0.0, 0.0)
 			elif key == "sfx":
 				Sfx.play("pickup", null, 0.0, 0.0)
 			elif key == "voice" and not s.has_meta("tested"):

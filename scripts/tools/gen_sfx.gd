@@ -7,6 +7,7 @@ extends SceneTree
 
 const SR := 44100
 const OUT_DIR := "res://assets/audio/sfx/"
+const AMMO_STYLE := "plasma"   # pew | beam | plasma (láseres por munición que usa el juego)
 
 
 func L(w: String, f0: float, f1: float, d: float, v: float = 1.0, extra: Dictionary = {}) -> Dictionary:
@@ -87,18 +88,36 @@ func sounds() -> Dictionary:
 	}
 	# Los láseres y disparos modernos sustituyen a la versión clásica (más "arcade").
 	base.merge(modern(), true)
+	# Motor v2 (estéreo, sin aliasing): el láser suena según la munición, como en los MMO de naves.
+	base.merge(ammo_set(AMMO_STYLE), true)
 	return base
 
 
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
+	if OS.get_cmdline_user_args().has("--preview"):
+		# Los tres estilos de láser por munición, para escucharlos y elegir (build/sfx_preview/<estilo>/).
+		for style in ["pew", "beam", "plasma"]:
+			var dir := "res://build/sfx_preview/%s/" % style
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+			var set := ammo_set(style)
+			for name in set.keys():
+				var st := render_v2(set[name])
+				save_wav_stereo(dir + name + ".wav", st[0], st[1])
+		print("Vista previa generada")
+		quit()
+		return
 	var all := sounds()
 	var only := OS.get_cmdline_user_args()
 	for name in all.keys():
 		if not only.is_empty() and not only.has(name):
 			continue
-		var samples := render(all[name])
-		save_wav(OUT_DIR + name + ".wav", samples)
+		if all[name].get("v2", false):
+			var st := render_v2(all[name])
+			save_wav_stereo(OUT_DIR + name + ".wav", st[0], st[1])
+		else:
+			var samples := render(all[name])
+			save_wav(OUT_DIR + name + ".wav", samples)
 	print("SFX generados: %d" % all.size())
 	quit()
 
@@ -278,13 +297,13 @@ func modern() -> Dictionary:
 	return m
 
 
-## Reverb tipo Schroeder (4 peines + 2 pasa-todo), cola corta.
-func _reverb(buf: PackedFloat32Array, wet: float) -> void:
+## Reverb tipo Schroeder (4 peines + 2 pasa-todo), cola corta. `off` desplaza los retardos (canal derecho).
+func _reverb(buf: PackedFloat32Array, wet: float, off: int = 0) -> void:
 	var n := buf.size()
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for d in [1116, 1188, 1277, 1356]:
-		var delay: int = d * SR / 44100
+		var delay: int = (d + off) * SR / 44100
 		var line := PackedFloat32Array()
 		line.resize(delay)
 		var idx := 0
@@ -294,7 +313,7 @@ func _reverb(buf: PackedFloat32Array, wet: float) -> void:
 			out[i] += y
 			idx = (idx + 1) % delay
 	for d in [556, 441]:
-		var delay: int = d * SR / 44100
+		var delay: int = (d + off / 3) * SR / 44100
 		var line := PackedFloat32Array()
 		line.resize(delay)
 		var idx := 0
@@ -306,3 +325,316 @@ func _reverb(buf: PackedFloat32Array, wet: float) -> void:
 			idx = (idx + 1) % delay
 	for i in n:
 		buf[i] = buf[i] * (1.0 - wet * 0.4) + out[i] * wet * 0.22
+
+
+
+# --- Motor v2: sonido moderno ----------------------------------------------------------------------
+# Osciladores sin aliasing (polyBLEP), unísono de varias voces desafinadas repartidas en estéreo,
+# filtro resonante de estado variable con barrido, caída exponencial del tono ("pew") y reverb estéreo.
+# Capa: {w: saw|square|sine|tri|noise, f0, f1, pr: velocidad de caída del tono (0 = barrido normal),
+#   d, t, v, a: ataque, k: caída, voices, det: desafinado en cents, pan, spread: apertura estéreo,
+#   cut0→cut1 con cr: velocidad del barrido del filtro, q: resonancia 0-0.95, mode: lp|bp|hp, vib, vd}
+
+func _blep(t: float, dt: float) -> float:
+	if t < dt:
+		t /= dt
+		return t + t - t * t - 1.0
+	elif t > 1.0 - dt:
+		t = (t - 1.0) / dt
+		return t * t + t + t + 1.0
+	return 0.0
+
+
+func V(w: String, f0: float, f1: float, d: float, v: float, extra: Dictionary = {}) -> Dictionary:
+	var l := {"w": w, "f0": f0, "f1": f1, "d": d, "v": v, "t": 0.0, "a": 0.002, "k": 5.0, "pr": 0.0,
+		"voices": 1, "det": 0.0, "pan": 0.0, "spread": 0.0, "cut0": 0.0, "cut1": 0.0, "cr": 0.0, "q": 0.0, "mode": "lp"}
+	l.merge(extra, true)
+	return l
+
+
+func render_v2(spec: Dictionary) -> Array:
+	var total := 0.0
+	for l in spec["layers"]:
+		total = maxf(total, float(l["t"]) + float(l["d"]))
+	total += float(spec.get("tail", 0.35))
+	var n := int(total * SR)
+	var bl := PackedFloat32Array()
+	bl.resize(n)
+	var br := PackedFloat32Array()
+	br.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(spec))
+	for l in spec["layers"]:
+		_layer_v2(bl, br, l, rng)
+	var drive: float = spec.get("drive", 1.0)
+	if drive > 1.0:
+		for i in n:
+			bl[i] = tanh(bl[i] * drive) / tanh(drive)
+			br[i] = tanh(br[i] * drive) / tanh(drive)
+	var rev: float = spec.get("rev", 0.0)
+	if rev > 0.0:
+		_reverb(bl, rev, 0)
+		_reverb(br, rev, 37)
+	# Volumen percibido igualado: RMS de los primeros 0,25 s a un objetivo común y limitador suave
+	# (si sólo se normaliza al pico, un chasquido muy afilado deja el resto del sonido flojo).
+	var m := mini(n, int(0.25 * SR))
+	var acc := 0.0
+	for i in m:
+		acc += bl[i] * bl[i] + br[i] * br[i]
+	var rms := sqrt(acc / maxf(1.0, 2.0 * m))
+	var g := minf(float(spec.get("loud", 0.16)) / maxf(rms, 0.0001), 40.0)
+	var fade := int(0.01 * SR)
+	for i in n:
+		var f := 1.0 if i <= n - fade else float(n - i) / fade
+		bl[i] = tanh(bl[i] * g) * 0.92 * f
+		br[i] = tanh(br[i] * g) * 0.92 * f
+	return [bl, br]
+
+
+func _layer_v2(bl: PackedFloat32Array, br: PackedFloat32Array, l: Dictionary, rng: RandomNumberGenerator) -> void:
+	if l["w"] == "chirp":
+		_chirp_v2(bl, br, l, rng)
+		return
+	var start := int(float(l["t"]) * SR)
+	var d: float = l["d"]
+	var len := int(d * SR)
+	var nv: int = maxi(1, int(l["voices"]))
+	var phases: Array = []
+	var gains_l: Array = []
+	var gains_r: Array = []
+	var dets: Array = []
+	for vi in nv:
+		var x := 0.0 if nv == 1 else float(vi) / (nv - 1) * 2.0 - 1.0
+		phases.append(rng.randf())
+		dets.append(pow(2.0, float(l["det"]) * x / 1200.0))
+		var pan := clampf(float(l["pan"]) + float(l["spread"]) * x, -1.0, 1.0)
+		gains_l.append(cos((pan + 1.0) * PI / 4.0) / sqrt(nv))
+		gains_r.append(sin((pan + 1.0) * PI / 4.0) / sqrt(nv))
+	# Filtro de estado variable (Chamberlin) con sobremuestreo x2, uno por canal.
+	var low := [0.0, 0.0]
+	var band := [0.0, 0.0]
+	var damp := 2.0 - 1.9 * clampf(float(l["q"]), 0.0, 0.95)
+	var f0: float = l["f0"]
+	var f1: float = l["f1"]
+	var pr: float = l["pr"]
+	var a: float = l["a"]
+	var k: float = l["k"]
+	var vib: float = l.get("vib", 0.0)
+	var vd: float = l.get("vd", 0.0)
+	var cut0: float = l["cut0"]
+	var cut1: float = l["cut1"] if float(l["cut1"]) > 0.0 else cut0
+	var cr: float = l["cr"]
+	var mode: String = l["mode"]
+	for j in len:
+		var i := start + j
+		if i >= bl.size():
+			break
+		var t := float(j) / SR
+		var u := float(j) / len
+		var freq := f1 + (f0 - f1) * exp(-pr * t) if pr > 0.0 else f0 * pow(f1 / f0, u)
+		if vib > 0.0:
+			freq *= 1.0 + vd * sin(TAU * vib * t)
+		var sl := 0.0
+		var sr := 0.0
+		for vi in nv:
+			var s := 0.0
+			if l["w"] == "noise":
+				s = rng.randf_range(-1.0, 1.0)
+			else:
+				var fv: float = freq * dets[vi]
+				var dt := fv / SR
+				var ph: float = fposmod(phases[vi] + dt, 1.0)
+				phases[vi] = ph
+				match l["w"]:
+					"fm":
+						# FM con crepitación: el modulador lleva ruido, el índice decae (timbre de plasma).
+						var mph: float = fposmod(float(l.get("_m%d" % vi, 0.0)) + fv * float(l.get("ratio", 1.0)) / SR, 1.0)
+						l["_m%d" % vi] = mph
+						var idx: float = float(l.get("index", 3.0)) * exp(-float(l.get("ik", 6.0)) * u)
+						s = sin(TAU * ph + idx * (sin(TAU * mph) + float(l.get("crk", 0.0)) * rng.randf_range(-1.0, 1.0)))
+					"saw":
+						s = 2.0 * ph - 1.0 - _blep(ph, dt)
+					"square":
+						s = (1.0 if ph < 0.5 else -1.0) + _blep(ph, dt) - _blep(fposmod(ph + 0.5, 1.0), dt)
+					"tri":
+						s = 4.0 * absf(ph - 0.5) - 1.0
+					_:
+						s = sin(TAU * ph)
+			sl += s * gains_l[vi]
+			sr += s * gains_r[vi]
+		if cut0 > 0.0:
+			var fc := cut1 + (cut0 - cut1) * exp(-cr * t) if cr > 0.0 else cut0
+			var fcoef := 2.0 * sin(PI * minf(fc, SR * 0.2) / (SR * 2.0))
+			var io := [sl, sr]
+			for c in 2:
+				var high := 0.0
+				for _o in 2:
+					low[c] += fcoef * band[c]
+					high = io[c] - low[c] - damp * band[c]
+					band[c] += fcoef * high
+				io[c] = low[c] if mode == "lp" else (band[c] if mode == "bp" else high)
+			sl = io[0]
+			sr = io[1]
+		var env := t / a if t < a else exp(-k * (t - a) / d)
+		env *= clampf((1.0 - u) * 12.0, 0.0, 1.0)
+		var vol: float = float(l["v"]) * env
+		bl[i] += sl * vol
+		br[i] += sr * vol
+
+
+## Dispersión de fase: un chasquido atraviesa una cadena de pasa-todos y sale convertido en un barrido
+## metálico descendente ("piu" de disparo de energía). stages = longitud del barrido, ap = coeficiente
+## (más alto, más grave y largo); cada canal con un coeficiente algo distinto para abrir el estéreo.
+func _chirp_v2(bl: PackedFloat32Array, br: PackedFloat32Array, l: Dictionary, rng: RandomNumberGenerator) -> void:
+	var start := int(float(l["t"]) * SR)
+	var n := int(float(l["d"]) * SR)
+	var stages: int = int(l.get("stages", 120))
+	var ap: float = l.get("ap", 0.7)
+	var burst := int(float(l.get("burst", 0.0006)) * SR) + 1
+	for c in 2:
+		var x := PackedFloat32Array()
+		x.resize(n)
+		for i in burst:
+			x[i] = rng.randf_range(-1.0, 1.0) if burst > 2 else 1.0
+		var coef := ap + (0.012 if c == 1 else -0.012) * float(l.get("width", 1.0))
+		for _st in stages:
+			var x1 := 0.0
+			var y1 := 0.0
+			for i in n:
+				var xi := x[i]
+				var y := coef * xi + x1 - coef * y1
+				x1 = xi
+				y1 = y
+				x[i] = y
+		var buf := bl if c == 0 else br
+		var k: float = l.get("k", 3.0)
+		for i in n:
+			var u := float(i) / n
+			var j := start + i
+			if j >= buf.size():
+				break
+			buf[j] += x[i] * float(l["v"]) * exp(-k * u) * clampf((1.0 - u) * 12.0, 0.0, 1.0)
+
+
+func save_wav_stereo(path: String, bl: PackedFloat32Array, br: PackedFloat32Array) -> void:
+	var data := PackedByteArray()
+	data.resize(bl.size() * 4)
+	for i in bl.size():
+		data.encode_s16(i * 4, int(clampf(bl[i], -1.0, 1.0) * 32767.0))
+		data.encode_s16(i * 4 + 2, int(clampf(br[i], -1.0, 1.0) * 32767.0))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = SR
+	w.stereo = true
+	w.data = data
+	w.save_to_wav(ProjectSettings.globalize_path(path))
+
+
+## Disparo de energía por capas: chasquido inicial, núcleo de sierras desafinadas con el tono cayendo
+## y el filtro cerrándose, golpe grave y cola de aire. `n` = munición 1-6: cada una más grave y pesada.
+func pew(f0: float, f1: float, d: float, o: Dictionary = {}) -> Array:
+	var t: float = o.get("t", 0.0)
+	var v: float = o.get("v", 1.0)
+	var layers := [
+		V("noise", 0, 0, 0.025, 0.35 * v, {"t": t, "cut0": 7000, "mode": "bp", "q": 0.3, "k": 9.0, "a": 0.0008}),
+		V(o.get("w", "saw"), f0, f1, d, 0.8 * v, {"t": t, "pr": o.get("pr", 24.0), "voices": o.get("voices", 3), "det": o.get("det", 14.0), "spread": 0.6,
+			"cut0": o.get("cut0", 9000.0), "cut1": o.get("cut1", 1500.0), "cr": o.get("cr", 16.0), "q": o.get("q", 0.45), "k": o.get("k", 4.5)}),
+		V("noise", 0, 0, d * 1.3, o.get("air", 0.12) * v, {"t": t, "cut0": 5000, "cut1": 600, "cr": 10.0, "spread": 0.0, "k": 3.5, "a": 0.004}),
+	]
+	if o.get("sub", 0.3) > 0.0:
+		layers.append(V("sine", o.get("sub_f", 150.0), 42, minf(0.22, d), o.get("sub", 0.3) * v, {"t": t, "pr": 30.0, "k": 6.0}))
+	if o.get("shine", 0.0) > 0.0:
+		layers.append(V("sine", o.get("shine_f", 5200.0), o.get("shine_f", 5200.0) * 0.72, d * 0.8, o.get("shine", 0.0) * v, {"t": t, "pr": 12.0, "vib": 34.0, "vd": 0.02, "voices": 2, "det": 8.0, "spread": 0.9, "k": 4.0}))
+	return layers
+
+
+## Disparo de energía v3: barrido por dispersión de fase (el "piu"), cuerpo FM con crepitación,
+## chasquido estéreo inmediato y un grave discreto (no un bombo). Más etapas y FM más grave = más pesado.
+func beam(o: Dictionary) -> Array:
+	var t: float = o.get("t", 0.0)
+	var v: float = o.get("v", 1.0)
+	var d: float = o.get("d", 0.22)
+	var layers := [
+		V("noise", 0, 0, 0.012, 0.5 * v, {"t": t, "cut0": 6500, "mode": "hp", "k": 10.0, "a": 0.0003, "voices": 2, "spread": 0.9}),
+		{"w": "chirp", "t": t, "d": d * 1.4, "v": 3.2 * v * o.get("chirp", 1.0), "stages": o.get("stages", 110), "ap": o.get("ap", 0.72), "k": o.get("ck", 2.6), "width": 1.0},
+		V("fm", o.get("f0", 900.0), o.get("f1", 220.0), d, 0.42 * v * o.get("body", 1.0), {"t": t, "pr": o.get("pr", 20.0), "ratio": o.get("ratio", 1.5), "index": o.get("index", 3.0),
+			"ik": 5.0, "crk": o.get("crk", 0.25), "voices": 3, "det": 9.0, "spread": 0.7, "cut0": 7000, "cut1": 1200, "cr": 14.0, "q": 0.15, "k": 4.5}),
+	]
+	if o.get("sub", 0.12) > 0.0:
+		layers.append(V("sine", 110, 55, 0.08, o.get("sub", 0.12) * v, {"t": t, "pr": 25.0, "k": 6.0}))
+	if o.get("shine", 0.0) > 0.0:
+		layers.append(V("fm", 4200, 3000, d * 0.7, o.get("shine", 0.0) * v, {"t": t, "pr": 10.0, "ratio": 3.5, "index": 1.2, "ik": 3.0, "voices": 2, "det": 7.0, "spread": 1.0, "k": 4.0}))
+	return layers
+
+
+## Disparo de energía v4: núcleo denso de sierras saturadas en los medios (400-1500 Hz) con zumbido
+## sostenido y un descenso suave, crepitación FM por encima, un toque de dispersión (no un muelle) y
+## chasquido estéreo. Más voces, más grave y más saturación = munición más pesada.
+func plasma(o: Dictionary) -> Array:
+	var t: float = o.get("t", 0.0)
+	var v: float = o.get("v", 1.0)
+	var d: float = o.get("d", 0.2)
+	var f0: float = o.get("f0", 1100.0)
+	var f1: float = o.get("f1", 600.0)
+	var layers := [
+		V("noise", 0, 0, 0.01, 0.45 * v, {"t": t, "cut0": 7000, "mode": "hp", "k": 10.0, "a": 0.0003, "voices": 2, "spread": 0.9}),
+		V("saw", f0, f1, d, 0.8 * v, {"t": t, "pr": o.get("pr", 9.0), "voices": o.get("voices", 5), "det": o.get("det", 16.0), "spread": 0.7,
+			"cut0": o.get("cut0", 6000.0), "cut1": o.get("cut1", 1600.0), "cr": 9.0, "q": 0.2, "k": o.get("k", 3.6), "a": 0.003}),
+		V("fm", f0 * 2.0, f1 * 2.2, d * 0.85, o.get("sizzle", 0.28) * v, {"t": t, "pr": 7.0, "ratio": o.get("ratio", 1.41), "index": o.get("index", 3.5),
+			"ik": 3.0, "crk": o.get("crk", 0.4), "voices": 2, "det": 10.0, "spread": 1.0, "cut0": 9000, "q": 0.0, "k": 4.0}),
+		{"w": "chirp", "t": t, "d": d, "v": o.get("chirp", 0.9) * v, "stages": o.get("stages", 60), "ap": o.get("ap", 0.6), "k": 5.0, "width": 1.0},
+	]
+	if o.get("sub", 0.1) > 0.0:
+		layers.append(V("sine", f1 * 0.25, f1 * 0.15, 0.1, o.get("sub", 0.1) * v, {"t": t, "pr": 20.0, "k": 5.0}))
+	return layers
+
+
+func ammo_set(style: String) -> Dictionary:
+	var m: Dictionary = {"pew": ammo_pew(), "beam": ammo_beam()}.get(style, ammo_plasma())
+	for k in m.keys():
+		m[k]["v2"] = true
+	return m
+
+
+## Estilo A (iteración 2): pulso de sierras con caída de tono, chasquido y golpe grave.
+func ammo_pew() -> Dictionary:
+	var crack := V("noise", 0, 0, 0.05, 0.4, {"cut0": 4500, "mode": "hp", "k": 7.0, "a": 0.0008})
+	return {
+		"laser_mk1": {"layers": pew(1600, 320, 0.18, {"voices": 2, "det": 10.0, "q": 0.3, "cut0": 6000.0, "cut1": 1400.0, "sub": 0.22}) + [crack], "drive": 1.3, "rev": 0.15, "tail": 0.25},
+		"laser_mk2": {"layers": pew(1500, 260, 0.22, {"q": 0.22, "sub": 0.32, "air": 0.14}) + [V("saw", 750, 130, 0.2, 0.35, {"pr": 20.0, "voices": 3, "det": 12.0, "spread": 0.5, "cut0": 3000, "cut1": 700, "cr": 14.0, "q": 0.15})], "drive": 1.2, "rev": 0.18, "tail": 0.28},
+		"laser_mk3": {"layers": pew(2400, 520, 0.2, {"w": "square", "q": 0.5, "cut0": 8000.0, "cut1": 500.0, "cr": 22.0, "sub": 0.3, "shine": 0.16}) + [crack], "rev": 0.2, "tail": 0.28},
+		"laser_mk4": {"layers": pew(1300, 200, 0.26, {"voices": 4, "det": 18.0, "q": 0.4, "sub": 0.5, "sub_f": 140.0}) + pew(1200, 190, 0.18, {"t": 0.045, "v": 0.4, "sub": 0.0}), "drive": 1.3, "rev": 0.2, "tail": 0.22},
+		"laser_mk5": {"layers": pew(1000, 120, 0.28, {"voices": 4, "det": 26.0, "q": 0.45, "sub": 0.6, "air": 0.26}) + [V("noise", 0, 0, 0.26, 0.22, {"cut0": 3200, "mode": "bp", "q": 0.45, "vib": 45.0, "vd": 0.9, "k": 4.0}), crack], "drive": 1.7, "rev": 0.2, "tail": 0.22},
+		"laser_mk6": {"layers": pew(950, 95, 0.32, {"voices": 5, "det": 26.0, "q": 0.5, "sub": 0.85, "sub_f": 125.0, "shine": 0.2, "air": 0.22, "pr": 16.0, "k": 5.5}) + pew(900, 90, 0.22, {"t": 0.06, "v": 0.45, "sub": 0.35, "voices": 3, "k": 6.0}) + [crack], "drive": 1.6, "rev": 0.22, "tail": 0.25},
+	}
+
+
+## Estilo B (iteración 3): dispersión de fase ("piu" metálico), FM crepitante y grave discreto.
+func ammo_beam() -> Dictionary:
+	return {
+		"laser_mk1": {"layers": beam({"d": 0.15, "stages": 70, "ap": 0.6, "f0": 1500.0, "f1": 420.0, "index": 2.0, "crk": 0.1, "sub": 0.05}), "rev": 0.14, "tail": 0.2},
+		"laser_mk2": {"layers": beam({"d": 0.18, "stages": 95, "ap": 0.66, "f0": 1200.0, "f1": 320.0, "index": 2.6, "crk": 0.18, "sub": 0.1}), "rev": 0.16, "tail": 0.22},
+		"laser_mk3": {"layers": beam({"d": 0.2, "stages": 110, "ap": 0.7, "f0": 1600.0, "f1": 600.0, "ratio": 2.76, "index": 4.0, "crk": 0.35, "shine": 0.12, "sub": 0.1}), "rev": 0.18, "tail": 0.24},
+		"laser_mk4": {"layers": beam({"d": 0.24, "stages": 140, "ap": 0.75, "f0": 800.0, "f1": 190.0, "index": 4.5, "crk": 0.3, "sub": 0.18}) + beam({"t": 0.04, "v": 0.45, "d": 0.18, "stages": 120, "ap": 0.73, "f0": 760.0, "f1": 180.0, "sub": 0.0}), "drive": 1.25, "rev": 0.2, "tail": 0.24},
+		"laser_mk5": {"layers": beam({"d": 0.26, "stages": 165, "ap": 0.78, "f0": 640.0, "f1": 140.0, "ratio": 0.5, "index": 6.0, "crk": 0.6, "sub": 0.22, "body": 1.15}), "drive": 1.5, "rev": 0.2, "tail": 0.24},
+		"laser_mk6": {"layers": beam({"d": 0.3, "stages": 190, "ap": 0.8, "f0": 560.0, "f1": 110.0, "ratio": 0.5, "index": 7.0, "crk": 0.45, "shine": 0.14, "sub": 0.28, "body": 1.2}) + beam({"t": 0.055, "v": 0.5, "d": 0.22, "stages": 170, "ap": 0.79, "f0": 520.0, "f1": 105.0, "index": 6.0, "sub": 0.0}), "drive": 1.4, "rev": 0.22, "tail": 0.26},
+	}
+
+
+## Estilo C (iteración 4): núcleo denso de sierras saturadas con zumbido, crepitación FM y algo de dispersión.
+func ammo_plasma() -> Dictionary:
+	var m := {
+		# Mk-I: pulso corto y nítido.
+		"laser_mk1": {"layers": plasma({"d": 0.14, "f0": 1500.0, "f1": 900.0, "voices": 3, "det": 10.0, "sizzle": 0.18, "chirp": 0.6, "stages": 40, "sub": 0.0}), "drive": 1.3, "rev": 0.12, "tail": 0.18},
+		# Mk-II: más denso.
+		"laser_mk2": {"layers": plasma({"d": 0.17, "f0": 1250.0, "f1": 720.0, "voices": 4, "det": 13.0, "sizzle": 0.22, "chirp": 0.7, "stages": 50, "sub": 0.06}), "drive": 1.4, "rev": 0.14, "tail": 0.2},
+		# Mk-III: eléctrico, con crepitación marcada.
+		"laser_mk3": {"layers": plasma({"d": 0.19, "f0": 1400.0, "f1": 820.0, "voices": 4, "det": 14.0, "ratio": 2.76, "index": 5.0, "crk": 0.8, "sizzle": 0.4, "chirp": 0.8, "stages": 55, "sub": 0.06}), "drive": 1.4, "rev": 0.16, "tail": 0.22},
+		# Mk-IV: pesado, con segundo pulso.
+		"laser_mk4": {"layers": plasma({"d": 0.22, "f0": 950.0, "f1": 520.0, "voices": 5, "det": 18.0, "sizzle": 0.28, "sub": 0.12, "stages": 70, "ap": 0.65}) + plasma({"t": 0.045, "v": 0.45, "d": 0.16, "f0": 900.0, "f1": 500.0, "voices": 3, "sub": 0.0, "chirp": 0.0}), "drive": 1.6, "rev": 0.18, "tail": 0.22},
+		# Mk-V: plasma grueso y saturado.
+		"laser_mk5": {"layers": plasma({"d": 0.25, "f0": 780.0, "f1": 420.0, "voices": 6, "det": 22.0, "ratio": 0.5, "index": 6.0, "crk": 0.7, "sizzle": 0.35, "sub": 0.16, "stages": 80, "ap": 0.68, "cut0": 5000.0, "cut1": 1300.0}), "drive": 2.0, "rev": 0.18, "tail": 0.22},
+		# Mk-VI: el más masivo: núcleo ancho, doble impacto y cola corta.
+		"laser_mk6": {"layers": plasma({"d": 0.28, "f0": 660.0, "f1": 360.0, "voices": 7, "det": 26.0, "ratio": 0.5, "index": 7.0, "crk": 0.6, "sizzle": 0.38, "sub": 0.22, "stages": 90, "ap": 0.7, "cut0": 5200.0, "cut1": 1200.0}) + plasma({"t": 0.055, "v": 0.5, "d": 0.2, "f0": 620.0, "f1": 340.0, "voices": 5, "sub": 0.1, "chirp": 0.4}), "drive": 2.2, "rev": 0.2, "tail": 0.24},
+	}
+	return m
