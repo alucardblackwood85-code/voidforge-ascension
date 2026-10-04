@@ -20,9 +20,11 @@ const ASC_MAX := 10
 const NEXO_RATE := 587.0              # créditos equivalentes a 1 Cristal Nexo (Specter-X: 246.4K créditos o 420 Nexo)
 const LOOT_BOX_LIFE := 120.0          # segundos que permanece una caja de botín
 const MAX_ENEMIES := 160               # tope de enemigos vivos (rendimiento: más allá cae la tasa de fotogramas)
-const ENGAGE_BASE := 6                 # enemigos que atacan a la vez (+1 cada 8 niveles); el resto espera a distancia
+const ENGAGE_BASE := 6                 # enemigos que atacan a la vez (+1 cada 12 niveles); el resto espera a distancia
 const BEACON_SPAWN_CAP := 12           # enemigos vivos invocados por las balizas como máximo
 const ESCORT_MAX_MOTHERS := 2          # nodrizas atacando a la vez en la escolta
+const BEACON_RADIUS := 260.0           # radio de activación de las balizas
+const WAIT_GIVE_UP := 20.0             # segundos esperando turno antes de abandonar la persecución
 
 ## Alcance de disparo por arquetipo (unidades de plano; el láser del jugador alcanza LASER_RANGE).
 const ARCH_RANGE := {
@@ -650,7 +652,7 @@ const SPECIAL_DR_MAX := 0.15
 
 ## Tope de enemigos atacando a la vez (los que sobran esperan y entran cuando cae uno).
 static func engage_cap(level: int, asc: int = 0) -> int:
-	return ENGAGE_BASE + level / 8 + asc
+	return ENGAGE_BASE + level / 12 + asc
 
 
 static func shield_slots(ship_id: String) -> int:

@@ -7,6 +7,13 @@ extends Entity
 signal died
 
 var ship_id := ""
+# Rodeo de obstáculos: lado elegido (se mantiene un momento para no oscilar) y desatasco.
+var avoid_side := 0.0
+var avoid_t := 0.0
+var unstick_t := 0.0
+var unstick_dir := Vector2.ZERO
+var progress_t := 0.0
+var progress_pos := Vector2.ZERO
 var ship_class := ""
 var stats: Dictionary = {}
 var hull := 1.0
@@ -106,7 +113,26 @@ func _move(delta: float) -> void:
 			has_move_target = false
 		else:
 			# Como en DarkOrbit: velocidad constante y frenada seca al llegar.
-			desired = to / dist * clampf(dist / 40.0, 0.35, 1.0)
+			var dir := to / dist
+			avoid_t = maxf(0.0, avoid_t - delta)
+			if avoid_t <= 0.0:
+				avoid_side = 0.0
+			var steer: Vector2 = sector.steer_around(plane_pos, dir, radius, dist, avoid_side)
+			if steer != dir and avoid_side == 0.0:
+				avoid_side = signf(steer.dot(dir.orthogonal()))
+				avoid_t = 1.0
+			# Desatasco: si en 1.5 s apenas se ha movido (empujando contra un obstáculo), se aparta en perpendicular.
+			progress_t += delta
+			if progress_t >= 1.5:
+				if dist > 100.0 and plane_pos.distance_to(progress_pos) < 40.0 and unstick_t <= 0.0:
+					unstick_t = 0.8
+					unstick_dir = dir.orthogonal() * (1.0 if randf() < 0.5 else -1.0)
+				progress_t = 0.0
+				progress_pos = plane_pos
+			if unstick_t > 0.0:
+				unstick_t -= delta
+				steer = unstick_dir
+			desired = steer * clampf(dist / 40.0, 0.35, 1.0)
 	var top := max_speed()
 	if boost_time > 0.0:
 		boost_time -= delta

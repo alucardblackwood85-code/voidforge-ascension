@@ -23,6 +23,7 @@ $Profiles = @{
     "ships/specter_x" = "smooth+polish"
     "ships/seraph_prime" = "smooth+polish"
     "enemies/campana_vacio" = "soft"
+    "enemies/ferroclasto" = "raw"
     "enemies/leviatan_genesis" = "soft"
     "enemies/monje_graviton" = "soft"
 }

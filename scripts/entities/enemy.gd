@@ -22,6 +22,8 @@ var heading := 0.0
 var home := Vector2.ZERO
 var aggro := false
 var engaged := true        # dentro del tope de atacantes; si no, espera a distancia sin disparar
+var wait_t := 0.0          # segundos esperando turno fuera del tope
+var calm_t := 0.0          # tras abandonar la persecución no vuelve a detectar al jugador por sí solo
 var is_nest := false
 var is_elite := false
 var shot_sfx := "e_shot_light"
@@ -100,6 +102,9 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	# Acosadores: son la principal causa de muerte temprana; -20% de daño en el nivel 1 que se recupera en el 7.
 	if arch == "harasser" and level < 7:
 		dmg *= 0.8 + 0.2 * float(level - 1) / 6.0
+	# Enjambres: van en grupos grandes; -25% de daño antes del nivel 10.
+	if arch == "swarm" and level < 10:
+		dmg *= 0.75
 	# Alcance de disparo propio de cada especie (arquetipo ± pequeña variación estable por especie).
 	attack_range = float(def.get("range", GameData.ARCH_RANGE.get(def["arch"], 450.0))) * (0.92 + 0.16 * float(abs(hash(id)) % 100) / 100.0)
 	speed = float(def["vel"]) * GameData.SPEED_UNIT * 0.75
@@ -127,8 +132,19 @@ func set_engaged(v: bool) -> void:
 	if not v:
 		phased = false
 		draining = false
-		if state in ["phase", "burst", "reveal", "dash", "aim", "windup"]:
+		if state in ["phase", "burst", "reveal", "dash", "aim", "windup", "drain_aim"]:
 			_set_state("move")
+
+
+## Abandona la persecución y no vuelve a detectar al jugador por sí solo durante `t` segundos.
+func calm_down(t: float) -> void:
+	aggro = false
+	calm_t = t
+	wait_t = 0.0
+	leash_t = 0.0
+	draining = false
+	phased = false
+	_set_state("move")
 
 
 ## Al detectar al jugador avisa a su grupo cercano (los enemigos atacan en manada).
@@ -138,7 +154,7 @@ func set_aggro() -> void:
 	aggro = true
 	# Avisa sólo a los vecinos directos (sin cadena: antes se activaba medio mapa en cascada).
 	for e in sector.enemies:
-		if e != self and not e.aggro and not e.is_nest and e.plane_pos.distance_to(plane_pos) < 350.0:
+		if e != self and not e.aggro and not e.is_nest and e.calm_t <= 0.0 and e.plane_pos.distance_to(plane_pos) < 350.0:
 			e.aggro = true
 
 
@@ -171,7 +187,8 @@ func _process(delta: float) -> void:
 	if is_boss and aggro and p.alive:
 		_boss_tick(delta, p, dist)
 	# Detección: 700 u, +80 u por nivel de alerta (antes, con alerta 3 se activaba todo el mapa).
-	if not aggro and not sector.showcase and dist < 700.0 + 80.0 * sector.alert:
+	calm_t = maxf(0.0, calm_t - delta)
+	if not aggro and calm_t <= 0.0 and not sector.showcase and dist < 700.0 + 80.0 * sector.alert:
 		set_aggro()
 	# Abandona la persecución si el jugador se aleja (permite retirarse a recargar escudo).
 	if aggro and not is_nest and not has_meta("objective"):
@@ -186,10 +203,15 @@ func _process(delta: float) -> void:
 			leash_t = 0.0
 	var move := Vector2.ZERO
 	if aggro and p.alive and engaged:
+		wait_t = 0.0
 		move = _behave(delta, p, dist)
 	elif aggro and p.alive:
 		move = _keep_distance(p, dist, maxf(attack_range, 500.0) + 220.0, 0.5)
 		draining = false
+		# Tras 20 s esperando turno se cansa y vuelve a su zona (evita colas enormes detrás del jugador).
+		wait_t += delta
+		if wait_t > GameData.WAIT_GIVE_UP and not is_boss and not has_meta("objective"):
+			calm_down(15.0)
 	else:
 		move = _wander(delta)
 		draining = false
@@ -441,16 +463,23 @@ func _drainer(delta: float, p: PlayerShip, dist: float) -> Vector2:
 			if drain_tick <= 0.0:
 				drain_tick = 0.5
 				sector.cur_src = arch + "-directo"
-				p.take_damage(out_dmg() * 0.3)
+				p.take_damage(out_dmg() * (0.3 if is_boss else 0.24))
 				hp = minf(hp_max, hp + out_dmg() * 0.2)
 			if state_time > 1.2:
 				state_time = 0.0
 				sfx("e_drain", -5.0)
 		return _keep_distance(p, dist, 240.0, 0.4)
+	if state == "drain_aim":
+		# Aviso: haz tenue durante 0.5 s antes de conectar (da tiempo a alejarse).
+		if dist > 420.0:
+			_set_state("move")
+		elif state_time > 0.5:
+			_set_state("move")
+			draining = true
+			sfx("e_drain", -3.0)
+		return (p.plane_pos - plane_pos).normalized() * 0.5
 	if dist < 330.0:
-		draining = true
-		state_time = 0.0
-		sfx("e_drain", -3.0)
+		_set_state("drain_aim")
 	return (p.plane_pos - plane_pos).normalized()
 
 
@@ -647,6 +676,9 @@ func _draw() -> void:
 		draw_ring(240.0, Color(def["accent"], 0.3), 1.5)
 	if reflecting > 0.0:
 		draw_ring(radius * 1.45, Color(0.7, 0.9, 1.0, 0.5 + 0.4 * sin(anim * 30.0)), 4.0, height)
+	if state == "drain_aim" and p.alive:
+		var to_a := Iso.to_screen(p.plane_pos - plane_pos) + Vector2(0, -p.height)
+		draw_dashed_line(eye, to_a, Color(def["accent"], 0.25 + 0.6 * clampf(state_time / 0.5, 0.0, 1.0)), 2.0, 10.0)
 	if draining and p.alive:
 		var to := Iso.to_screen(p.plane_pos - plane_pos) + Vector2(0, -p.height)
 		var wob := Vector2(sin(anim * 25.0), cos(anim * 21.0)) * 4.0

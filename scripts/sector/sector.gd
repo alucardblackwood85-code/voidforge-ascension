@@ -68,6 +68,7 @@ var stat_objective_t := -1.0
 var stat_max_enemies := 0
 var stat_max_aggro := 0
 var stat_max_engaged := 0
+var stat_stuck_s := 0.0                 # segundos casi parado camino de la salida (bot)
 var beacon_spawned: Array = []           # enemigos invocados por las balizas (con tope de vivos)
 var engage_t := 0.0
 var stat_spawned := 0
@@ -211,9 +212,10 @@ func _generate() -> void:
 	gate_pos = cell_center(start_cell)
 
 	# M5: seis tipos de objetivo (escolta y comandante desde el nivel 3).
-	var kinds := ["limpieza", "baliza", "socorro"]
+	var kinds := ["limpieza", "socorro"]
+	# Balizas, comandante y escolta desde el nivel 3 (en los dos primeros el jugador aún va con la nave de serie).
 	if level >= 3:
-		kinds += ["comandante", "escolta"]
+		kinds += ["baliza", "comandante", "escolta"]
 	# Los nidos aguantan mucho: con la nave inicial sin mejorar no salen antes del nivel 4.
 	if level >= 4:
 		kinds.append("nidos")
@@ -539,6 +541,31 @@ func constrain(p: Vector2, r: float) -> Vector2:
 				if d.length_squared() < min_d * min_d:
 					p = a.plane_pos + d.normalized() * min_d
 	return p
+
+
+## Desvío alrededor del asteroide que haya en el camino (sin él, ir de frente contra uno deja la nave atascada).
+func steer_around(p: Vector2, dir: Vector2, r: float, max_d: float = INF, side_pref: float = 0.0, look: float = 220.0) -> Vector2:
+	var best: Asteroid = null
+	var best_along := INF
+	var c := cell_of(p)
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			for a in asteroids_by_cell.get(c + Vector2i(dx, dy), []):
+				if not is_instance_valid(a) or not a.alive:
+					continue
+				var to: Vector2 = a.plane_pos - p
+				var along := to.dot(dir)
+				var side := absf(to.dot(dir.orthogonal()))
+				if along > 0.0 and along < minf(look + a.radius, max_d) and side < a.radius * 0.85 + r + 6.0 and along < best_along:
+					best_along = along
+					best = a
+	if best == null:
+		return dir
+	# Rodea por el lado más cercano a la ruta.
+	var off := (best.plane_pos - p).dot(dir.orthogonal())
+	var side := side_pref if side_pref != 0.0 else (-1.0 if off > 0.0 else 1.0)
+	var tangent := dir.orthogonal() * side
+	return (dir * 0.35 + tangent).normalized()
 
 
 func is_blocked(p: Vector2, margin: float = 0.0) -> bool:
@@ -946,6 +973,11 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		commander = null
 		if objective == "comandante":
 			objective_progress += 1
+		# Sin su comandante, la escolta se dispersa.
+		for o in enemies:
+			if o.alive and o.aggro and not o.is_boss and not o.is_nest and o.plane_pos.distance_to(e.plane_pos) < 700.0:
+				o.calm_down(12.0)
+		hud.toast("Comandante abatido: su escolta se dispersa", 2.5, UiTheme.GOOD)
 	if not by_player:
 		_check_objective()
 		return
@@ -1696,6 +1728,8 @@ func _bot_nav(delta: float) -> void:
 	var repair_ready: bool = int(run_items.get("repair", 0)) > 0 and item_cd.get("repair", 0.0) <= 0.0
 	var want_out: bool = objective_done or cargo_used >= cargo_capacity() * 0.85 or (hp < 0.3 and not repair_ready) or (elapsed > 300.0 and hp < 0.5)
 	if want_out:
+		if player.velocity.length() < 20.0 and player.plane_pos.distance_to(gate_pos) > 200.0:
+			stat_stuck_s += delta
 		collect_target = null
 		player.move_target = gate_pos
 		player.has_move_target = true

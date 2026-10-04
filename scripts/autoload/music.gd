@@ -33,7 +33,8 @@ func _load(track: String) -> AudioStream:
 
 
 func play(track: String) -> void:
-	if track == current:
+	# Sin pantalla (pruebas automáticas) no suena nada; el driver de audio vacío nunca libera las pistas.
+	if track == current or DisplayServer.get_name() == "headless":
 		return
 	var stream := _load(track)
 	if stream == null:
@@ -77,3 +78,17 @@ func _process(_delta: float) -> void:
 	if length > LOOP_FADE * 2.0 and _active.get_playback_position() >= length - LOOP_FADE:
 		_looping = true
 		_crossfade_to(_active.stream, LOOP_FADE)
+
+
+## Para y suelta las pistas (antes de cerrar; si no, Godot avisa de recursos de audio sin liberar).
+func stop_all() -> void:
+	current = ""
+	_self_loop = false
+	for p in [_a, _b]:
+		if p:
+			p.stop()
+			p.stream = null
+
+
+func _exit_tree() -> void:
+	stop_all()

@@ -33,7 +33,8 @@ func setup(p_sector: Sector, p_kind: String, pos: Vector2) -> void:
 	height = 18.0 if kind == "convoy" else 0.0
 	anim = randf() * 10.0
 	if kind == "convoy":
-		hp_max = 40.0 * GameData.level_hp(100.0, sector.level)
+		# Más robusto en niveles altos (en el 40 caía en segundos): x1 en el nivel 1, x2 en el 40.
+		hp_max = 40.0 * GameData.level_hp(100.0, sector.level) * (1.0 + float(sector.level - 1) / 39.0)
 		hp = hp_max
 	sync_screen()
 
@@ -57,7 +58,7 @@ func _process(delta: float) -> void:
 		return
 	match kind:
 		"baliza":
-			if dist < 170.0:
+			if dist < GameData.BEACON_RADIUS:
 				if not started:
 					started = true
 					sector.hud.toast("Activando baliza… mantente cerca", 2.0, COLORS[kind])
@@ -70,8 +71,7 @@ func _process(delta: float) -> void:
 					_beacon_wave()
 				if progress >= 1.0:
 					_complete()
-			else:
-				progress = maxf(0.0, progress - delta / 12.0)
+			# Fuera del radio el progreso se pausa (antes bajaba y obligaba a no pelear).
 		"socorro":
 			if not started and dist < 260.0:
 				started = true
@@ -117,7 +117,7 @@ func _beacon_wave() -> void:
 	sector.beacon_spawned = sector.beacon_spawned.filter(func(e): return is_instance_valid(e) and e.alive)
 	var n := mini(2 + sector.level / 12, GameData.BEACON_SPAWN_CAP - sector.beacon_spawned.size())
 	if n > 0:
-		sector.beacon_spawned.append_array(sector.spawn_group_near(plane_pos + Vector2.from_angle(randf() * TAU) * 500.0, n, sector.level))
+		sector.beacon_spawned.append_array(sector.spawn_group_near(plane_pos + Vector2.from_angle(randf() * TAU) * 450.0, n, sector.level))
 
 
 func _convoy(delta: float, dist: float) -> void:
@@ -166,7 +166,7 @@ func _draw() -> void:
 		col = col.darkened(0.6)
 	match kind:
 		"baliza":
-			draw_ring(170.0, Color(col, 0.18 + 0.12 * pulse), 2.0)
+			draw_ring(GameData.BEACON_RADIUS, Color(col, 0.18 + 0.12 * pulse), 2.0)
 			_pylon(col, pulse)
 			if progress > 0.0 and not done:
 				draw_arc(Vector2(0, -60), 26.0, -PI * 0.5, -PI * 0.5 + TAU * progress, 32, col, 5.0)

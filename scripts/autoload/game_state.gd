@@ -33,7 +33,7 @@ func new_profile() -> Dictionary:
 		"seals": 0,
 		"xp": 0,
 		"materials": {"ferrita": 40, "plata": 30, "nanoespuma": 12, "resina_plasma": 8},
-		"ammo": {"mk1": 2500, "mk2": 300},
+		"ammo": {"mk1": 4000, "mk2": 300},
 		"items": {"repair": 3, "boost": 2, "mine": 0, "shield_cell": 0},
 		"ships": ["kestrel_a1"],
 		"current_ship": "kestrel_a1",
