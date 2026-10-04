@@ -149,6 +149,13 @@ func _migrate() -> void:
 			mods.resize(int(GameData.SHIPS[ship_id]["mods"]))
 			mods.fill(-1)
 			lo["mods"] = mods
+	# Las naves ganaron un 75% de ranuras de láser: una sola vez, llena las vacías de la nave actual con L-01.
+	if not data.get("laser_fill_v2", false):
+		data["laser_fill_v2"] = true
+		var cur_lo := ensure_loadout(data["current_ship"])
+		for i in cur_lo["lasers"].size():
+			if int(cur_lo["lasers"][i]) < 0:
+				cur_lo["lasers"][i] = int(add_laser("l01")["uid"])
 	data["version"] = SAVE_VERSION
 
 
@@ -589,6 +596,9 @@ func open_box(box_id: String) -> Dictionary:
 			if roll <= 0.0:
 				rarity = i
 				break
+	# La primera caja siempre da un módulo Raro: útil pero no perfecto (GDD 21.1).
+	if int(pity["opened"]) == 0:
+		rarity = 1
 	pity["since_relic"] = 0 if rarity >= 3 else int(pity["since_relic"]) + 1
 	pity["since_exotic"] = 0 if rarity == 4 else int(pity["since_exotic"]) + 1
 	pity["opened"] = int(pity["opened"]) + 1
@@ -752,6 +762,8 @@ func theoretical_dps(ship_id: String = "") -> float:
 func apply_run_result(result: Dictionary) -> void:
 	var loot: Dictionary = result.get("loot", {})
 	add_loot(loot)
+	if int(result.get("ammo_used", {}).get("mk2", 0)) > 0:
+		data["used_mk2"] = true
 	for k in ["ammo", "items"]:
 		var used: Dictionary = result.get(k + "_used", {})
 		for id in used.keys():

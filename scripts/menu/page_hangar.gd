@@ -17,12 +17,37 @@ func _ready() -> void:
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left.add_child(W.title("Naves"))
 	left.add_child(UiTheme.label("En propiedad: %d / %d" % [GameState.data["ships"].size(), GameData.SHIPS.size()], 14, UiTheme.MUTED))
+	if Prog.training_index() < Prog.TRAINING.size():
+		left.add_child(_training_card())
 	var g := W.grid(5, 8)
 	for id in GameData.SHIPS.keys():
 		g.add_child(_ship_card(id, id == sel))
 	left.add_child(W.scroll(g))
 	add_child(left)
 	add_child(_detail(sel))
+
+
+## Entrenamiento: paso actual, su recompensa y el progreso de los siete pasos.
+func _training_card() -> Control:
+	var i := Prog.training_index()
+	var step: Dictionary = Prog.TRAINING[i]
+	var done := Prog.training_done(step["id"])
+	var c := W.card(Color(0.05, 0.1, 0.12, 0.94), UiTheme.GOOD if done else UiTheme.ACCENT, 10)
+	var h := W.hbox(14)
+	c.add_child(h)
+	var v := W.vbox(2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_child(UiTheme.label("ENTRENAMIENTO %d/%d — %s" % [i + 1, Prog.TRAINING.size(), step["name"]], 16, UiTheme.ACCENT))
+	v.add_child(UiTheme.label(step["desc"], 13, UiTheme.TEXT))
+	v.add_child(UiTheme.label("Recompensa: " + Prog.training_reward_text(step["reward"]), 12, UiTheme.WARN))
+	h.add_child(v)
+	var b := W.button("Reclamar" if done else "En curso", func():
+		if Prog.claim_training():
+			Sfx.play("ui_select")
+			menu.refresh(), done, 150)
+	b.disabled = not done
+	h.add_child(b)
+	return c
 
 
 func _ship_card(id: String, selected: bool) -> Control:

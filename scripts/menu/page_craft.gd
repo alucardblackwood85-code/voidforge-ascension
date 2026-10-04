@@ -241,7 +241,7 @@ func _upgrades(list: VBoxContainer) -> void:
 			var v := W.vbox(3)
 			v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var where := GameState.equipped_on(list_key, int(it["uid"]))
-			v.add_child(UiTheme.label("%s  Nv %d/16%s" % [info["name"], lvl, "  [%s]" % GameData.SHIPS[where]["name"] if where != "" else ""], 15))
+			v.add_child(UiTheme.label("%s  Nv %d/16%s" % [info["name"], lvl, "  [%s]" % GameData.holder_name(where) if where != "" else ""], 15))
 			var bar := ProgressBar.new()
 			bar.max_value = 16
 			bar.value = lvl

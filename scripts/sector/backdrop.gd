@@ -15,7 +15,10 @@ var tex: Texture2D
 func _ready() -> void:
 	z_index = -20
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
-	var path := "res://assets/backgrounds/%s.png" % sector.theme_id
+	# Fondo propio del mapa si lo tiene; si no, el de su facción.
+	var path := "res://assets/backgrounds/%s.png" % sector.biome_id
+	if not ResourceLoader.exists(path):
+		path = "res://assets/backgrounds/%s.png" % sector.theme_id
 	if ResourceLoader.exists(path):
 		tex = load(path)
 	var r := RandomNumberGenerator.new()

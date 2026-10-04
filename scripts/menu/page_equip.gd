@@ -55,8 +55,10 @@ func _ship_view() -> void:
 	info.add_child(UiTheme.label(s["name"], 24, UiTheme.ACCENT))
 	var stats_txt := UiTheme.rich("", 15)
 	stats_txt.custom_minimum_size.x = 500
-	stats_txt.text = "Casco [b]%s[/b]  ·  Escudo [b]%s[/b]  ·  Velocidad [b]%d[/b]\nDaño [b]x%.2f[/b]  ·  DPS (x1) [b]%s[/b]  ·  Crítico [b]%d%%[/b]" % [
-		GameData.format_num(st["hull"]), GameData.format_num(st["shield"]), int(st["speed"]), st["dmg"],
+	# Total en grande y, al lado, base y bonificación de equipo, módulos y rango (GDD 17.2).
+	stats_txt.text = "%s  ·  %s\n%s  ·  %s\nDPS (x1) [b]%s[/b]  ·  Crítico [b]%d%%[/b]" % [
+		_stat("Casco", st["hull"], st["hull_base"]), _stat("Escudo", st["shield"], st["shield_base"]),
+		_stat("Velocidad", st["speed"], st["speed_base"]), _stat("Daño", st["dmg"], st["dmg_base"], true),
 		GameData.format_num(GameState.theoretical_dps(ship_id)), int(st["crit"] * 100)]
 	info.add_child(stats_txt)
 	info.add_child(W.button("Cambiar de nave (Hangar)", func(): menu.show_page("hangar")))
@@ -115,21 +117,48 @@ func _inventory(filter: String, ship_id: String) -> Control:
 			menu.refresh())
 		fb.add_child(b)
 	v.add_child(fb)
+	# Filtros (GDD 17.2): estado del objeto y, según el tipo, clase de generador o familia de módulo.
+	var sub: String = menu.state.get("equip_sub", "all")
+	var opts := [["all", "Todos"], ["free", "Libres"], ["other", "En otras naves"]]
+	if filter != "mods":
+		opts.append(["up", "Mejorables"])
+	if filter == "gens":
+		opts += [["shield", "Escudo"], ["speed", "Velocidad"]]
+	elif filter == "mods":
+		for fam in GameData.MODULE_FAMILIES.keys():
+			opts.append([fam, GameData.MODULE_FAMILIES[fam]["name"]])
+	if not opts.any(func(o): return o[0] == sub):
+		sub = "all"
+	var sb := HFlowContainer.new()
+	sb.add_theme_constant_override("h_separation", 6)
+	for o in opts:
+		var key: String = o[0]
+		var ob := Button.new()
+		ob.text = o[1]
+		ob.focus_mode = Control.FOCUS_NONE
+		ob.add_theme_font_size_override("font_size", 13)
+		if key == sub:
+			ob.add_theme_stylebox_override("normal", UiTheme.box(Color(0.1, 0.2, 0.3), UiTheme.ACCENT, 4, 1, 4))
+		ob.pressed.connect(func():
+			menu.state["equip_sub"] = key
+			menu.refresh())
+		sb.add_child(ob)
+	v.add_child(sb)
 	var flow := HFlowContainer.new()
 	flow.add_theme_constant_override("h_separation", 8)
 	flow.add_theme_constant_override("v_separation", 8)
 	var list_key := "modules" if filter == "mods" else filter
 	var count := 0
 	var items: Array = GameState.data[list_key].duplicate()
-	if filter == "mods":
-		items.sort_custom(func(a, b): return int(a["rarity"]) > int(b["rarity"]))
+	# Lo mejor primero: así lo útil queda arriba aunque el inventario crezca.
+	items.sort_custom(func(a, b): return _item_value(filter, a) > _item_value(filter, b))
 	for it in items:
 		var where := GameState.equipped_on(filter, int(it["uid"]))
-		if where == ship_id:
+		if where == ship_id or not _passes(filter, sub, it, where):
 			continue
 		var note := ""
 		if where != "":
-			note = "En %s" % GameData.SHIPS[where]["name"]
+			note = "En %s" % GameData.holder_name(where)
 		var info := W.item_info(filter, it)
 		var cmp := _compare(filter, it, ship_id)
 		if cmp != "":
@@ -153,6 +182,36 @@ Comparado con lo equipado: " + cmp
 	v.add_child(W.scroll(flow))
 	v.add_child(UiTheme.label("Suelta aquí un objeto de un slot para desequiparlo.", 12, UiTheme.MUTED))
 	return zone
+
+
+## "Casco 4.6K (base 4.2K +10%)": total, base y bonificación en verde o rojo.
+func _stat(name: String, total: float, base: float, mult: bool = false) -> String:
+	var pct := (total / maxf(0.001, base) - 1.0) * 100.0
+	var tot := ("x%.2f" % total) if mult else GameData.format_num(total)
+	var bas := ("x%.2f" % base) if mult else GameData.format_num(base)
+	if absf(pct) < 0.5:
+		return "%s [b]%s[/b]" % [name, tot]
+	return "%s [b]%s[/b] [color=#7d8aa3](base %s [/color][color=#%s]%+d%%[/color][color=#7d8aa3])[/color]" % [name, tot, bas, "6fd17a" if pct > 0 else "ff5a5a", int(round(pct))]
+
+
+## ¿Pasa el objeto el filtro `sub` del inventario?
+func _passes(filter: String, sub: String, it: Dictionary, where: String) -> bool:
+	match sub:
+		"free":
+			return where == ""
+		"other":
+			return where != ""
+		"up":
+			if int(it.get("level", 16)) >= 16:
+				return false
+			var cost := GameData.upgrade_cost(int(it["level"]), GameState.item_base_credits(filter, it["id"]))
+			return GameState.can_afford(cost)
+		"shield", "speed":
+			return GameData.GENERATORS[it["id"]]["type"] == sub
+		"all":
+			return true
+	# Familia de módulo
+	return filter == "mods" and it.get("family", "") == sub
 
 
 # --- Pet ----------------------------------------------------------------------------
@@ -250,7 +309,7 @@ func _pet_view() -> void:
 		var info := W.item_info("gens", it)
 		var where := GameState.equipped_on("gens", int(it["uid"]))
 		if where != "":
-			info["tip"] += "\n(Equipado en %s: se moverá al pet)" % GameData.SHIPS[where]["name"]
+			info["tip"] += "\n(Equipado en %s: se moverá al pet)" % GameData.holder_name(where)
 		var d := DragItem.make("drone_gens", int(it["uid"]), info)
 		d.activated.connect(func(item): _quick_equip(item.kind, item.uid))
 		gflow.add_child(d)

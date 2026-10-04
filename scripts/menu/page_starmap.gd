@@ -116,7 +116,9 @@ func _biome_card(id: String, selected: bool) -> Control:
 	var v := W.vbox(4)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.add_child(v)
-	var path := "res://assets/backgrounds/%s.png" % GameData.theme_of(id)
+	var path := "res://assets/backgrounds/%s.png" % id
+	if not ResourceLoader.exists(path):
+		path = "res://assets/backgrounds/%s.png" % GameData.theme_of(id)
 	if ResourceLoader.exists(path):
 		var t := TextureRect.new()
 		t.texture = load(path)

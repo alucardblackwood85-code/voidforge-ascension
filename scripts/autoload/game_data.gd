@@ -442,6 +442,11 @@ const PET_GEN_SHARE := 0.5
 const PET_RECIPE := {"credits": 36000}  # tienda: ~50 400 créditos u ~86 Cristales Nexo
 
 
+## Nombre de quien lleva equipado un objeto: una nave o el pet ("drone").
+static func holder_name(where: String) -> String:
+	return "Pet" if where == "drone" else String(SHIPS.get(where, {}).get("name", where))
+
+
 ## Forma del pet (1-5) según su nivel.
 static func pet_stage(lvl: int) -> int:
 	var st := 1

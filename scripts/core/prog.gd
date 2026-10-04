@@ -120,6 +120,90 @@ static func time_to_next_day() -> int:
 
 
 # --- Estado -----------------------------------------------------------------------------------
+# --- Entrenamiento: los primeros pasos guiados (GDD 21.1) --------------------------------------
+# Siete pasos en orden, cada uno con su recompensa; se ven en el Hangar hasta reclamarlos todos.
+const TRAINING := [
+	{"id": "extract", "name": "Primera incursión", "desc": "Cumple el objetivo de un sector y extrae por el portal.", "reward": {"credits": 3000}},
+	{"id": "upgrade", "name": "Mejora un láser", "desc": "En Crafteo → Mejoras 1-16, sube un láser al nivel 1 (la recompensa anterior lo paga).", "reward": {"credits": 5000}},
+	{"id": "mk2", "name": "Munición fuerte", "desc": "Usa munición Mk-II (tecla 2) contra un enemigo duro durante una incursión.", "reward": {"mk2": 500}},
+	{"id": "gens", "name": "Generadores", "desc": "Compra un generador en la Tienda y llena los 3 espacios de generador de tu Kestrel.", "reward": {"credits": 4000}},
+	{"id": "pet", "name": "Tu pet", "desc": "Compra un pet en la Tienda → Pet y elige su rol en Equipamiento → Pet.", "reward": {"pet_laser": "pet_stinger"}},
+	{"id": "module", "name": "Primer módulo", "desc": "Al llegar al rango Cabo Primero se abren los módulos: fabrica y abre tu primera caja.", "reward": {"nexo": 10}},
+	{"id": "forja", "name": "Forja Ferron", "desc": "Alcanza el nivel de amenaza 5 para abrir la Forja Ferron y sus especies fuertes.", "reward": {"credits": 10000, "nexo": 15}},
+]
+
+
+## ¿Se cumple el paso `id` del entrenamiento?
+static func training_done(id: String) -> bool:
+	var d: Dictionary = GameState.data
+	match id:
+		"extract":
+			return int(d["stats"].get("extractions", 0)) >= 1
+		"upgrade":
+			for it in d["lasers"]:
+				if int(it["level"]) >= 1:
+					return true
+			return false
+		"mk2":
+			return d.get("used_mk2", false)
+		"gens":
+			var gens: Array = GameState.ensure_loadout(d["current_ship"])["gens"]
+			return gens.filter(func(u): return int(u) >= 0).size() >= mini(3, gens.size())
+		"pet":
+			return d["unlocks"].get("pet", false)
+		"module":
+			return int(d["pity"].get("opened", 0)) >= 1
+		"forja":
+			return int(d.get("sector_max", 1)) >= 5
+	return false
+
+
+## Índice del primer paso sin reclamar (TRAINING.size() si ya terminó).
+static func training_index() -> int:
+	var claimed: Array = GameState.data.get("training_claimed", [])
+	for i in TRAINING.size():
+		if not claimed.has(TRAINING[i]["id"]):
+			return i
+	return TRAINING.size()
+
+
+## Reclama el paso actual si está cumplido.
+static func claim_training() -> bool:
+	var i := training_index()
+	if i >= TRAINING.size() or not training_done(TRAINING[i]["id"]):
+		return false
+	var r: Dictionary = TRAINING[i]["reward"]
+	for k in r.keys():
+		match k:
+			"mk2":
+				GameState.data["ammo"]["mk2"] = int(GameState.data["ammo"].get("mk2", 0)) + int(r[k])
+			"pet_laser":
+				GameState.add_drone_laser(r[k])
+			_:
+				GameState.add_amount(k, int(r[k]))
+	if not GameState.data.has("training_claimed"):
+		GameState.data["training_claimed"] = []
+	GameState.data["training_claimed"].append(TRAINING[i]["id"])
+	GameState.save_game()
+	GameState.changed.emit()
+	return true
+
+
+static func training_reward_text(r: Dictionary) -> String:
+	var parts: PackedStringArray = []
+	for k in r.keys():
+		match k:
+			"credits":
+				parts.append("%s créditos" % GameData.format_num(r[k]))
+			"nexo":
+				parts.append("%d Cristales Nexo" % r[k])
+			"mk2":
+				parts.append("%d cargas Mk-II" % r[k])
+			"pet_laser":
+				parts.append("láser %s" % GameData.DRONE_LASERS[r[k]]["name"])
+	return ", ".join(parts)
+
+
 static func ensure() -> void:
 	var d: Dictionary = GameState.data
 	if not d.has("missions"):

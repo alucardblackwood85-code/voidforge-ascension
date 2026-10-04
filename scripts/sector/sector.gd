@@ -438,6 +438,7 @@ func _process(delta: float) -> void:
 	_update_loot(delta)
 	_update_events(delta)
 	_update_tutorial(delta)
+	_context_hints(delta)
 	_update_music(delta)
 	Sfx.listener_pos = player.plane_pos
 	Sfx.has_listener = true
@@ -1659,6 +1660,48 @@ const TUTORIAL := [
 ]
 var tut_step := -2
 var tut_t := 0.0
+var hint_t := 1.0
+# Avisos que se muestran una sola vez (la primera vez que el jugador ve cada cosa).
+const CONTEXT_HINTS := {
+	"variant": "Ese enemigo tiene AURA: es una variante (dorada Boss, roja Mega, violeta Ultra, cian Uber). Más vida y más botín.",
+	"telegraph": "¡Zona marcada en el suelo! Sal de ella antes de que se llene: es un ataque fuerte.",
+	"shield": "Escudo agotado: se recarga solo si dejas de recibir daño unos segundos. Retírate un momento.",
+	"hull": "Casco bajo: pulsa %s para usar un kit de reparación (o extrae por el portal).",
+	"cargo": "Bodega casi llena: abre el inventario (I) para refinar o tirar materiales.",
+}
+
+
+func _context_hints(delta: float) -> void:
+	hint_t -= delta
+	if hint_t > 0.0 or demo or showcase or not player.alive:
+		return
+	hint_t = 0.5
+	var seen: Dictionary = GameState.data.get("hints_seen", {})
+	var show := ""
+	if not seen.has("telegraph"):
+		for fxn in fx_ground.get_children():
+			if fxn is Fx and fxn.kind == "telegraph" and fxn.plane_pos.distance_to(player.plane_pos) < 500.0:
+				show = "telegraph"
+				break
+	if show == "" and not seen.has("variant"):
+		for e in enemies:
+			if e.alive and e.variant != "base" and e.plane_pos.distance_to(player.plane_pos) < 700.0:
+				show = "variant"
+				break
+	if show == "" and not seen.has("shield") and player.shield <= 1.0 and elapsed > 5.0:
+		show = "shield"
+	if show == "" and not seen.has("hull") and player.hull < player.hull_max * 0.4:
+		show = "hull"
+	if show == "" and not seen.has("cargo") and cargo_used >= cargo_capacity() * 0.85:
+		show = "cargo"
+	if show == "":
+		return
+	seen[show] = true
+	GameState.data["hints_seen"] = seen
+	var text: String = CONTEXT_HINTS[show]
+	if show == "hull":
+		text = text % Controls.key_label("hotbar_2")
+	hud.toast(text, 5.0, UiTheme.WARN)
 
 
 func _update_tutorial(delta: float) -> void:
