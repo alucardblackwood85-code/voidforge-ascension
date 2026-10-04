@@ -299,7 +299,16 @@ func _run_metrics(sc: Dictionary, s: Sector, xp_before: int, real_ms: int) -> Di
 		avg += x
 	avg /= maxf(1.0, fr.size())
 	var p95: float = float(fr[int(fr.size() * 0.95)]) if fr.size() > 0 else 0.0
+	# Gasto de la incursión al coste de fabricarlo (créditos + materiales a su valor), para medir el neto.
+	var spent := 0.0
+	for k in s.ammo_used.keys():
+		spent += _recipe_value(GameData.AMMO[k]["recipe"]) * int(s.ammo_used[k]) / 100.0
+	for k in s.missiles_used.keys():
+		spent += _recipe_value(GameData.MISSILES[k]["recipe"]) * int(s.missiles_used[k])
+	for k in s.items_used.keys():
+		spent += _recipe_value(GameData.ITEMS[k]["recipe"]) * int(s.items_used[k])
 	return {
+		"spent": int(spent), "net_credits_min": int((int(s.loot.get("credits", 0)) - spent) / mins), "ammo_by": s.ammo_used.duplicate(),
 		"name": sc["name"], "biome": sc["biome"], "level": sc["level"], "ship": s.player.ship_id, "objective": s.objective,
 		"outcome": "death" if not s.player.alive else ("extract" if s.ended and s.elapsed < SIM_LIMIT - 1.0 else "timeout"),
 		"sim_s": int(s.elapsed), "kills": s.kills, "kills_min": snappedf(s.kills / mins, 0.1),
@@ -315,6 +324,14 @@ func _run_metrics(sc: Dictionary, s: Sector, xp_before: int, real_ms: int) -> Di
 		"power_pct": int(100.0 * _power() / _rec_power(int(sc["level"]))),
 		"frame_ms_avg": snappedf(avg / 1000.0, 0.01), "frame_ms_p95": snappedf(p95 / 1000.0, 0.01), "real_s": snappedf(real_ms / 1000.0, 0.1),
 	}
+
+
+func _recipe_value(rec: Dictionary) -> float:
+	var v := float(rec.get("credits", 0))
+	for k in rec.keys():
+		if GameData.MATERIALS.has(k):
+			v += GameData.MAT_VALUE[int(GameData.MATERIALS[k]["rarity"])] * float(rec[k])
+	return v
 
 
 # --- Fase 3: ritmo de progresión ---------------------------------------------------------------

@@ -1,0 +1,103 @@
+{
+  "kestrel_a1": {
+    "rx": 90,
+    "rz": 180
+  },
+  "falcon_r": {
+    "rx": 90,
+    "rz": 180
+  },
+  "bulwark_t1": {
+    "rx": 90,
+    "rz": 90
+  },
+  "_info": "Orientación de los modelos de TripoSG por nave (tools/tsg_orient.py); lo lee el perfil hy3d de tools/blender_ship.py.",
+  "aegis_r": {
+    "rx": 90,
+    "rz": 90
+  },
+  "ark_meridian": {
+    "rx": 90,
+    "rz": 270
+  },
+  "atlas_c4": {
+    "rx": 90,
+    "rz": 90
+  },
+  "bastion_h": {
+    "rx": 90,
+    "rz": 90
+  },
+  "centurion_p": {
+    "rx": 90,
+    "rz": 90
+  },
+  "event_horizon": {
+    "rx": 90,
+    "rz": 0
+  },
+  "fortress_omega": {
+    "rx": 90,
+    "rz": 90
+  },
+  "helios_d": {
+    "rx": 90,
+    "rz": 0
+  },
+  "imperator_vx": {
+    "rx": 90,
+    "rz": 270
+  },
+  "leviathan_k": {
+    "rx": 90,
+    "rz": 90
+  },
+  "mammoth_k": {
+    "rx": 90,
+    "rz": 90
+  },
+  "mule_c1": {
+    "rx": 90,
+    "rz": 270
+  },
+  "needle_s": {
+    "rx": 90,
+    "rz": 180
+  },
+  "nomad_c": {
+    "rx": 90,
+    "rz": 270
+  },
+  "nova_rex": {
+    "rx": 90,
+    "rz": 90
+  },
+  "orion_m7": {
+    "rx": 90,
+    "rz": 90
+  },
+  "prospector_ix": {
+    "rx": 90,
+    "rz": 90
+  },
+  "raptor_v2": {
+    "rx": 90,
+    "rz": 90
+  },
+  "seraph_prime": {
+    "rx": 90,
+    "rz": 0
+  },
+  "specter_x": {
+    "rx": 90,
+    "rz": 90
+  },
+  "titan_b1": {
+    "rx": 90,
+    "rz": 90
+  },
+  "vanguard_m": {
+    "rx": 90,
+    "rz": 90
+  }
+}

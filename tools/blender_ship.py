@@ -15,12 +15,31 @@ mode, src = argv[0], argv[1]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
-obj_path = os.path.join(src, "mesh.obj")
-if not os.path.exists(obj_path):
-    obj_path = os.path.join(src, "mesh.glb")  # TripoSR lo guarda como OBJ aunque se llame .glb
-    os.replace(obj_path, os.path.join(src, "mesh.obj")); obj_path = os.path.join(src, "mesh.obj")
-bpy.ops.wm.obj_import(filepath=obj_path)
-ship = [o for o in scene.objects if o.type == "MESH"][0]
+glb_path = os.path.join(src, "model.glb")   # modelos de Tripo (API): GLB con o sin materiales PBR
+keep_mat = False
+if os.path.exists(glb_path):
+    bpy.ops.import_scene.gltf(filepath=glb_path)
+    meshes = [o for o in scene.objects if o.type == "MESH"]
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
+    if len(meshes) > 1:
+        bpy.ops.object.join()
+    for o in [o for o in scene.objects if o.type != "MESH"]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    ship = meshes[0]
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    # Perfil «tex»: se conservan los materiales PBR de Tripo en vez de proyectar el sprite.
+    keep_mat = len(argv) > 8 and "tex" in argv[8].split("+")
+else:
+    obj_path = os.path.join(src, "mesh.obj")
+    if not os.path.exists(obj_path):
+        obj_path = os.path.join(src, "mesh.glb")  # TripoSR lo guarda como OBJ aunque se llame .glb
+        os.replace(obj_path, os.path.join(src, "mesh.obj")); obj_path = os.path.join(src, "mesh.obj")
+    bpy.ops.wm.obj_import(filepath=obj_path)
+    ship = [o for o in scene.objects if o.type == "MESH"][0]
 
 # Material con la textura horneada
 tex_path = os.path.join(src, "texture.png")
@@ -31,7 +50,8 @@ if os.path.exists(tex_path):
     mat.node_tree.links.new(img.outputs["Color"], bsdf.inputs["Base Color"])
 bsdf.inputs["Roughness"].default_value = 0.45
 bsdf.inputs["Metallic"].default_value = 0.35
-ship.data.materials.clear(); ship.data.materials.append(mat)
+if not keep_mat:
+    ship.data.materials.clear(); ship.data.materials.append(mat)
 bpy.context.view_layer.objects.active = ship
 bpy.ops.object.shade_smooth()
 
@@ -88,7 +108,7 @@ def _bounds():
     return mn, mx, vs
 
 
-def refine(thickness: float = 0.32, min_part: float = 0.03, smooth_iter: int = 6):
+def refine(thickness: float = 0.32, min_part: float = 0.03, smooth_iter: int = 6, mirror: bool = True):
     """Limpia un modelo de TripoSR ya orientado (proa +X, arriba +Z):
     quita piezas sueltas pequeñas, suaviza las abolladuras, recorta lo que cuelga por debajo de un
     grosor razonable (fracción de la mayor dimensión en planta) y lo hace simétrico de izquierda a derecha
@@ -126,6 +146,9 @@ def refine(thickness: float = 0.32, min_part: float = 0.03, smooth_iter: int = 6
         bpy.ops.mesh.bisect(plane_co=(0, 0, z_cut), plane_no=(0, 0, 1), clear_inner=True, use_fill=True)
         bpy.ops.object.mode_set(mode="OBJECT")
     # 4. Simetría izquierda/derecha: eje en el centro de la planta; se conserva la mitad que menos cuelga.
+    if not mirror:
+        bpy.ops.object.shade_smooth()
+        return
     mn, mx, vs = _bounds()
     cy = (mn.y + mx.y) / 2
     pos = [v.z for v in vs if v.y > cy]; neg = [v.z for v in vs if v.y < cy]
@@ -139,6 +162,210 @@ def refine(thickness: float = 0.32, min_part: float = 0.03, smooth_iter: int = 6
     mi.use_mirror_merge = True; mi.merge_threshold = 0.004
     bpy.ops.object.modifier_apply(modifier=mi.name)
     bpy.ops.object.shade_smooth()
+
+def metalize(voxel: float = 0.014, smooth_iter: int = 30, ratio: float = 0.1, tex_res: int = 1024, colors: int = 10):
+    """Pulido de superficie dura para los modelos «de plastilina» de TripoSR:
+    1) remallado por vóxeles + alisado laplaciano que conserva el volumen (adiós arrugas),
+    2) simplificación a caras planas (paneles) y sombreado por ángulo (aristas nítidas),
+    3) los colores del modelo original se hornean en la malla nueva (Cycles) y se reducen a una paleta
+       limpia de pocos tonos con un leve desenfoque (se van las arrugas «pintadas» en la textura),
+    4) material metálico con barniz y un entorno en degradado que da reflejos."""
+    global ship, mat, bsdf
+    import numpy as np
+    hi = ship
+    lo = hi.copy(); lo.data = hi.data.copy(); scene.collection.objects.link(lo)
+    lo.data.materials.clear()
+    bpy.ops.object.select_all(action="DESELECT")
+    lo.select_set(True); bpy.context.view_layer.objects.active = lo
+    rm = lo.modifiers.new("remesh", "REMESH"); rm.mode = "VOXEL"; rm.voxel_size = voxel
+    bpy.ops.object.modifier_apply(modifier=rm.name)
+    ls = lo.modifiers.new("lap", "LAPLACIANSMOOTH"); ls.lambda_factor = 0.9; ls.iterations = smooth_iter
+    ls.use_volume_preserve = True; ls.use_normalized = True
+    bpy.ops.object.modifier_apply(modifier=ls.name)
+    dc = lo.modifiers.new("dec", "DECIMATE"); dc.ratio = ratio
+    bpy.ops.object.modifier_apply(modifier=dc.name)
+    bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.015)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    # Horneado del color del original sobre la malla nueva.
+    img = bpy.data.images.new("bake", tex_res, tex_res)
+    m2 = bpy.data.materials.new("metal"); m2.use_nodes = True
+    n2 = m2.node_tree.nodes; b2 = n2.get("Principled BSDF")
+    tn = n2.new("ShaderNodeTexImage"); tn.image = img; n2.active = tn
+    lo.data.materials.append(m2)
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = 8
+    try:
+        bpy.context.preferences.addons["cycles"].preferences.compute_device_type = "CUDA"
+        bpy.context.preferences.addons["cycles"].preferences.get_devices()
+        scene.cycles.device = "GPU"
+    except Exception:
+        pass
+    bpy.ops.object.select_all(action="DESELECT")
+    hi.select_set(True); lo.select_set(True); bpy.context.view_layer.objects.active = lo
+    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, use_selected_to_active=True, cage_extrusion=0.03, max_ray_distance=0.12, margin=6)
+    # Paleta limpia: k-medias sobre los colores horneados y desenfoque suave.
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(tex_res, tex_res, 4)
+    rgb = px[:, :, :3]
+    valid = px[:, :, 3] > 0.5
+    sample = rgb[valid][:: max(1, int(valid.sum() / 20000))]
+    if len(sample) > colors:
+        rng = np.random.default_rng(1)
+        cent = sample[rng.choice(len(sample), colors, replace=False)]
+        for _ in range(12):
+            lab = np.argmin(((sample[:, None, :] - cent[None, :, :]) ** 2).sum(-1), axis=1)
+            for k in range(colors):
+                if (lab == k).any():
+                    cent[k] = sample[lab == k].mean(0)
+        flat = rgb.reshape(-1, 3)
+        lab = np.empty(len(flat), dtype=np.int32)
+        for i0 in range(0, len(flat), 262144):
+            lab[i0:i0 + 262144] = np.argmin(((flat[i0:i0 + 262144, None, :] - cent[None, :, :]) ** 2).sum(-1), axis=1)
+        q = cent[lab].reshape(rgb.shape)
+        # Mezcla 75% paleta / 25% original suavizado: conserva algo de matiz sin las arrugas.
+        k5 = np.ones(5) / 5.0
+        sm = rgb.copy()
+        for ax in (0, 1):
+            sm = np.apply_along_axis(lambda m: np.convolve(m, k5, mode="same"), ax, sm)
+        rgb = q * 0.6 + sm * 0.4
+        px[:, :, :3] = rgb
+        img.pixels[:] = px.ravel()
+    img.pack()
+    bpy.data.objects.remove(hi, do_unlink=True)
+    ship = lo; mat = m2; bsdf = b2
+    nt2 = m2.node_tree
+    sat = nt2.nodes.new("ShaderNodeHueSaturation"); sat.inputs["Saturation"].default_value = 1.35
+    nt2.links.new(tn.outputs["Color"], sat.inputs["Color"])
+    nt2.links.new(sat.outputs["Color"], b2.inputs["Base Color"])
+    b2.inputs["Metallic"].default_value = 0.6
+    b2.inputs["Roughness"].default_value = 0.38
+    # Brillo propio en los colores vivos (cabinas, luces, franjas), como en el perfil «polish».
+    hsv = nt2.nodes.new("ShaderNodeSeparateColor"); hsv.mode = "HSV"
+    nt2.links.new(tn.outputs["Color"], hsv.inputs["Color"])
+    mul = nt2.nodes.new("ShaderNodeMath"); mul.operation = "MULTIPLY"
+    nt2.links.new(hsv.outputs[1], mul.inputs[0]); nt2.links.new(hsv.outputs[2], mul.inputs[1])
+    mr = nt2.nodes.new("ShaderNodeMapRange")
+    mr.inputs["From Min"].default_value = 0.22; mr.inputs["From Max"].default_value = 0.55
+    mr.inputs["To Min"].default_value = 0.0; mr.inputs["To Max"].default_value = 2.5
+    nt2.links.new(mul.outputs[0], mr.inputs["Value"])
+    ec = "Emission Color" if "Emission Color" in b2.inputs else "Emission"
+    nt2.links.new(sat.outputs["Color"], b2.inputs[ec])
+    nt2.links.new(mr.outputs["Result"], b2.inputs["Emission Strength"])
+    for name in ("Coat Weight", "Clearcoat"):
+        if name in b2.inputs:
+            b2.inputs[name].default_value = 0.6
+    if "Coat Roughness" in b2.inputs:
+        b2.inputs["Coat Roughness"].default_value = 0.08
+    bpy.context.view_layer.objects.active = ship
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(32))
+    except Exception:
+        bpy.ops.object.shade_flat()
+    scene.render.engine = "BLENDER_EEVEE"
+    # Entorno en degradado (suelo oscuro, horizonte claro, cielo azulado): reflejos para el metal.
+    w = scene.world; w.use_nodes = True
+    wn = w.node_tree.nodes; wl = w.node_tree.links
+    for n in list(wn):
+        if n.type != "OUTPUT_WORLD":
+            wn.remove(n)
+    tc = wn.new("ShaderNodeTexCoord"); sx = wn.new("ShaderNodeSeparateXYZ"); cr = wn.new("ShaderNodeValToRGB")
+    bg = wn.new("ShaderNodeBackground"); bg.inputs["Strength"].default_value = 1.0
+    wl.new(tc.outputs["Generated"], sx.inputs[0]); wl.new(sx.outputs["Z"], cr.inputs["Fac"])
+    cr.color_ramp.elements[0].position = 0.35; cr.color_ramp.elements[0].color = (0.04, 0.05, 0.07, 1)
+    cr.color_ramp.elements[1].position = 0.75; cr.color_ramp.elements[1].color = (0.55, 0.65, 0.8, 1)
+    mid = cr.color_ramp.elements.new(0.52); mid.color = (1.0, 0.97, 0.92, 1)
+    wl.new(cr.outputs["Color"], bg.inputs["Color"])
+    out = next(n for n in wn if n.type == "OUTPUT_WORLD")
+    wl.new(bg.outputs["Background"], out.inputs["Surface"])
+
+
+def env_reflections():
+    """Entorno en degradado (suelo oscuro, horizonte claro, cielo azulado): reflejos para el metal."""
+    w = scene.world; w.use_nodes = True
+    wn = w.node_tree.nodes; wl = w.node_tree.links
+    for n in list(wn):
+        if n.type != "OUTPUT_WORLD":
+            wn.remove(n)
+    tc = wn.new("ShaderNodeTexCoord"); sx = wn.new("ShaderNodeSeparateXYZ"); cr = wn.new("ShaderNodeValToRGB")
+    bg = wn.new("ShaderNodeBackground"); bg.inputs["Strength"].default_value = 1.0
+    wl.new(tc.outputs["Generated"], sx.inputs[0]); wl.new(sx.outputs["Z"], cr.inputs["Fac"])
+    cr.color_ramp.elements[0].position = 0.35; cr.color_ramp.elements[0].color = (0.04, 0.05, 0.07, 1)
+    cr.color_ramp.elements[1].position = 0.75; cr.color_ramp.elements[1].color = (0.55, 0.65, 0.8, 1)
+    mid = cr.color_ramp.elements.new(0.52); mid.color = (1.0, 0.97, 0.92, 1)
+    wl.new(cr.outputs["Color"], bg.inputs["Color"])
+    out = next(n for n in wn if n.type == "OUTPUT_WORLD")
+    wl.new(bg.outputs["Background"], out.inputs["Surface"])
+
+
+def hy3d_material():
+    """Modelos de Hunyuan3D (geometría limpia, sin textura): el sprite original se proyecta desde arriba
+    sobre la nave ya orientada (proa +X, arriba +Z), ajustando su silueta (caja del alfa) a la de la malla.
+    Material metálico con barniz, colores algo más vivos y brillo propio en cabinas y luces."""
+    global mat, bsdf
+    import numpy as np
+    timg = next((n.image for n in mat.node_tree.nodes if n.type == "TEX_IMAGE"), None)
+    if timg is None:
+        return
+    w, h = timg.size
+    px = np.array(timg.pixels[:], dtype=np.float32).reshape(h, w, 4)   # fila 0 = abajo de la imagen
+    ys, xs = np.nonzero(px[:, :, 3] > 0.1)
+    u0, u1 = xs.min() / w, (xs.max() + 1) / w
+    v0, v1 = ys.min() / h, (ys.max() + 1) / h
+    # Las caras casi verticales (laterales, cúpulas, esferas) caen en el borde de la silueta o fuera de
+    # ella, donde el sprite es transparente (negro): se extienden los colores del sprite hacia fuera.
+    rgb = px[:, :, :3].copy()
+    known = px[:, :, 3] > 0.5
+    for _ in range(96):
+        if known.all():
+            break
+        acc = np.zeros_like(rgb); cnt = np.zeros(known.shape, dtype=np.float32)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            k = np.roll(known, (dy, dx), (0, 1))
+            acc += np.roll(rgb, (dy, dx), (0, 1)) * k[..., None]; cnt += k
+        new = (~known) & (cnt > 0)
+        rgb[new] = acc[new] / cnt[new][:, None]; known |= new
+    px[:, :, :3] = rgb
+    timg.pixels[:] = px.ravel()
+    timg.alpha_mode = "CHANNEL_PACKED"   # el color no se multiplica por el alfa
+    me = ship.data
+    vs = [v.co for v in me.vertices]
+    mnx = min(v.x for v in vs); mxx = max(v.x for v in vs); mny = min(v.y for v in vs); mxy = max(v.y for v in vs)
+    uv = me.uv_layers.new(name="top") if not me.uv_layers else me.uv_layers[0]
+    me.uv_layers.active = uv
+    for loop in me.loops:
+        co = me.vertices[loop.vertex_index].co
+        fu = (co.x - mnx) / max(1e-6, mxx - mnx)
+        fv = (co.y - mny) / max(1e-6, mxy - mny)
+        uv.data[loop.index].uv = (u0 + fu * (u1 - u0), v0 + fv * (v1 - v0))
+    nt = mat.node_tree
+    tex = next(n for n in nt.nodes if n.type == "TEX_IMAGE")
+    tex.extension = "EXTEND"
+    sat = nt.nodes.new("ShaderNodeHueSaturation"); sat.inputs["Saturation"].default_value = 1.2
+    nt.links.new(tex.outputs["Color"], sat.inputs["Color"])
+    nt.links.new(sat.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Metallic"].default_value = 0.55
+    bsdf.inputs["Roughness"].default_value = 0.33
+    for name in ("Coat Weight", "Clearcoat"):
+        if name in bsdf.inputs:
+            bsdf.inputs[name].default_value = 0.5
+    hsv = nt.nodes.new("ShaderNodeSeparateColor"); hsv.mode = "HSV"
+    nt.links.new(tex.outputs["Color"], hsv.inputs["Color"])
+    mul = nt.nodes.new("ShaderNodeMath"); mul.operation = "MULTIPLY"
+    nt.links.new(hsv.outputs[1], mul.inputs[0]); nt.links.new(hsv.outputs[2], mul.inputs[1])
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.inputs["From Min"].default_value = 0.3; mr.inputs["From Max"].default_value = 0.6
+    mr.inputs["To Min"].default_value = 0.0; mr.inputs["To Max"].default_value = 2.0
+    nt.links.new(mul.outputs[0], mr.inputs["Value"])
+    ec = "Emission Color" if "Emission Color" in bsdf.inputs else "Emission"
+    nt.links.new(sat.outputs["Color"], bsdf.inputs[ec])
+    nt.links.new(mr.outputs["Result"], bsdf.inputs["Emission Strength"])
+    bpy.context.view_layer.objects.active = ship
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(30))
+    except Exception:
+        pass
+    env_reflections()
+
 
 scene.render.engine = "BLENDER_EEVEE"
 scene.render.film_transparent = True
@@ -170,7 +397,20 @@ if mode == "axes":
         bpy.ops.render.render(write_still=True)
 elif mode == "spin":
     out = argv[2]
-    rx, ry, rz = (math.radians(float(a)) for a in argv[3:6])
+    rot_deg = [float(a) for a in argv[3:6]]
+    # Correcciones por nave de los modelos de Hunyuan3D (tools/hy3d_fix.json).
+    fix = {}
+    if len(argv) > 8 and ("hy3d" in argv[8] or "tex" in argv[8]):
+        import json
+        # Modelos de Tripo (GLB): orientación de tools/tripo_orient.py; los de TripoSG/Hunyuan, hy3d_fix.json.
+        fname = "tripo_fix.json" if os.path.exists(glb_path) else "hy3d_fix.json"
+        fpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), fname)
+        if os.path.exists(fpath):
+            fix = json.load(open(fpath, encoding="utf-8")).get(os.path.basename(os.path.normpath(src)), {})
+        for i, k in enumerate(("rx", "ry", "rz")):
+            if k in fix:
+                rot_deg[i] = float(fix[k])
+    rx, ry, rz = (math.radians(a) for a in rot_deg)
     frames = int(argv[6]) if len(argv) > 6 else 32
     elev = math.radians(float(argv[7])) if len(argv) > 7 else math.radians(55)
     ship.rotation_mode = "XYZ"
@@ -183,8 +423,30 @@ elif mode == "spin":
         refine(thickness=0.7, smooth_iter=10)  # orgánicos: sin recortar el cuerpo
     elif "smooth" in profile:
         refine(smooth_iter=14)  # superficie extra lisa
-    elif "raw" not in profile:
-        refine()  # simetría, sin piezas sueltas ni partes colgando, superficie suavizada
+    elif "raw" not in profile and "hy3d" not in profile:
+        refine(mirror="nomirror" not in profile)  # simetría, sin piezas sueltas ni partes colgando, superficie suavizada
+    if "metal" in profile:
+        normalize()
+        metalize()  # superficie dura metálica sin arrugas
+    if "hy3d" in profile:
+        normalize()
+        if "cut" in fix:
+            # Quita la copia en espejo de debajo: corta a esa altura, conserva lo de arriba y cierra la base.
+            mn, mx, vs = _bounds()
+            zc = mn.z + float(fix["cut"]) * (mx.z - mn.z)
+            bpy.context.view_layer.objects.active = ship
+            bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+            bpy.ops.mesh.bisect(plane_co=(0, 0, zc), plane_no=(0, 0, 1), clear_inner=True, use_fill=True)
+            bpy.ops.object.mode_set(mode="OBJECT")
+            normalize()
+        if "flat" in fix:
+            ship.scale.z = float(fix["flat"])
+            bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+            normalize()
+        hy3d_material()  # modelo de Hunyuan3D: sprite proyectado desde arriba + metal
+    if "tex" in profile:
+        normalize()
+        env_reflections()  # materiales PBR propios de Tripo: sólo el entorno para los reflejos
     normalize()
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=True)
     # Cámara fija mirando desde el sur de la pantalla (-Y), elevada `elev`.

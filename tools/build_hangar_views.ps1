@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Giros 3D de las naves para el hangar: vista semifrontal (elevación baja) y 36 fotogramas por vuelta.
 
@@ -13,7 +13,7 @@
   .\tools\build_hangar_views.ps1
   .\tools\build_hangar_views.ps1 -Only kestrel_a1 -Force
 #>
-param([string]$Only = "", [switch]$Force, [int]$Frames = 36, [int]$Elev = 18, [int]$FrameSize = 256)
+param([string]$Only = "", [switch]$Force, [int]$Frames = 36, [int]$Elev = 26, [int]$FrameSize = 256, [switch]$Hy3d)
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 $blender = "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
@@ -26,14 +26,21 @@ $cols = [Math]::Ceiling([Math]::Sqrt($Frames))
 $rows = [Math]::Ceiling($Frames / $cols)
 foreach ($m in Get-ChildItem (Join-Path $root "build/3d_models/ships") -Directory) {
     $id = $m.Name
+    # -Hy3d: modelo limpio con el sprite proyectado (perfil «hy3d»): el de Tripo (model.glb) si existe,
+    # si no el de TripoSG (mesh.obj). La orientación sale de tools/tripo_fix.json o hy3d_fix.json.
+    $hyDir = Join-Path $root "build/tripo_models/ships/$id"
+    if (-not (Test-Path (Join-Path $hyDir "model.glb"))) { $hyDir = Join-Path $root "build/tsg_models/ships/$id" }
+    $useHy = $Hy3d -and ((Test-Path (Join-Path $hyDir "mesh.obj")) -or (Test-Path (Join-Path $hyDir "model.glb")))
+    $modelDir = if ($useHy) { $hyDir } else { $m.FullName }
     if ($Only -and $id -ne $Only) { continue }
     $dest = Join-Path $outDir "$id.webp"
     if ((Test-Path $dest) -and -not $Force) { continue }
     $raw = Join-Path $root "build/hangar_frames/$id"
     $last = Join-Path $raw ("{0:D2}.png" -f ($Frames - 1))
     if ($Force -or -not (Test-Path $last)) {
-        $prof = if ($Profiles.ContainsKey($id)) { $Profiles[$id] } else { "refine" }
-        $p = Start-Process -FilePath $blender -ArgumentList @("-b", "-t", "8", "-P", (Join-Path $PSScriptRoot "blender_ship.py"), "--", "spin", $m.FullName, $raw, "0", "-90", "270", "$Frames", "$Elev", $prof) -WindowStyle Hidden -PassThru
+        $prof = if ($useHy) { "hy3d" } elseif ($Profiles.ContainsKey($id)) { $Profiles[$id] } else { "refine" }
+        $rot = if ($useHy) { @("0", "0", "0") } else { @("0", "-90", "270") }
+        $p = Start-Process -FilePath $blender -ArgumentList @("-b", "-t", "8", "-P", (Join-Path $PSScriptRoot "blender_ship.py"), "--", "spin", $modelDir, $raw, $rot[0], $rot[1], $rot[2], "$Frames", "$Elev", $prof) -WindowStyle Hidden -PassThru
         Start-Sleep -Milliseconds 400
         try { $p.PriorityClass = "BelowNormal" } catch {}
         $p.WaitForExit()
