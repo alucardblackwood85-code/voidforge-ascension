@@ -160,7 +160,12 @@ func _process(delta: float) -> void:
 
 # --- Dibujo -------------------------------------------------------------------------
 func _text(pos: Vector2, s: String, size: int = 16, color: Color = UiTheme.TEXT, align := HORIZONTAL_ALIGNMENT_LEFT, width: float = -1) -> void:
-	var f := ThemeDB.fallback_font
+	# Títulos y cifras grandes con la tipografía propia (en mayúsculas); el texto pequeño, legible.
+	var f: Font = ThemeDB.fallback_font
+	if size >= 15:
+		f = UiTheme.display_font()
+		s = s.to_upper()
+		size += 2
 	canvas.draw_string_outline(f, pos, s, align, width, size, 4, Color(0, 0, 0, 0.75))
 	canvas.draw_string(f, pos, s, align, width, size, color)
 
@@ -258,7 +263,7 @@ func _draw_canvas() -> void:
 	_text(Vector2(cx - 200, vs.y - 84), "Munición: %s (%s)  %s  ·  %d por andanada" % [am["name"], am["short"], GameData.format_num(sector.run_ammo.get(sector.active_ammo, 0)), p.lasers.size()], 14, am["color"], HORIZONTAL_ALIGNMENT_CENTER, 400)
 	var md: Dictionary = GameData.MISSILES[sector.active_missile]
 	var mleft := int(sector.run_missiles.get(sector.active_missile, 0))
-	_text(Vector2(cx - 200, vs.y - 102), "Misil: %s  %s  ·  %s" % [md["name"], GameData.format_num(mleft), ("listo" if sector.missile_cd <= 0.0 else "%.1f s" % sector.missile_cd) if mleft > 0 else "sin misiles"], 13, md["color"] if mleft > 0 else UiTheme.BAD, HORIZONTAL_ALIGNMENT_CENTER, 400)
+	_text(Vector2(cx - 200, vs.y - 102), "Misil: %s  %s  ·  %s" % [md["name"], GameData.format_num(mleft), ("listo" if sector.missile_cd <= 0.05 else "%.1f s" % sector.missile_cd) if mleft > 0 else "sin misiles"], 13, md["color"] if mleft > 0 else UiTheme.BAD, HORIZONTAL_ALIGNMENT_CENTER, 400)
 
 	# M11: tutorial
 	if hint != "":
@@ -362,18 +367,35 @@ func toggle_pause() -> void:
 		return
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = true
-	pause_panel = _modal("PAUSA")
+	pause_panel = _modal("Pausa")
 	var box: VBoxContainer = pause_panel.get_meta("box")
+	# Resumen de la incursión en curso.
+	var sumr := W.vbox(0)
+	sumr.add_child(W.stat_row("Sector", "%s · nivel %d" % [sector.biome["name"], sector.level], true))
+	sumr.add_child(W.stat_row("Tiempo", _time(int(sector.elapsed)), false))
+	sumr.add_child(W.stat_row("Bajas", str(sector.kills), true))
+	sumr.add_child(W.stat_row("Objetivo", sector.objective_text(), false, UiTheme.GOOD if sector.objective_done else UiTheme.TEXT))
+	sumr.add_child(W.stat_row("Créditos recogidos", GameData.format_num(int(sector.loot.get("credits", 0))), true, UiTheme.GOLD))
+	box.add_child(sumr)
 	var ctl := UiTheme.label("Clic izquierdo: fijar objetivo  ·  Clic derecho: mover (mantener para guiar)  ·  Ataque automático
 1-0: munición y objetos  ·  %s habilidad  ·  %s impulso  ·  %s pet  ·  %s mapa  ·  rueda: zoom" % [Controls.key_label("ability"), Controls.key_label("boost"), Controls.key_label("drone"), Controls.key_label("tactical_map")], 14, UiTheme.MUTED)
 	ctl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(ctl)
-	box.add_child(UiTheme.label("Sonido", 18, UiTheme.ACCENT))
+	box.add_child(UiTheme.heading("Sonido", 18))
 	box.add_child(AudioPanel.new())
-	box.add_child(UiTheme.button("Continuar", toggle_pause))
-	box.add_child(UiTheme.button("Abandonar sector", func():
-		toggle_pause()
-		sector._finish("death")))
+	var cont := W.btn("Continuar", toggle_pause, "primary", 0, 22)
+	cont.custom_minimum_size.y = 50
+	box.add_child(cont)
+	# Abandonar pide una segunda pulsación (se pierde el 90% del botín).
+	var quit := W.btn("Abandonar sector", func(): pass, "danger", 0, 16)
+	quit.pressed.connect(func():
+		if quit.has_meta("armed"):
+			toggle_pause()
+			sector._finish("death")
+		else:
+			quit.set_meta("armed", true)
+			quit.text = "¿SEGURO? PIERDES EL %d%% DEL BOTÍN · PULSA OTRA VEZ" % int(GameData.DEATH_LOOT_LOSS * 100))
+	box.add_child(quit)
 
 
 func _modal(title: String) -> Control:
@@ -385,12 +407,13 @@ func _modal(title: String) -> Control:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
+	panel.custom_minimum_size = Vector2(560, 0)
+	panel.add_theme_stylebox_override("panel", UiTheme.bevel(Color(0.06, 0.09, 0.16, 0.97), Color(0.02, 0.04, 0.08, 0.97), UiTheme.ACCENT.darkened(0.3), 16, 12))
 	center.add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	panel.add_child(box)
-	var l := UiTheme.label(title, 28, UiTheme.ACCENT)
+	var l := UiTheme.heading(title, 32, UiTheme.ACCENT)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(l)
 	dim.set_meta("box", box)

@@ -203,6 +203,9 @@ func _ready() -> void:
 			active_ammo = e["id"]
 			break
 	Music.play(theme_id)
+	# Depuración: --pause abre el menú de pausa a los 3 s (para capturas).
+	if OS.get_cmdline_user_args().has("--pause"):
+		get_tree().create_timer(3.0).timeout.connect(func(): hud.toggle_pause())
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
 	if OS.get_cmdline_user_args().has("--showinv"):

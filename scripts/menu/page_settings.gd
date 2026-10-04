@@ -12,18 +12,16 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 14)
 	var left := W.vbox(10)
 	left.custom_minimum_size.x = 620
-	var audio := W.card()
-	var av := W.vbox(10)
-	audio.add_child(av)
-	av.add_child(W.title("Sonido"))
+	var afr: Array = W.frame("Sonido")
+	var audio: Control = afr[0]
+	var av: VBoxContainer = afr[1]
 	av.add_child(AudioPanel.new())
 	av.add_child(UiTheme.label("La música cambia según el bioma y se intensifica en combate y contra el jefe.", 13, UiTheme.MUTED))
 	left.add_child(audio)
 	# Escala de interfaz
-	var sc := W.card()
-	var sv := W.vbox(6)
-	sc.add_child(sv)
-	sv.add_child(W.title("Pantalla", 18))
+	var sfr: Array = W.frame("Pantalla")
+	var sc: Control = sfr[0]
+	var sv: VBoxContainer = sfr[1]
 	var row := W.hbox(10)
 	row.add_child(UiTheme.label("Escala de interfaz", 15))
 	var slider := HSlider.new()
@@ -42,10 +40,9 @@ func _ready() -> void:
 	sv.add_child(UiTheme.label("Aumenta la escala en móviles y tabletas para pulsar los botones con comodidad.", 12, UiTheme.MUTED))
 	left.add_child(sc)
 	# Copia de seguridad
-	var bk := W.card()
-	var bv := W.vbox(6)
-	bk.add_child(bv)
-	bv.add_child(W.title("Copia de seguridad", 18))
+	var bfr: Array = W.frame("Copia de seguridad")
+	var bk: Control = bfr[0]
+	var bv: VBoxContainer = bfr[1]
 	bv.add_child(UiTheme.label("Exporta tu partida como código para guardarla o pasarla a otro dispositivo.", 12, UiTheme.MUTED))
 	var code := TextEdit.new()
 	code.custom_minimum_size = Vector2(0, 70)
@@ -58,7 +55,7 @@ func _ready() -> void:
 		DisplayServer.clipboard_set(code.text)
 		Sfx.play("ui_click")
 		_toast(bv, "Código copiado al portapapeles.", UiTheme.GOOD)
-	brow.add_child(W.button("Exportar y copiar", do_export, true, 180))
+	brow.add_child(W.btn("Exportar y copiar", do_export, "primary", 200))
 	var do_import := func():
 		var dlg := ConfirmationDialog.new()
 		dlg.dialog_text = "¿Reemplazar la partida actual por la del código?"
@@ -70,23 +67,22 @@ func _ready() -> void:
 				_toast(bv, "Código no válido.", UiTheme.BAD))
 		menu.add_child(dlg)
 		dlg.popup_centered()
-	brow.add_child(W.button("Importar", do_import, false, 140))
+	brow.add_child(W.btn("Importar", do_import, "normal", 150))
 	bv.add_child(brow)
 	left.add_child(bk)
 	add_child(W.scroll(left))
 
 	var right := W.vbox(10)
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var ctl := W.card()
-	var cv := W.vbox(6)
-	ctl.add_child(cv)
+	var cfr: Array = W.frame("Controles")
+	var ctl: Control = cfr[0]
+	var cv: VBoxContainer = cfr[1]
 	var th := W.hbox(10)
-	th.add_child(W.title("Controles"))
 	th.add_child(W.spacer())
 	var reset_keys := func():
 		Controls.reset_keys()
 		menu.refresh()
-	th.add_child(W.button("Teclas por defecto", reset_keys, false, 160))
+	th.add_child(W.btn("Teclas por defecto", reset_keys, "normal", 200, 14))
 	cv.add_child(th)
 	cv.add_child(UiTheme.rich("[b]Clic izquierdo[/b]: fijar objetivo o recoger cajas · [b]Clic derecho[/b]: mover la nave · [b]Rueda[/b]: zoom · [b]Esc[/b]: soltar objetivo / pausa\nAtaque automático: una andanada cada %.1f s con la munición seleccionada." % GameData.VOLLEY_INTERVAL, 14))
 	cv.add_child(UiTheme.label("Haz clic en una tecla y pulsa la nueva (Esc cancela). Si ya estaba en uso, se intercambian.", 12, UiTheme.MUTED))
@@ -98,23 +94,23 @@ func _ready() -> void:
 		g.add_child(l)
 		var b := Button.new()
 		b.text = Controls.key_label(action)
-		b.custom_minimum_size = Vector2(120, 32)
+		UiTheme.style_button(b, "normal")
+		b.custom_minimum_size = Vector2(120, 34)
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(_start_wait.bind(action, b))
 		g.add_child(b)
 	cv.add_child(g)
 	right.add_child(ctl)
-	var danger := W.card(Color(0.1, 0.04, 0.05, 0.9), UiTheme.BAD)
-	var dv := W.vbox(6)
-	danger.add_child(dv)
-	dv.add_child(UiTheme.label("Zona de peligro", 18, UiTheme.BAD))
+	var dfr: Array = W.frame("Zona de peligro", UiTheme.BAD)
+	var danger: Control = dfr[0]
+	var dv: VBoxContainer = dfr[1]
 	var reset := func():
 		var dlg := ConfirmationDialog.new()
 		dlg.dialog_text = "¿Borrar todo el progreso guardado? (se conservan los ajustes de sonido)"
 		dlg.confirmed.connect(GameState.reset_profile)
 		menu.add_child(dlg)
 		dlg.popup_centered()
-	dv.add_child(W.button("Reiniciar todo el progreso", reset))
+	dv.add_child(W.btn("Reiniciar todo el progreso", reset, "danger", 280))
 	right.add_child(danger)
 	right.add_child(UiTheme.label("Versión %s · guardado local (usa la copia de seguridad para no perderlo)" % ProjectSettings.get_setting("application/config/version"), 13, UiTheme.MUTED))
 	add_child(right)

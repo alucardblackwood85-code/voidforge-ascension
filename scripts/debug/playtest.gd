@@ -251,6 +251,7 @@ func _phase_combat() -> void:
 			_equip(sc["ship"], sc["laser"], sc["lvl"], sc["gen"], sc["glvl"], sc["mods"])
 			GameState.data["ammo"]["mk1"] = 100000
 			GameState.data["ammo"]["mk2"] = 20000
+			GameState.data["missiles"] = {"r1": 200, "r2": 200, "r3": 100}
 			GameState.data["items"]["repair"] = 10
 			GameState.data["items"]["shield_cell"] = 6
 		GameState.data["sector_max"] = 99
@@ -307,7 +308,7 @@ func _run_metrics(sc: Dictionary, s: Sector, xp_before: int, real_ms: int) -> Di
 		"credits": int(s.loot.get("credits", 0)), "credits_min": int(s.loot.get("credits", 0) / mins), "nexo": int(s.loot.get("nexo", 0)),
 		"materials": mats, "cargo_cap": s.cargo_capacity(), "cargo_full_s": int(s.stat_cargo_full_t), "objective_s": int(s.stat_objective_t),
 		"ammo_used": ammo, "ammo_min": int(ammo / mins), "items_used": s.stat_items_used, "refined": s.stat_refined,
-		"boxes_left": s.boxes.size(), "max_enemies": s.stat_max_enemies, "max_aggro": s.stat_max_aggro, "max_engaged": s.stat_max_engaged, "stuck_s": int(s.stat_stuck_s), "variants": s.stat_variants, "spawned": s.stat_spawned, "dps_theory": int(GameState.theoretical_dps()),
+		"boxes_left": s.boxes.size(), "max_enemies": s.stat_max_enemies, "max_aggro": s.stat_max_aggro, "max_engaged": s.stat_max_engaged, "stuck_s": int(s.stat_stuck_s), "variants": s.stat_variants, "missiles": s.stat_missiles, "missile_hits": s.stat_missile_hits, "spawned": s.stat_spawned, "dps_theory": int(GameState.theoretical_dps()),
 		"boss": "muerto" if s.boss_dead else ("%d%%" % int(100.0 * s.boss.hp / s.boss.hp_max) if is_instance_valid(s.boss) else "-"),
 		"obj_progress": "%d/%d" % [s.objective_progress, s.objective_target], "clear_pct": s._clear_percent(),
 		"dmg_by": s.dmg_by, "pois": s.run_pois, "events": s.run_events, "boxes": s.run_boxes, "elites": s.run_elites, "legendary": s.run_legendary,

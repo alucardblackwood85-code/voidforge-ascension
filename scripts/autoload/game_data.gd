@@ -199,17 +199,18 @@ const ASCENT_SKILLS := {
 # --- Misiles teledirigidos ------------------------------------------------------------------
 # El lanzamisiles dispara solo 1 misil cada MISSILE_INTERVAL s al objetivo fijado. Cada misil tiene
 # daño base (varía ±20% por impacto, 8% de crítico x1,5), precisión (probabilidad de acertar, menor
-# contra blancos rápidos) y, los caros, daño en área. Receta = lote de 10.
+# contra blancos rápidos) y, los caros, daño en área. Receta = lote de 10 (el R-1 cuesta ~15-20K créditos
+# por hora de juego, como la munición básica: el lanzamisiles dispara unos 900 misiles por hora).
 const MISSILE_INTERVAL := 4.0
 const MISSILE_RANGE := 820.0
 const MISSILE_LOT := 10
 const MISSILES := {
-	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 900.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 400, "ferrita": 10}},
-	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 1600.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 1200, "ferrita": 10, "plata": 10}},
-	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 2800.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 3000, "titanio": 8}},
-	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 2400.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 4500, "cobalto": 8, "paladio": 1}},
-	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 4200.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 9000, "titanio": 10, "iridio": 2}},
-	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6500.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 20000, "osmio": 2, "neutronio": 1}},
+	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 900.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 100, "ferrita": 3}},
+	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 1600.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 300, "ferrita": 3, "plata": 3}},
+	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 2800.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 800, "titanio": 3}},
+	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 2400.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 1200, "cobalto": 3, "paladio": 1}},
+	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 4200.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 2500, "titanio": 4, "iridio": 1}},
+	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6500.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 6000, "osmio": 1, "neutronio": 1}},
 }
 
 

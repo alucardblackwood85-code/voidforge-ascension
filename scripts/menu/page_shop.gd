@@ -1,37 +1,60 @@
 class_name PageShop
-extends VBoxContainer
-## TIENDA: compra con créditos (y Cristales Nexo en objetos especiales). Subventanas por categoría.
-## Todo lo que se compra aquí también puede fabricarse con materiales en Crafteo.
+extends HBoxContainer
+## TIENDA al estilo de los MMO de naves: categorías a la izquierda y, a la derecha, tarjetas con el objeto
+## sobre un brillo de su color, una descripción breve, sus datos y el precio en créditos O Cristales Nexo.
+## Todo lo que se compra aquí también puede fabricarse con materiales en Fabricación.
 
-const TABS := [["ship", "NAVES"], ["laser", "LÁSERES"], ["gen", "GENERADORES"], ["ammo", "MUNICIÓN"], ["item", "CONSUMIBLES"], ["drone_laser", "PET"]]
+const TABS := [["ship", "Naves"], ["laser", "Láseres"], ["gen", "Generadores"], ["ammo", "Munición"], ["missile", "Misiles"], ["item", "Consumibles"], ["drone_laser", "Pet"]]
 
 var menu: StartMenu
 
 
+## Brillo radial detrás del icono del objeto.
+class Glow extends Control:
+	var color := UiTheme.ACCENT
+	var tex: Texture2D
+
+	func _draw() -> void:
+		var c := size * 0.5
+		for k in 6:
+			draw_circle(c, minf(size.x, size.y) * (0.5 - k * 0.07), Color(color, 0.05 + k * 0.025))
+		if tex:
+			var s := minf(size.x, size.y) * 0.92
+			draw_texture_rect(tex, Rect2(c - Vector2(s, s) * 0.5, Vector2(s, s)), false)
+
+
 func _ready() -> void:
-	add_theme_constant_override("separation", 10)
-	var tabs := W.hbox(6)
-	for t in TABS:
-		var b := Button.new()
-		b.text = "  %s  " % t[1]
-		b.focus_mode = Control.FOCUS_NONE
-		if menu.state["shop_tab"] == t[0]:
-			b.add_theme_stylebox_override("normal", UiTheme.box(Color(0.1, 0.2, 0.3), UiTheme.ACCENT, 4, 2, 8))
-		var id: String = t[0]
-		b.pressed.connect(func():
-			menu.state["shop_tab"] = id
-			menu.refresh())
-		tabs.add_child(b)
-	add_child(tabs)
-	var g := W.grid(5, 10)
+	add_theme_constant_override("separation", 12)
 	var kind: String = menu.state["shop_tab"]
-	# El pet se compra aquí (no viene de inicio); debajo, sus láseres.
+	if not TABS.any(func(t): return t[0] == kind):
+		kind = "ship"
+	# Categorías
+	var cat: Array = W.frame("Tienda")
+	cat[0].custom_minimum_size.x = 230
+	for t in TABS:
+		var id: String = t[0]
+		var b := W.btn(t[1], func():
+			menu.state["shop_tab"] = id
+			menu.refresh(), "primary" if id == kind else "normal", 0, 17)
+		b.custom_minimum_size.y = 44
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		cat[1].add_child(b)
+	var note := UiTheme.label("Paga con créditos o con Cristales Nexo. Todo se puede fabricar también en Fabricación.", 12, UiTheme.MUTED)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cat[1].add_child(note)
+	add_child(cat[0])
+	# Artículos
+	var title: String = TABS.filter(func(t): return t[0] == kind)[0][1]
+	var fr: Array = W.frame(title)
+	fr[0].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var g := W.grid(4, 10)
 	if kind == "drone_laser":
 		g.add_child(_product("pet", "pet"))
 	for id in _ids(kind):
 		if GameState.in_shop(kind, id):
 			g.add_child(_product(kind, id))
-	add_child(W.scroll(g))
+	fr[1].add_child(W.scroll(g))
+	add_child(fr[0])
 
 
 func _ids(kind: String) -> Array:
@@ -44,6 +67,8 @@ func _ids(kind: String) -> Array:
 			return GameData.GENERATORS.keys()
 		"ammo":
 			return GameData.AMMO.keys()
+		"missile":
+			return GameData.MISSILES.keys()
 		"item":
 			return GameData.ITEMS.keys()
 		"drone_laser":
@@ -54,27 +79,26 @@ func _ids(kind: String) -> Array:
 func _product(kind: String, id: String) -> Control:
 	var name := ""
 	var sub := ""
-	var desc := ""
-	var col := UiTheme.BORDER
+	var stats := ""
+	var col := UiTheme.ACCENT
 	var tex: Texture2D = null
 	var owned_txt := ""
+	var owned := false
 	match kind:
 		"ship":
 			var s: Dictionary = GameData.SHIPS[id]
 			name = ("★ " if s.get("special", false) else "") + s["name"]
 			sub = GameData.SHIP_CLASSES[s["class"]]["name"]
 			var gtxt := ("%d+%d" % [s["gens"], GameData.shield_slots(id)]) if GameData.shield_slots(id) > 0 else str(s["gens"])
-			var drtxt := ("  ·  blindaje -%d%%" % int(round(GameData.special_dr(id) * 100.0))) if GameData.special_dr(id) > 0.0 else ""
-			desc = "Casco %s · Vel %d · Daño x%.2f\n%d láseres · %s gen. · %d mód.%s" % [GameData.format_num(s["hull"]), s["speed"], s["dmg"], s["lasers"], gtxt, s["mods"], drtxt]
-			col = UiTheme.WARN if s.get("special", false) else UiTheme.BORDER
-			tex = W.icon("ship", id)
-			if GameState.data["ships"].has(id):
-				owned_txt = "En propiedad"
+			stats = "Casco %s · Vel %d · Daño x%.2f\n%d láseres · %s gen. · %d mód." % [GameData.format_num(s["hull"]), s["speed"], s["dmg"], s["lasers"], gtxt, s["mods"]]
+			col = UiTheme.GOLD if s.get("special", false) else Color("4aa3ff")
+			tex = ShipSpin.frame_tex(id, 21)
+			owned = GameState.data["ships"].has(id)
 		"laser":
 			var d: Dictionary = GameData.LASERS[id]
 			name = d["name"]
 			sub = GameData.ITEM_RARITY_NAMES[d["rarity"]]
-			desc = "Daño/andanada %d%s\n+ %s\n- %s" % [int(GameState.laser_volley_damage(d, 0) * int(d["shots"])), " (%d rayos)" % d["shots"] if int(d["shots"]) > 1 else "", d["adv"], d["dis"]]
+			stats = "Daño/andanada %d%s\n+ %s  ·  − %s" % [int(GameState.laser_volley_damage(d, 0) * int(d["shots"])), " (%d rayos)" % d["shots"] if int(d["shots"]) > 1 else "", d["adv"], d["dis"]]
 			col = GameData.ITEM_RARITY_COLORS[d["rarity"]]
 			tex = W.icon("laser", id)
 			owned_txt = _count_owned("lasers", id)
@@ -82,7 +106,7 @@ func _product(kind: String, id: String) -> Control:
 			var g: Dictionary = GameData.GENERATORS[id]
 			name = g["name"]
 			sub = "Escudo" if g["type"] == "shield" else "Velocidad"
-			desc = "%s\n%s" % [W.gen_stats(g["stats"]), g["trait"]]
+			stats = "%s\n%s" % [W.gen_stats(g["stats"]), g["trait"]]
 			col = Color("4aa3ff") if g["type"] == "shield" else Color("ffd84a")
 			tex = W.icon("gen", id)
 			owned_txt = _count_owned("gens", id)
@@ -90,52 +114,74 @@ func _product(kind: String, id: String) -> Control:
 			var a: Dictionary = GameData.AMMO[id]
 			name = "%s (%s)" % [a["name"], a["short"]]
 			sub = "Lote de 100"
-			desc = "Multiplicador de daño %s.\nEn almacén: %s" % [a["short"], GameData.format_num(GameState.data["ammo"].get(id, 0))]
+			stats = "Multiplicador de daño %s · en almacén %s" % [a["short"], GameData.format_num(GameState.data["ammo"].get(id, 0))]
 			col = a["color"]
 			tex = W.icon("ammo", id)
+		"missile":
+			var md: Dictionary = GameData.MISSILES[id]
+			name = md["name"]
+			sub = "Lote de %d" % GameData.MISSILE_LOT
+			stats = "Daño %s · precisión %d%%%s\nEn almacén %s" % [GameData.format_num(md["dmg"]), int(md["acc"] * 100), (" · área %d u" % int(md["splash"])) if float(md["splash"]) > 0.0 else "", GameData.format_num(GameState.data["missiles"].get(id, 0))]
+			col = md["color"]
+			tex = W.icon("missile", id)
 		"item":
 			var it: Dictionary = GameData.ITEMS[id]
 			name = it["name"]
 			sub = "Consumible" if it["kind"] == "instant" else "Desplegable"
-			desc = "%s\nTienes: %d" % [it["desc"], int(GameState.data["items"].get(id, 0))]
+			stats = "%s · tienes %d" % [it["desc"], int(GameState.data["items"].get(id, 0))]
 			col = it["color"]
 			tex = W.icon("item", id)
-		"pet":
-			name = "Pet acompañante"
-			sub = "Compañero"
-			desc = "Te sigue y dispara a tu objetivo (o recoge botín). Evoluciona en 5 formas al subir de nivel: +1 láser por forma y generadores de escudo desde la 3.ª."
-			col = Color("5affc8")
-			tex = SpriteLib.get_tex("drone", "pet_s1")
-			if tex == null:
-				tex = SpriteLib.get_tex("drone", "drone")
 		"drone_laser":
 			var dl: Dictionary = GameData.DRONE_LASERS[id]
 			name = dl["name"]
 			sub = "Láser de pet"
-			desc = dl["desc"]
+			stats = dl["desc"]
 			col = dl["color"]
 			tex = W.icon("drone_laser", id)
 			owned_txt = _count_owned("drone_lasers", id)
-	var c := W.card(Color(0.05, 0.08, 0.13, 0.94), col.darkened(0.15), 10)
-	c.custom_minimum_size = Vector2(296, 0)
-	var v := W.vbox(4)
+		"pet":
+			name = "Pet acompañante"
+			sub = "Compañero"
+			stats = "5 formas al subir de nivel: +1 láser por forma y generadores de escudo desde la 3.ª"
+			col = Color("5affc8")
+			tex = SpriteLib.get_tex("drone", "pet_s1")
+			if tex == null:
+				tex = SpriteLib.get_tex("drone", "drone")
+			owned = GameState.data["unlocks"].get("pet", false)
+	var c := PanelContainer.new()
+	c.add_theme_stylebox_override("panel", UiTheme.bevel(Color(0.07, 0.1, 0.17, 0.96), Color(0.03, 0.05, 0.09, 0.96), col.darkened(0.35), 8, 8))
+	c.custom_minimum_size = Vector2(300, 0)
+	var v := W.vbox(5)
 	c.add_child(v)
-	v.add_child(W.pic(tex, Vector2(0, 110)))
-	var h := W.hbox(6)
-	h.add_child(UiTheme.label(name, 16, col.lightened(0.3)))
-	h.add_child(W.spacer())
-	h.add_child(UiTheme.label(sub, 12, UiTheme.MUTED))
-	v.add_child(h)
-	var dl_label := UiTheme.label(desc, 12, UiTheme.TEXT)
-	dl_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dl_label.custom_minimum_size = Vector2(270, 54)
-	v.add_child(dl_label)
-	if (kind == "ship" and GameState.data["ships"].has(id)) or (kind == "pet" and GameState.data["unlocks"].get("pet", false)):
-		v.add_child(UiTheme.label("✔ En propiedad", 14, UiTheme.GOOD))
+	# Cabecera: nombre y tipo.
+	var head := W.hbox(6)
+	var nl := UiTheme.label(name, 16, col.lightened(0.35))
+	nl.clip_text = true
+	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(nl)
+	head.add_child(UiTheme.label(sub, 12, UiTheme.MUTED))
+	v.add_child(head)
+	var glow := Glow.new()
+	glow.color = col
+	glow.tex = tex
+	glow.custom_minimum_size = Vector2(0, 112)
+	v.add_child(glow)
+	var desc := UiTheme.label(ItemDesc.of(kind, id), 13, UiTheme.TEXT)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size = Vector2(270, 36)
+	v.add_child(desc)
+	var st := UiTheme.label(stats, 12, UiTheme.MUTED)
+	st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	st.custom_minimum_size = Vector2(270, 0)
+	v.add_child(st)
+	if owned:
+		var ok := UiTheme.heading("✔ En propiedad", 16, UiTheme.GOOD)
+		ok.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(ok)
 		return c
-	# Dos formas de pago excluyentes: créditos O Cristales Nexo (nunca ambos).
+	# Precio: créditos O Cristales Nexo (nunca ambos), con lotes para los consumibles.
 	var qtys := [1]
-	if kind == "ammo":
+	if kind in ["ammo", "missile"]:
 		qtys = [1, 10]
 	elif kind == "item":
 		qtys = [1, 5]
@@ -148,14 +194,12 @@ func _product(kind: String, id: String) -> Control:
 			var label := "Comprar" if q == 1 else "x%d" % q
 			if kind == "ammo":
 				label = "+%d" % (100 * q)
-			var b := W.button(label, func(): _buy(kind, id, q, cur), q == 1 and cur == "credits")
+			elif kind == "missile":
+				label = "+%d" % (GameData.MISSILE_LOT * q)
+			var b := W.btn(label, func(): _buy(kind, id, q, cur), "gold" if cur == "credits" else "normal", 0, 14)
 			b.disabled = not GameState.can_afford(price, q)
 			row.add_child(b)
 		v.add_child(row)
-		if cur == "credits":
-			var o := UiTheme.label("— o —", 11, UiTheme.MUTED)
-			o.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			v.add_child(o)
 	if owned_txt != "":
 		v.add_child(UiTheme.label(owned_txt, 12, UiTheme.MUTED))
 	return c

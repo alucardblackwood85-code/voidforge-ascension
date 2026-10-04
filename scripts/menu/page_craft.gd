@@ -1,10 +1,10 @@
 class_name PageCraft
 extends HBoxContainer
-## CRAFTEO: fabricación con los materiales recolectados en los sectores. Categorías: munición,
+## FABRICACIÓN: fabricación con los materiales recolectados en los sectores. Categorías: munición,
 ## consumibles, cajas de módulos (gacha con probabilidades visibles y pity), naves, láseres,
 ## generadores, pet y mejoras de nivel 1-16. El panel derecho muestra el inventario de materiales.
 
-const CATS := [["ammo", "Munición"], ["item", "Consumibles"], ["box", "Cajas de módulos"], ["ship", "Naves"],
+const CATS := [["ammo", "Munición"], ["missile", "Misiles"], ["item", "Consumibles"], ["box", "Cajas de módulos"], ["ship", "Naves"],
 	["laser", "Láseres"], ["gen", "Generadores"], ["drone_laser", "Pet"], ["upgrade", "Mejoras 1-16"]]
 
 var menu: StartMenu
@@ -14,23 +14,18 @@ var reveal: Control
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
 	# Categorías
-	var cats := W.card(Color(0.04, 0.06, 0.1, 0.92))
-	cats.custom_minimum_size.x = 210
-	var cv := W.vbox(6)
-	cats.add_child(cv)
-	cv.add_child(UiTheme.label("CATEGORÍAS", 15, UiTheme.ACCENT))
+	var cfr: Array = W.frame("Fabricación")
+	var cats: Control = cfr[0]
+	cats.custom_minimum_size.x = 230
+	var cv: VBoxContainer = cfr[1]
 	for c in CATS:
-		var b := Button.new()
-		b.text = c[1]
+		var id: String = c[0]
+		var b := W.btn(c[1], func():
+			menu.state["craft_tab"] = id
+			menu.refresh(), "primary" if menu.state["craft_tab"] == id else "normal", 0, 16)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size.y = 38
-		if menu.state["craft_tab"] == c[0]:
-			b.add_theme_stylebox_override("normal", UiTheme.box(Color(0.1, 0.2, 0.3), UiTheme.ACCENT, 4, 2, 8))
-		var id: String = c[0]
-		b.pressed.connect(func():
-			menu.state["craft_tab"] = id
-			menu.refresh())
+		b.custom_minimum_size.y = 40
 		cv.add_child(b)
 	add_child(cats)
 	# Recetas
@@ -57,6 +52,8 @@ func _ids(kind: String) -> Array:
 	match kind:
 		"ammo":
 			return GameData.AMMO.keys()
+		"missile":
+			return GameData.MISSILES.keys()
 		"item":
 			return GameData.ITEMS.keys()
 		"ship":
@@ -82,6 +79,12 @@ func _recipe(kind: String, id: String) -> Control:
 			sub = "En almacén: %s" % GameData.format_num(GameState.data["ammo"].get(id, 0))
 			tex = W.icon("ammo", id)
 			col = a["color"]
+		"missile":
+			var md: Dictionary = GameData.MISSILES[id]
+			name = "%s — lote de %d" % [md["name"], GameData.MISSILE_LOT]
+			sub = "Daño %s · precisión %d%% · en almacén %s" % [GameData.format_num(md["dmg"]), int(md["acc"] * 100), GameData.format_num(GameState.data["missiles"].get(id, 0))]
+			tex = W.icon("missile", id)
+			col = md["color"]
 		"item":
 			var it: Dictionary = GameData.ITEMS[id]
 			name = it["name"]
@@ -130,7 +133,7 @@ func _recipe(kind: String, id: String) -> Control:
 		bv.add_child(UiTheme.label("✔", 22, UiTheme.GOOD))
 	else:
 		var qtys := [1]
-		if kind == "ammo":
+		if kind in ["ammo", "missile"]:
 			qtys = [1, 10]
 		elif kind == "item":
 			qtys = [1, 5]
@@ -138,7 +141,9 @@ func _recipe(kind: String, id: String) -> Control:
 			var label := "Fabricar" if q == 1 else "x%d" % q
 			if kind == "ammo":
 				label = "+%d" % (100 * q)
-			var b := W.button(label, func(): _craft(kind, id, q), q == 1, 110)
+			elif kind == "missile":
+				label = "+%d" % (GameData.MISSILE_LOT * q)
+			var b := W.btn(label, func(): _craft(kind, id, q), "primary" if q == 1 else "normal", 120, 15)
 			b.disabled = not GameState.can_afford(recipe, q)
 			bv.add_child(b)
 	h.add_child(bv)

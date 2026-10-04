@@ -721,6 +721,9 @@ func fx_v2() -> Dictionary:
 		"objective": {"layers": [chime(523, 0.0, 0.18, 0.5), chime(659, 0.13, 0.18, 0.5), chime(784, 0.26, 0.18, 0.5), chime(1046, 0.39, 0.6, 0.55), V("saw", 261, 261, 0.7, 0.18, {"t": 0.39, "voices": 3, "det": 10.0, "spread": 0.8, "cut0": 1500, "a": 0.05, "k": 2.5})], "rev": 0.3, "tail": 0.4},
 		# Alerta: dos tonos suaves tipo sirena de cabina (triangulares y filtrados, sin timbre de altavoz de PC).
 		"alert": {"layers": [V("tri", 700, 700, 0.28, 0.45, {"voices": 3, "det": 8.0, "spread": 0.7, "cut0": 1600, "a": 0.02, "k": 0.8}), V("tri", 525, 525, 0.28, 0.45, {"t": 0.3, "voices": 3, "det": 8.0, "spread": 0.7, "cut0": 1600, "a": 0.02, "k": 0.8}), V("tri", 700, 700, 0.28, 0.45, {"t": 0.6, "voices": 3, "det": 8.0, "spread": 0.7, "cut0": 1600, "a": 0.02, "k": 0.8}), V("sine", 175, 175, 0.9, 0.2, {"a": 0.05, "k": 1.2})], "rev": 0.22, "tail": 0.3},
+		# Misiles: ignición con siseo que se aleja, e impacto seco con restos.
+		"missile_launch": {"layers": [V("noise", 0, 0, 0.04, 0.5, {"cut0": 6000, "mode": "hp", "k": 9.0}), V("sine", 160, 70, 0.12, 0.5, {"pr": 18.0, "k": 5.0}), V("noise", 0, 0, 0.6, 0.45, {"cut0": 1500, "cut1": 5000, "cr": 4.0, "q": 0.35, "a": 0.02, "k": 2.4, "voices": 2, "spread": 0.8}), V("saw", 220, 420, 0.5, 0.15, {"voices": 3, "det": 25.0, "cut0": 1800, "a": 0.03, "k": 2.6})], "rev": 0.18, "tail": 0.3},
+		"missile_hit": {"layers": boom(0.3), "drive": 1.5, "rev": 0.2, "tail": 0.35},
 		# Interfaz: suave y corta.
 		"ui_click": {"layers": [V("noise", 0, 0, 0.025, 0.4, {"cut0": 4000, "mode": "bp", "q": 0.5, "k": 9.0}), chime(1800, 0.0, 0.04, 0.2)], "rev": 0.05, "tail": 0.05},
 		"ui_select": {"layers": [chime(900, 0.0, 0.08, 0.4), chime(1350, 0.04, 0.1, 0.35)], "rev": 0.1, "tail": 0.12},

@@ -141,6 +141,11 @@ func _migrate() -> void:
 		data["drone"]["lasers"].append(-1)
 	if not data.has("missiles"):
 		data["missiles"] = {"r1": 60}
+		# Partidas anteriores a los misiles: R-1 en la tecla 5 si está libre.
+		for lo in data["loadouts"].values():
+			var hb: Array = lo.get("hotbar", [])
+			if hb.size() > 4 and hb[4] == null:
+				hb[4] = {"type": "missile", "id": "r1"}
 	if not data.has("ascent"):
 		data["ascent"] = {"points": 0, "alloc": {}}
 	if not data["drone"].has("gens"):
