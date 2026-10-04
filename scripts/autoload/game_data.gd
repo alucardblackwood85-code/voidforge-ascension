@@ -274,54 +274,104 @@ const ENEMIES := {
 }
 
 # --- Biomas (11.1) -------------------------------------------------------------
-# enemies: pesos de aparición. elites: nodriza/jefe del sector. border: color de la barrera del mapa.
+# Dos mapas por facción: el primero con sus especies débiles y el segundo con las fuertes. Dentro de un
+# mapa las especies no cambian: subir el nivel de amenaza endurece a los enemigos y trae más variantes
+# (Boss, Mega, Ultra, Uber). theme: facción visual (fondo, música, obstáculos, sonido de disparo).
+# temper: distancia (u) a la que sus enemigos detectan al jugador: los débiles sólo atacan si te acercas.
+# enemies: pesos de aparición. elites: [jefe del sector, comandante]. border: color de la barrera.
 const BIOMES := {
 	"ferron": {
-		"name": "Cinturón Ferron", "faction": "Enjambre Ferron", "min_level": 1,
-		"desc": "Asteroides, metal oxidado y estaciones rotas.", "hazards": "Nubes de chatarra, minas.",
+		"name": "Cinturón Ferron", "faction": "Enjambre Ferron", "theme": "ferron", "min_level": 1, "temper": 380.0,
+		"desc": "Asteroides, metal oxidado y estaciones rotas. Chatarreros y mineros débiles.", "hazards": "Nubes de chatarra, minas.",
 		"bg": Color("0a0c12"), "rock": Color("4a4038"), "rock_edge": Color("7a6250"), "border": Color(1.0, 0.55, 0.25),
-		"enemies": {"xenomita": 30, "chatarrax": 26, "ferroclasto": 10, "aguijon_khepri": 12, "taladro_vorak": 8, "nodo_bastion": 5, "mina_garra": 10, "recolector_morbido": 7, "artillero_ciclope": 7},
-		"elites": ["madre_remache"],
+		"enemies": {"xenomita": 35, "chatarrax": 30, "recolector_morbido": 20, "mina_garra": 15},
+		"elites": ["madre_remache", "recolector_morbido"],
 		"resources": {"ferrita": 50, "plata": 30, "oro": 12, "titanio": 8},
 	},
+	"ferron_forja": {
+		"name": "Forja Ferron", "faction": "Enjambre Ferron", "theme": "ferron", "min_level": 5, "temper": 480.0,
+		"desc": "Astilleros y fundiciones del Enjambre: su maquinaria de guerra.", "hazards": "Artillería, embestidas.",
+		"bg": Color("0c0a0a"), "rock": Color("50382c"), "rock_edge": Color("9a5a38"), "border": Color(1.0, 0.45, 0.2),
+		"enemies": {"aguijon_khepri": 25, "ferroclasto": 20, "taladro_vorak": 20, "artillero_ciclope": 20, "nodo_bastion": 15},
+		"elites": ["ferroclasto", "taladro_vorak"],
+		"resources": {"ferrita": 40, "titanio": 30, "oro": 15, "plata": 15},
+	},
 	"vesper": {
-		"name": "Nebulosa Vesper", "faction": "Biomancia Vesper", "min_level": 8,
-		"desc": "Gas púrpura, membranas orgánicas, huevos.", "hazards": "Visibilidad reducida, zonas corrosivas.",
+		"name": "Nebulosa Vesper", "faction": "Biomancia Vesper", "theme": "vesper", "min_level": 9, "temper": 420.0,
+		"desc": "Gas púrpura y criaderos: larvas, esporas y cazadores jóvenes.", "hazards": "Visibilidad reducida, esporas.",
 		"bg": Color("0e0814"), "rock": Color("3a2440"), "rock_edge": Color("7a4a8a"), "border": Color(0.8, 0.4, 1.0),
-		"enemies": {"larva_vesper": 30, "mantis_necral": 14, "bulbo_sangrante": 9, "caparazon_orax": 8, "sifon_myr": 9, "espora_kraal": 10, "cirujano_vex": 6, "raptor_medula": 9, "nexo_umbilical": 5},
-		"elites": ["matriarca_vesper"],
-		"resources": {"bioaleacion": 25, "quitina": 40, "resina_plasma": 35},
+		"enemies": {"larva_vesper": 35, "mantis_necral": 25, "espora_kraal": 20, "bulbo_sangrante": 20},
+		"elites": ["nexo_umbilical", "mantis_necral"],
+		"resources": {"quitina": 45, "resina_plasma": 40, "bioaleacion": 15},
+	},
+	"vesper_colmena": {
+		"name": "Colmena Vesper", "faction": "Biomancia Vesper", "theme": "vesper", "min_level": 13, "temper": 520.0,
+		"desc": "El corazón orgánico de la colmena y su guardia.", "hazards": "Drenadores, emboscadas, zonas corrosivas.",
+		"bg": Color("100612"), "rock": Color("4a2040"), "rock_edge": Color("9a3a8a"), "border": Color(0.9, 0.3, 0.9),
+		"enemies": {"raptor_medula": 23, "sifon_myr": 22, "caparazon_orax": 20, "nexo_umbilical": 20, "cirujano_vex": 15},
+		"elites": ["matriarca_vesper", "caparazon_orax"],
+		"resources": {"bioaleacion": 35, "quitina": 30, "resina_plasma": 25, "gel_entropico": 10},
 	},
 	"prismaticos": {
-		"name": "Campos Prismáticos", "faction": "Legión Prismática", "min_level": 16,
-		"desc": "Cristales gigantes y refracción.", "hazards": "Rayos reflejados, paredes energéticas.",
+		"name": "Campos Prismáticos", "faction": "Legión Prismática", "theme": "prismaticos", "min_level": 17, "temper": 450.0,
+		"desc": "Cristales gigantes y refracción: la vanguardia de la Legión.", "hazards": "Rayos reflejados.",
 		"bg": Color("06101a"), "rock": Color("2a4a5a"), "rock_edge": Color("8ad8f0"), "border": Color(0.5, 1.0, 1.0),
-		"enemies": {"esquirla_lux": 30, "prisma_rho": 14, "espejo_kappa": 8, "lanza_solaris": 8, "corona_lumen": 6, "golem_faceta": 8, "cortador_helio": 9, "orbe_lambda": 8, "arconte_espectral": 4},
-		"elites": ["catedral_prismatica"],
+		"enemies": {"esquirla_lux": 35, "prisma_rho": 25, "cortador_helio": 20, "espejo_kappa": 20},
+		"elites": ["golem_faceta", "prisma_rho"],
 		"resources": {"xenocristal": 50, "vidrio_estelar": 40, "oro": 10},
 	},
+	"prismaticos_catedral": {
+		"name": "Catedral de Cristal", "faction": "Legión Prismática", "theme": "prismaticos", "min_level": 21, "temper": 550.0,
+		"desc": "Santuario de la Legión: francotiradores, artillería y arcontes.", "hazards": "Paredes energéticas, disparos lejanos.",
+		"bg": Color("081220"), "rock": Color("34506a"), "rock_edge": Color("a8e0ff"), "border": Color(0.6, 0.9, 1.0),
+		"enemies": {"orbe_lambda": 25, "lanza_solaris": 20, "golem_faceta": 20, "arconte_espectral": 20, "corona_lumen": 15},
+		"elites": ["catedral_prismatica", "arconte_espectral"],
+		"resources": {"xenocristal": 40, "vidrio_estelar": 30, "polvo_cuantico": 15, "aetherium": 5},
+	},
 	"vacio": {
-		"name": "Fractura del Vacío", "faction": "Culto del Vacío", "min_level": 24,
-		"desc": "Espacio deformado y materia oscura.", "hazards": "Portales, gravedad variable.",
+		"name": "Fractura del Vacío", "faction": "Culto del Vacío", "theme": "vacio", "min_level": 25, "temper": 480.0,
+		"desc": "Espacio deformado donde acechan los acólitos del Culto.", "hazards": "Emboscadas en fase.",
 		"bg": Color("06040a"), "rock": Color("1e1a24"), "rock_edge": Color("6a3a7a"), "border": Color(1.0, 0.3, 0.9),
-		"enemies": {"acaro_umbral": 30, "cuchilla_nula": 14, "monje_graviton": 8, "pozo_menor": 7, "profeta_nadir": 6, "carcelero_obsidiana": 7, "hereje_fase": 10, "campana_vacio": 8, "hierofante_cero": 4},
-		"elites": ["arca_nadir"],
-		"resources": {"materia_oscura": 20, "fibra_fase": 20, "fragmento_vacio": 30, "plata": 30},
+		"enemies": {"acaro_umbral": 35, "cuchilla_nula": 25, "hereje_fase": 20, "profeta_nadir": 20},
+		"elites": ["carcelero_obsidiana", "hereje_fase"],
+		"resources": {"fragmento_vacio": 35, "fibra_fase": 25, "plata": 30, "materia_oscura": 10},
+	},
+	"vacio_abismo": {
+		"name": "Abismo Nadir", "faction": "Culto del Vacío", "theme": "vacio", "min_level": 29, "temper": 580.0,
+		"desc": "El templo del Culto: gravedad rota, pozos y campanas.", "hazards": "Portales, gravedad variable.",
+		"bg": Color("05030a"), "rock": Color("221a2a"), "rock_edge": Color("8a3a9a"), "border": Color(0.9, 0.2, 1.0),
+		"enemies": {"campana_vacio": 25, "monje_graviton": 20, "carcelero_obsidiana": 20, "hierofante_cero": 20, "pozo_menor": 15},
+		"elites": ["arca_nadir", "hierofante_cero"],
+		"resources": {"materia_oscura": 30, "fragmento_vacio": 25, "graviton": 5, "fibra_fase": 20},
 	},
 	"leviatan": {
-		"name": "Jardín Leviatán", "faction": "Dominio Leviatán", "min_level": 32,
-		"desc": "Megaorganismos espaciales.", "hazards": "Tentáculos, esporas, zonas vivas.",
+		"name": "Jardín Leviatán", "faction": "Dominio Leviatán", "theme": "leviatan", "min_level": 33, "temper": 500.0,
+		"desc": "Praderas de megaorganismos y sus depredadores.", "hazards": "Tentáculos, esporas.",
 		"bg": Color("040a14"), "rock": Color("1a2a3a"), "rock_edge": Color("5a8ab0"), "border": Color(0.4, 0.7, 1.0),
-		"enemies": {"dardo_leviatan": 28, "mandibula_kron": 12, "custodio_abisal": 8, "tejedor_cronal": 9, "sangre_quasar": 9, "pastor_nidos": 5, "espectro_parallax": 10, "nexo_devorador": 8, "heraldo_singular": 4},
-		"elites": ["leviatan_genesis"],
-		"resources": {"bioaleacion": 30, "gel_entropico": 30, "neutronio": 5, "osmio": 20},
+		"enemies": {"dardo_leviatan": 35, "mandibula_kron": 25, "tejedor_cronal": 20, "espectro_parallax": 20},
+		"elites": ["pastor_nidos", "mandibula_kron"],
+		"resources": {"bioaleacion": 35, "gel_entropico": 30, "osmio": 20, "cronita": 5},
 	},
-	"titan": {"name": "Cementerio Titán", "min_level": 40, "locked": true},
-	"corona": {"name": "Corona Solar", "min_level": 48, "locked": true},
-	"cronos": {"name": "Anillo de Cronos", "min_level": 56, "locked": true},
-	"pozo": {"name": "Pozo Gravitacional", "min_level": 64, "locked": true},
-	"umbral": {"name": "Umbral Singular", "min_level": 72, "locked": true},
+	"leviatan_corazon": {
+		"name": "Corazón Leviatán", "faction": "Dominio Leviatán", "theme": "leviatan", "min_level": 37, "temper": 600.0,
+		"desc": "Dentro del Leviatán Génesis: sus guardianes más antiguos.", "hazards": "Zonas vivas, devoradores.",
+		"bg": Color("030812"), "rock": Color("1a2440"), "rock_edge": Color("6a7ad0"), "border": Color(0.5, 0.6, 1.0),
+		"enemies": {"sangre_quasar": 25, "custodio_abisal": 20, "nexo_devorador": 20, "pastor_nidos": 20, "heraldo_singular": 15},
+		"elites": ["leviatan_genesis", "heraldo_singular"],
+		"resources": {"neutronio": 8, "osmio": 25, "antimateria": 4, "bioaleacion": 30, "gel_entropico": 25},
+	},
+	"titan": {"name": "Cementerio Titán", "min_level": 41, "locked": true},
+	"corona": {"name": "Corona Solar", "min_level": 49, "locked": true},
+	"cronos": {"name": "Anillo de Cronos", "min_level": 57, "locked": true},
+	"pozo": {"name": "Pozo Gravitacional", "min_level": 65, "locked": true},
+	"umbral": {"name": "Umbral Singular", "min_level": 73, "locked": true},
 }
+
+
+## Facción visual de un bioma (fondo, música, obstáculos y sonidos los comparten los dos mapas de una facción).
+static func theme_of(biome_id: String) -> String:
+	return String(BIOMES.get(biome_id, {}).get("theme", biome_id))
+
 
 const OBJECTIVES := {
 	"limpieza": {"name": "Limpieza", "desc": "Elimina el %d%% de la presencia hostil."},
@@ -382,7 +432,37 @@ const PET_XP_BASE := 5200.0  # nivel 1 → 12 en ~8-13 h según el ritmo (playte
 const PET_XP_GROWTH := 1.35
 const PET_DMG_PER_LEVEL := 0.08        # +8% de daño por nivel del pet
 const PET_RATE_PER_LEVEL := 0.03       # -3% de intervalo de disparo por nivel
-const PET_THIRD_SLOT_LEVEL := 8        # tercer slot de láser del pet
+# El pet se compra en la tienda y evoluciona en 5 formas; cada forma nueva abre un láser más y, desde la
+# tercera, un generador de escudo (sus escudos se proyectan sobre la nave al 50%).
+const PET_STAGE_LEVELS := [1, 3, 6, 9, 12]
+const PET_STAGE_NAMES := ["Esfera", "Explorador", "Vigía", "Centinela", "Guardián"]
+const PET_MAX_LASERS := 5
+const PET_MAX_GENS := 3
+const PET_GEN_SHARE := 0.5
+const PET_RECIPE := {"credits": 36000}  # tienda: ~50 400 créditos u ~86 Cristales Nexo
+
+
+## Forma del pet (1-5) según su nivel.
+static func pet_stage(lvl: int) -> int:
+	var st := 1
+	for i in PET_STAGE_LEVELS.size():
+		if lvl >= int(PET_STAGE_LEVELS[i]):
+			st = i + 1
+	return st
+
+
+static func pet_laser_slots(lvl: int) -> int:
+	return pet_stage(lvl)
+
+
+static func pet_gen_slots(lvl: int) -> int:
+	return maxi(0, pet_stage(lvl) - 2)
+
+
+## Sprite del pet para su forma (cae al de la esfera si esa forma aún no tiene fotogramas).
+static func pet_sprite(lvl: int) -> String:
+	var id := "pet_s%d" % pet_stage(lvl)
+	return id if SpriteLib.has_frames("drone", id) else "drone"
 
 static func pet_xp_for_level(lvl: int) -> int:
 	if lvl <= 1:
@@ -458,7 +538,6 @@ const DRONE_LASERS := {
 	"pet_guard": {"name": "Pet-Guard", "dmg": 0.30, "color": Color("e8e8f0"), "effect": "guard", "desc": "Daño bajo; 5% de destruir proyectiles cercanos.", "cost": {"credits": 25000, "titanio": 30}},
 	"pet_marker": {"name": "Pet-Marker", "dmg": 0.35, "color": Color("ff6a6a"), "effect": "marker", "desc": "Marca al objetivo: la nave inflige +3% de daño 3 s.", "cost": {"credits": 28000, "xenocristal": 8}},
 }
-const DRONE_SLOTS := 2
 
 # --- Módulos (9) ----------------------------------------------------------------------
 const MODULE_FAMILIES := {

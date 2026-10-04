@@ -1,10 +1,11 @@
 class_name Drone
 extends Entity
-## Dron acompañante / pet (10). Roles: Asalto (dispara al objetivo) y Recolector (botín).
-## Usa los láseres de dron equipados en Equipamiento → Pet; ataca automáticamente con la nave.
+## Pet acompañante (10). Roles: Asalto (dispara al objetivo) y Recolector (botín).
+## Usa los láseres de pet equipados en Equipamiento → Pet; ataca automáticamente con la nave.
+## Cambia de forma al subir de nivel (Esfera → Explorador → Vigía → Centinela → Guardián).
 
 const ROLES := {
-	"asalto": {"name": "Asalto", "ability": "Ráfaga: triplica la cadencia del dron 4 s.", "cd": 15.0},
+	"asalto": {"name": "Asalto", "ability": "Ráfaga: triplica la cadencia del pet 4 s.", "cd": 15.0},
 	"recolector": {"name": "Recolector", "ability": "Barrido: atrae todo el botín en 600 u.", "cd": 12.0},
 }
 const FIRE_INTERVAL := 1.6
@@ -25,13 +26,18 @@ var fetch_box: LootBox = null
 var attack_len := 5.0
 var pet_lvl := 1
 var guard_t := 0.3
-var locked := false       # M11: el pet se desbloquea tras 2 incursiones
+var locked := false       # el pet se compra en la tienda
+var sprite_id := "drone"
+var draw_r := 14.0
 
 
 func setup(p_sector: Sector, p_role: String) -> void:
 	sector = p_sector
 	role = p_role
 	pet_lvl = GameState.pet_level()
+	sprite_id = GameData.pet_sprite(pet_lvl)
+	# Crece un poco con cada forma, pero siempre es claramente menor que la nave (como mucho la mitad).
+	draw_r = minf(11.0 + 1.6 * GameData.pet_stage(pet_lvl), sector.player.radius * 0.5)
 	radius = 12.0
 	height = 34.0
 	plane_pos = sector.player.plane_pos + Vector2(-40, 0)
@@ -169,9 +175,11 @@ func pickup_bonus() -> float:
 
 
 func _draw() -> void:
-	var tex := SpriteLib.get_tex("drone", "drone")
+	var tex := SpriteLib.get_tex("drone", sprite_id)
+	if tex == null:
+		tex = SpriteLib.get_tex("drone", "drone")
 	if tex:
-		SpriteLib.draw_dir(self, "drone", "drone", tex, 14.0, heading, height)
+		SpriteLib.draw_dir(self, "drone", sprite_id, tex, draw_r, heading, height)
 	else:
 		var pts := [Vector2(1.0, 0), Vector2(-0.6, 0.7), Vector2(-0.3, 0), Vector2(-0.6, -0.7)]
 		Shapes.draw_hull(self, pts, 12.0, heading, height, Color("2a6a5a"), Color("5affc8"), Color("ffffff"))

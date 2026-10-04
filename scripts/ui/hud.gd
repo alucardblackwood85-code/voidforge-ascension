@@ -84,7 +84,7 @@ func _build_touch() -> void:
 	root.add_child(box)
 	_tbtn(box, "IMPULSO", func(): sector.player.try_boost())
 	_tbtn(box, "HABILIDAD", func(): sector.player.try_ability())
-	_tbtn(box, "DRON", func(): sector.drone.use_ability())
+	_tbtn(box, "PET", func(): sector.drone.use_ability())
 	var top := HBoxContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	top.position = Vector2(16, 130)
@@ -190,7 +190,7 @@ func _draw_canvas() -> void:
 	_ability(Vector2(x, 100), Controls.key_label("ability"), GameData.ABILITIES[p.ability_id]["name"], p.ability_cd, GameData.ABILITIES[p.ability_id]["cd"])
 	_ability(Vector2(x + 156, 100), Controls.key_label("boost"), "Impulso", p.boost_cd, 2.5)
 	if not sector.drone.locked:
-		_ability(Vector2(x + 312, 100), Controls.key_label("drone"), "Dron", sector.drone.ability_cd, Drone.ROLES[sector.drone.role]["cd"])
+		_ability(Vector2(x + 312, 100), Controls.key_label("drone"), "Pet", sector.drone.ability_cd, Drone.ROLES[sector.drone.role]["cd"])
 
 	# Objetivo y alerta
 	var cx := vs.x * 0.5
@@ -362,7 +362,7 @@ func toggle_pause() -> void:
 	pause_panel = _modal("PAUSA")
 	var box: VBoxContainer = pause_panel.get_meta("box")
 	var ctl := UiTheme.label("Clic izquierdo: fijar objetivo  ·  Clic derecho: mover (mantener para guiar)  ·  Ataque automático
-1-0: munición y objetos  ·  %s habilidad  ·  %s impulso  ·  %s dron  ·  %s mapa  ·  rueda: zoom" % [Controls.key_label("ability"), Controls.key_label("boost"), Controls.key_label("drone"), Controls.key_label("tactical_map")], 14, UiTheme.MUTED)
+1-0: munición y objetos  ·  %s habilidad  ·  %s impulso  ·  %s pet  ·  %s mapa  ·  rueda: zoom" % [Controls.key_label("ability"), Controls.key_label("boost"), Controls.key_label("drone"), Controls.key_label("tactical_map")], 14, UiTheme.MUTED)
 	ctl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(ctl)
 	box.add_child(UiTheme.label("Sonido", 18, UiTheme.ACCENT))

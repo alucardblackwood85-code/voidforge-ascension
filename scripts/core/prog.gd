@@ -163,7 +163,7 @@ static func _make_missions(n: int, scale: int, seed_v: int) -> Array:
 	var factions: Array = []
 	for bid in GameData.BIOMES.keys():
 		var b: Dictionary = GameData.BIOMES[bid]
-		if b.has("enemies") and not b.get("locked", false) and int(GameState.data["sector_max"]) >= int(b["min_level"]):
+		if b.has("enemies") and GameData.theme_of(bid) == bid and int(GameState.data["sector_max"]) >= int(b["min_level"]):
 			factions.append(bid)
 	while out.size() < n:
 		var t: String = types[rng.randi() % types.size()]
@@ -272,7 +272,7 @@ static func on_run(result: Dictionary) -> void:
 				continue
 			var add := 0
 			if mi["type"] == "faction":
-				add = counters["kills"] if mi["key"] == biome else 0
+				add = counters["kills"] if GameData.theme_of(mi["key"]) == GameData.theme_of(biome) else 0
 			else:
 				add = int(counters.get(mi["type"], 0))
 			mi["progress"] = mini(int(mi["target"]), int(mi["progress"]) + add)

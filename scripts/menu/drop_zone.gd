@@ -5,11 +5,12 @@ extends PanelContainer
 signal received(data: Dictionary)
 
 var kind := ""
+var kinds: Array = []   # otros tipos que también acepta
 var hover := false
 
 
 func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
-	hover = data is Dictionary and data.get("kind", "") == kind and int(data.get("from_slot", -1)) >= 0
+	hover = data is Dictionary and (data.get("kind", "") == kind or kinds.has(data.get("kind", ""))) and int(data.get("from_slot", -1)) >= 0
 	queue_redraw()
 	return hover
 

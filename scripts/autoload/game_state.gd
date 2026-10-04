@@ -41,7 +41,7 @@ func new_profile() -> Dictionary:
 		"gens": [],
 		"modules": [],
 		"drone_lasers": [],
-		"drone": {"role": "asalto", "lasers": [-1, -1, -1]},
+		"drone": {"role": "asalto", "lasers": [-1, -1, -1, -1, -1], "gens": [-1, -1, -1]},
 		"pet": {"xp": 0},
 		"perma": {"dmg": 0.0, "hull": 0.0, "shield": 0.0},
 		"rank_claimed": 1,
@@ -135,8 +135,10 @@ func _migrate() -> void:
 	if not data["settings"].has("audio"):
 		data["settings"]["audio"] = default_audio()
 	data["settings"].erase("wasd")
-	while data["drone"]["lasers"].size() < 3:
+	while data["drone"]["lasers"].size() < GameData.PET_MAX_LASERS:
 		data["drone"]["lasers"].append(-1)
+	if not data["drone"].has("gens"):
+		data["drone"]["gens"] = [-1, -1, -1]
 	if data["drone_lasers"].is_empty():
 		var dl := add_drone_laser("pet_pulse")
 		data["drone"]["lasers"][0] = dl["uid"]
@@ -323,6 +325,8 @@ func find_item(list_key: String, uid: int) -> Dictionary:
 func equipped_on(list_key: String, uid: int) -> String:
 	if list_key == "drone_lasers":
 		return "drone" if data["drone"]["lasers"].has(uid) else ""
+	if list_key == "gens" and data["drone"]["gens"].has(uid):
+		return "drone"
 	for ship_id in data["loadouts"].keys():
 		if data["loadouts"][ship_id][list_key].has(uid):
 			return ship_id
@@ -361,13 +365,24 @@ func equip(list_key: String, slot: int, uid: int, ship_id: String = "") -> void:
 		return
 	if ship_id == "":
 		ship_id = data["current_ship"]
-	if list_key == "drone_lasers":
-		var dl: Array = data["drone"]["lasers"]
+	if list_key in ["drone_lasers", "drone_gens"]:
+		# Ranuras del pet: sólo las abiertas por su forma; sus generadores, sólo de escudo.
+		var open := GameData.pet_laser_slots(pet_level()) if list_key == "drone_lasers" else GameData.pet_gen_slots(pet_level())
+		if uid >= 0 and slot >= open:
+			return
+		if list_key == "drone_gens" and uid >= 0 and GameData.GENERATORS[find_item("gens", uid).get("id", "")]["type"] != "shield":
+			return
+		var arr: Array = data["drone"]["lasers" if list_key == "drone_lasers" else "gens"]
 		if uid >= 0:
-			var idx := dl.find(uid)
+			var idx := arr.find(uid)
 			if idx >= 0:
-				dl[idx] = -1
-		dl[slot] = uid
+				arr[idx] = -1
+			if list_key == "drone_gens":
+				for other in data["loadouts"].values():
+					var oi: int = other["gens"].find(uid)
+					if oi >= 0:
+						other["gens"][oi] = -1
+		arr[slot] = uid
 		save_game()
 		changed.emit()
 		return
@@ -382,6 +397,10 @@ func equip(list_key: String, slot: int, uid: int, ship_id: String = "") -> void:
 			var idx := arr.find(uid)
 			if idx >= 0:
 				arr[idx] = -1
+		if list_key == "gens":
+			var pi: int = data["drone"]["gens"].find(uid)
+			if pi >= 0:
+				data["drone"]["gens"][pi] = -1
 		if list_key == "mods":
 			var fam: String = find_item("modules", uid).get("family", "")
 			var mods: Array = lo["mods"]
@@ -395,8 +414,13 @@ func equip(list_key: String, slot: int, uid: int, ship_id: String = "") -> void:
 
 ## Primer slot libre compatible (para equipar con doble clic).
 func first_free_slot(list_key: String, ship_id: String = "", uid: int = -1) -> int:
-	if list_key == "drone_lasers":
-		return data["drone"]["lasers"].find(-1)
+	if list_key in ["drone_lasers", "drone_gens"]:
+		var arr: Array = data["drone"]["lasers" if list_key == "drone_lasers" else "gens"]
+		var open := GameData.pet_laser_slots(pet_level()) if list_key == "drone_lasers" else GameData.pet_gen_slots(pet_level())
+		if list_key == "drone_gens" and uid >= 0 and GameData.GENERATORS[find_item("gens", uid).get("id", "")]["type"] != "shield":
+			return -1
+		var idx := arr.find(-1)
+		return idx if idx >= 0 and idx < open else -1
 	if ship_id == "":
 		ship_id = data["current_ship"]
 	var arr: Array = ensure_loadout(ship_id)[list_key]
@@ -461,6 +485,8 @@ func _raw_recipe(kind: String, id: String) -> Dictionary:
 			return GameData.ITEMS[id]["recipe"]
 		"box":
 			return GameData.MODULE_BOXES[id]["recipe"]
+		"pet":
+			return GameData.PET_RECIPE
 	return {}
 
 
@@ -494,6 +520,8 @@ func craft(kind: String, id: String, qty: int = 1) -> bool:
 func _acquire(kind: String, id: String, qty: int, cost: Dictionary) -> bool:
 	if kind == "ship" and data["ships"].has(id):
 		return false
+	if kind == "pet" and data["unlocks"].get("pet", false):
+		return false
 	if not pay(cost, qty):
 		return false
 	for i in qty:
@@ -511,6 +539,11 @@ func _acquire(kind: String, id: String, qty: int, cost: Dictionary) -> bool:
 				data["ammo"][id] = int(data["ammo"].get(id, 0)) + 100
 			"item":
 				data["items"][id] = int(data["items"].get(id, 0)) + 1
+			"pet":
+				data["unlocks"]["pet"] = true
+				if int(data["drone"]["lasers"][0]) < 0 and not data["drone_lasers"].is_empty():
+					data["drone"]["lasers"][0] = int(data["drone_lasers"][0]["uid"])
+				data["news"] = data.get("news", []) + ["¡Nuevo! Tu pet se une al escuadrón: equípalo en Equipamiento → Pet."]
 	save_game()
 	changed.emit()
 	return true
@@ -613,6 +646,13 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 			var v: float = g["stats"][k]
 			# Las penalizaciones no escalan con el nivel; sólo los beneficios.
 			bonus[k] = float(bonus.get(k, 0.0)) + (v * mult if v > 0.0 else v)
+	if data["unlocks"].get("pet", false):
+		var pet_gens: Array = data["drone"]["gens"]
+		for i in mini(pet_gens.size(), GameData.pet_gen_slots(pet_level())):
+			var pit := find_item("gens", int(pet_gens[i])) if int(pet_gens[i]) >= 0 else {}
+			if not pit.is_empty():
+				var pg: Dictionary = GameData.GENERATORS[pit["id"]]
+				bonus["shield"] += float(pg["stats"].get("shield", 0.0)) * GameData.component_mult(int(pit["level"])) * GameData.PET_GEN_SHARE
 	for uid in lo["mods"]:
 		if int(uid) < 0:
 			continue
@@ -685,8 +725,8 @@ func equipped_drone_lasers() -> Array:
 	var slots: Array = data["drone"]["lasers"]
 	for i in slots.size():
 		var uid := int(slots[i])
-		# El tercer slot del pet se abre en el nivel PET_THIRD_SLOT_LEVEL.
-		if uid < 0 or (i >= 2 and pet_level() < GameData.PET_THIRD_SLOT_LEVEL):
+		# Sólo cuentan las ranuras abiertas por la forma actual del pet.
+		if uid < 0 or i >= GameData.pet_laser_slots(pet_level()):
 			continue
 		var it := find_item("drone_lasers", int(uid))
 		if not it.is_empty():
@@ -718,10 +758,6 @@ func apply_run_result(result: Dictionary) -> void:
 			data[k][id] = maxi(0, int(data[k].get(id, 0)) - int(used[id]))
 	var stats: Dictionary = data["stats"]
 	stats["runs"] = int(stats["runs"]) + 1
-	# M11: el pet se une tras la segunda incursión.
-	if int(stats["runs"]) >= 2 and not data["unlocks"].get("pet", false):
-		data["unlocks"]["pet"] = true
-		data["news"] = data.get("news", []) + ["¡Nuevo! Tu pet se une al escuadrón: equípale láseres en Equipamiento → Pet / Dron."]
 	stats["kills"] = int(stats["kills"]) + int(result.get("kills", 0))
 	stats["time"] = int(stats["time"]) + int(result.get("time", 0))
 	stats["credits_earned"] = int(stats["credits_earned"]) + int(loot.get("credits", 0))

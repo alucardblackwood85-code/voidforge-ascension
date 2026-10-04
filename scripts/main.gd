@@ -1,7 +1,7 @@
 extends Node
 ## Raíz del juego: alterna entre la pantalla de INICIO (StartMenu) y el Sector.
 ## Argumentos de depuración (tras "--"): --sector[=bioma] entra directo a un sector con autopiloto de demo
-## (admite --level=N, --objective=tipo y --asc=N).
+## (admite --level=N, --objective=tipo y --asc=N). --menu=pagina[:pestaña] abre una página del menú.
 
 var current: Node = null
 var autotest := false
@@ -56,6 +56,13 @@ func goto_menu() -> void:
 	var h := StartMenu.new()
 	h.launch_requested.connect(goto_sector)
 	_swap(h)
+	# Depuración: --menu=pagina[:pestaña] abre directamente esa página (p. ej. equip:pet, shop:drone_laser).
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--menu="):
+			var parts := arg.get_slice("=", 1).split(":")
+			if parts.size() > 1:
+				h.state[parts[0] + "_tab"] = parts[1]
+			h.call_deferred("show_page", parts[0])
 
 
 func goto_sector(params: Dictionary) -> void:

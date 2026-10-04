@@ -16,11 +16,15 @@ func _ready() -> void:
 		menu.state["biome"] = "ferron"
 	var sel: String = menu.state["biome"]
 	add_child(W.title("Mapa estelar — elige tu destino"))
-	var cards := W.hbox(10)
+	# Una columna por facción: arriba su mapa de especies débiles, debajo el de las fuertes.
+	var cards := W.grid(5, 10)
+	var open_ids: Array = []
 	for id in GameData.BIOMES.keys():
-		var b: Dictionary = GameData.BIOMES[id]
-		if b.get("locked", false):
-			continue
+		if not GameData.BIOMES[id].get("locked", false):
+			open_ids.append(id)
+	var weak := open_ids.filter(func(i): return GameData.theme_of(i) == i)
+	var strong := open_ids.filter(func(i): return GameData.theme_of(i) != i)
+	for id in weak + strong:
 		cards.add_child(_biome_card(id, id == sel))
 	add_child(cards)
 	var locked: PackedStringArray = []
@@ -106,19 +110,19 @@ func _biome_card(id: String, selected: bool) -> Control:
 	var b: Dictionary = GameData.BIOMES[id]
 	var open := _biome_unlocked(id)
 	var c := W.card(Color(0.04, 0.05, 0.09, 0.9), UiTheme.ACCENT if selected else UiTheme.BORDER, 4)
-	c.custom_minimum_size = Vector2(290, 210)
+	c.custom_minimum_size = Vector2(270, 150)
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if open else Control.CURSOR_FORBIDDEN
 	var v := W.vbox(4)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.add_child(v)
-	var path := "res://assets/backgrounds/%s.png" % id
+	var path := "res://assets/backgrounds/%s.png" % GameData.theme_of(id)
 	if ResourceLoader.exists(path):
 		var t := TextureRect.new()
 		t.texture = load(path)
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		t.custom_minimum_size = Vector2(0, 120)
+		t.custom_minimum_size = Vector2(0, 64)
 		t.clip_contents = true
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if not open:
@@ -164,9 +168,16 @@ func _details(id: String, level: int, asc: int = 0) -> String:
 	s += "Vida enemiga x%.2f · Daño enemigo x%.2f · Recompensas x%.2f\n" % [bf["hp"] * GameData.level_hp(1.0, el), bf["dmg"] * GameData.level_dmg(1.0, el), GameData.level_reward(1.0, level)]
 	if asc > 0:
 		s += "[color=#ff4fd8]Ascensión %d: vida x%.0f · daño x%.2f · recompensas x%.2f[/color]\n" % [asc, pow(2.0, asc), pow(1.55, asc), pow(1.75, asc)]
-	var vs := "Boss" + (", Mega" if level >= 3 else "") + (", Ultra" if level >= 20 else "") + (", Uber" if level >= 40 else "")
-	s += "Objetivo aleatorio: limpieza, nidos, balizas o señal de socorro%s. Variantes élite: %s.%s\n" % [" (también escolta y comandante)" if level >= 3 else "", vs, " Jefe con 3 fases." if level >= 4 else ""]
-	if level >= 20 or id in ["prismaticos", "vacio"]:
+	# Las especies de un mapa no cambian con el nivel: subirlo trae más variantes (con su aura de color).
+	var d := level - int(b["min_level"])
+	var vs := "[color=#ffb84a]Boss[/color]" + (", [color=#ff5a5a]Mega[/color]" if d >= 3 else "") + (", [color=#d05aff]Ultra[/color]" if d >= 8 else "") + (", [color=#4affff]Uber[/color]" if d >= 15 else "")
+	var nxt := "" if d >= 15 else "  (siguiente: %s en el nivel %d)" % [["Mega", "Ultra", "Uber"][0 if d < 3 else (1 if d < 8 else 2)], int(b["min_level"]) + (3 if d < 3 else (8 if d < 8 else 15))]
+	var sp: PackedStringArray = []
+	for eid in b["enemies"].keys():
+		sp.append(GameData.ENEMIES[eid]["name"])
+	s += "Especies: %s.\n" % ", ".join(sp)
+	s += "Objetivo aleatorio: limpieza, socorro%s%s. Variantes: %s%s.%s\n" % [", balizas, escolta y comandante" if level >= 3 else "", ", nidos" if level >= 4 else "", vs, nxt, " Jefe con 3 fases." if level >= 4 else ""]
+	if level >= 20 or GameData.theme_of(id) in ["prismaticos", "vacio"]:
 		s += "[color=#4ab8ff]Enemigos con escudo blindado: usa munición alta o láseres Ion.[/color]\n"
 	if GameState.data["sector_cleared"].has(level):
 		s += "[color=#7d8aa3]Primera limpieza de este nivel ya obtenida.[/color]"

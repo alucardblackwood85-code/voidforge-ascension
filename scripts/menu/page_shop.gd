@@ -25,6 +25,9 @@ func _ready() -> void:
 	add_child(tabs)
 	var g := W.grid(5, 10)
 	var kind: String = menu.state["shop_tab"]
+	# El pet se compra aquí (no viene de inicio); debajo, sus láseres.
+	if kind == "drone_laser":
+		g.add_child(_product("pet", "pet"))
 	for id in _ids(kind):
 		if GameState.in_shop(kind, id):
 			g.add_child(_product(kind, id))
@@ -97,6 +100,14 @@ func _product(kind: String, id: String) -> Control:
 			desc = "%s\nTienes: %d" % [it["desc"], int(GameState.data["items"].get(id, 0))]
 			col = it["color"]
 			tex = W.icon("item", id)
+		"pet":
+			name = "Pet acompañante"
+			sub = "Compañero"
+			desc = "Te sigue y dispara a tu objetivo (o recoge botín). Evoluciona en 5 formas al subir de nivel: +1 láser por forma y generadores de escudo desde la 3.ª."
+			col = Color("5affc8")
+			tex = SpriteLib.get_tex("drone", "pet_s1")
+			if tex == null:
+				tex = SpriteLib.get_tex("drone", "drone")
 		"drone_laser":
 			var dl: Dictionary = GameData.DRONE_LASERS[id]
 			name = dl["name"]
@@ -119,7 +130,7 @@ func _product(kind: String, id: String) -> Control:
 	dl_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dl_label.custom_minimum_size = Vector2(270, 54)
 	v.add_child(dl_label)
-	if kind == "ship" and GameState.data["ships"].has(id):
+	if (kind == "ship" and GameState.data["ships"].has(id)) or (kind == "pet" and GameState.data["unlocks"].get("pet", false)):
 		v.add_child(UiTheme.label("✔ En propiedad", 14, UiTheme.GOOD))
 		return c
 	# Dos formas de pago excluyentes: créditos O Cristales Nexo (nunca ambos).

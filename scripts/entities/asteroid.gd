@@ -28,7 +28,7 @@ func setup(p_sector: Sector, pos: Vector2, r: float, p_ore: String, rng: RandomN
 	if ore != "":
 		sprite_id = ["ore_1", "ore_2"][rng.randi() % 2]
 	else:
-		var pool: Array = GameData.OBSTACLES_COMMON + GameData.OBSTACLES_BIOME.get(sector.biome_id, [])
+		var pool: Array = GameData.OBSTACLES_COMMON + GameData.OBSTACLES_BIOME.get(sector.theme_id, [])
 		sprite_id = pool[rng.randi() % pool.size()]
 	var n := 9 + rng.randi() % 5
 	for i in n:

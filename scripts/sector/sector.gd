@@ -12,6 +12,7 @@ var level := 1
 var rng := RandomNumberGenerator.new()
 var biome: Dictionary = {}
 var biome_id := "ferron"
+var theme_id := "ferron"                 # facción visual del bioma (fondo, música, obstáculos)
 
 var cells: Dictionary = {}          # Vector2i -> {"visited": bool}
 var start_cell := Vector2i.ZERO
@@ -68,6 +69,7 @@ var stat_objective_t := -1.0
 var stat_max_enemies := 0
 var stat_max_aggro := 0
 var stat_max_engaged := 0
+var stat_variants := {}                  # variantes aparecidas (bot de prueba)
 var stat_stuck_s := 0.0                 # segundos casi parado camino de la salida (bot)
 var beacon_spawned: Array = []           # enemigos invocados por las balizas (con tope de vivos)
 var engage_t := 0.0
@@ -128,6 +130,7 @@ func _ready() -> void:
 	aimtest = params.get("aimtest", false)
 	biome_id = params.get("biome", "ferron")
 	biome = GameData.BIOMES[biome_id]
+	theme_id = GameData.theme_of(biome_id)
 	asc = int(params.get("asc", 0))
 	eff_level = GameData.eff_level(level, biome_id)
 	asc_reward = pow(1.75, asc)
@@ -187,7 +190,7 @@ func _ready() -> void:
 		if e is Dictionary and e.get("type") == "ammo" and int(run_ammo.get(e["id"], 0)) > 0:
 			active_ammo = e["id"]
 			break
-	Music.play(biome_id)
+	Music.play(theme_id)
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
 	if OS.get_cmdline_user_args().has("--showinv"):
@@ -355,17 +358,20 @@ func _weighted(table: Dictionary) -> String:
 	return table.keys()[0]
 
 
+## Variante de un enemigo nuevo. Al subir el nivel de amenaza de un mapa sus especies no cambian:
+## aparecen más variantes. d = niveles por encima del mínimo del mapa.
+## Boss desde d 0 · Mega desde d 3 · Ultra desde d 8 · Uber desde d 15 (más con alerta y Ascensión).
 func _roll_variant() -> String:
 	var a := floorf(alert)
+	var d := level - int(biome.get("min_level", 1))
 	var r := rng.randf() / float(mod.get("elites", 1.0))
-	# M9: Ultra desde el nivel 20 y Uber desde el 40 (más frecuentes con alerta y Ascensión).
-	if level >= 40 and r < 0.004 + 0.002 * a + 0.002 * asc:
+	if d >= 15 and r < minf(0.03, 0.003 + 0.0015 * (d - 15) + 0.002 * a + 0.002 * asc):
 		return "uber"
-	if level >= 20 and r < 0.01 + 0.003 * a + 0.003 * asc:
+	if d >= 8 and r < minf(0.06, 0.006 + 0.003 * (d - 8) + 0.003 * a + 0.003 * asc):
 		return "ultra"
-	if level >= 3 and r < 0.01 + 0.004 * a:
+	if d >= 3 and r < minf(0.10, 0.01 + 0.005 * (d - 3) + 0.004 * a):
 		return "mega"
-	if r < 0.05 + 0.012 * a:
+	if r < minf(0.18, 0.03 + 0.01 * d + 0.01 * a):
 		return "boss"
 	return "base"
 
@@ -373,6 +379,8 @@ func _roll_variant() -> String:
 func spawn_enemy(id: String, pos: Vector2, lvl: int, variant: String) -> Enemy:
 	stat_spawned += 1
 	var e := Enemy.new()
+	if variant != "base":
+		stat_variants[variant] = int(stat_variants.get(variant, 0)) + 1
 	e.setup(self, id, lvl, variant, pos)
 	world.add_child(e)
 	enemies.append(e)
@@ -490,13 +498,13 @@ func _update_alert(delta: float) -> void:
 func _spawn_wave() -> void:
 	if enemies.size() > GameData.MAX_ENEMIES - 20:
 		return
-	# Llegan desde fuera del campo visual, en una dirección aleatoria.
-	var dir := Vector2.from_angle(rng.randf() * TAU)
-	var pos := constrain(player.plane_pos + dir * 900.0, 40.0)
-	var count := 2 + int(floorf(alert) * 0.6) + level / 10
-	for i in count:
-		var e := spawn_enemy(_weighted(biome["enemies"]), pos + Vector2.from_angle(rng.randf() * TAU) * 120.0, level, _roll_variant())
-		e.aggro = true
+	# Refuerzos: una patrulla nueva en una zona alejada de la nave que vaga por allí; sólo ataca si te acercas
+	# (antes llegaban directamente a por el jugador y se amontonaban sin orden).
+	var far: Array = cells.keys().filter(func(c): return cell_center(c).distance_to(player.plane_pos) > 1600.0)
+	if far.is_empty():
+		return
+	var pos := _free_point_in(far[rng.randi() % far.size()], 0.7)
+	spawn_group_at(pos, 2 + int(floorf(alert) * 0.5) + level / 15, level, false)
 
 
 func _separate_enemies() -> void:
@@ -1037,7 +1045,7 @@ func _on_boss_killed(_e: Enemy) -> void:
 	hud.toast("¡JEFE DERROTADO! Módulo obtenido: %s" % GameState.module_label(m), 5.0, UiTheme.WARN)
 	_gain("nexo", 5 + level / 4)
 	Sfx.play("objective")
-	Music.play(biome_id)
+	Music.play(theme_id)
 
 
 # --- M5/M19: puntos de objetivo e interés, eventos aleatorios -------------------------------
@@ -1706,10 +1714,10 @@ func _update_music(delta: float) -> void:
 		combat_level = maxf(0.0, combat_level - 0.08)
 	if is_instance_valid(boss) and boss.aggro and boss.plane_pos.distance_to(player.plane_pos) < 1600.0:
 		Music.play("boss")
-	elif combat_level >= 0.6 or (combat_level > 0.0 and Music.current == biome_id + "_combat"):
-		Music.play(biome_id + "_combat")
+	elif combat_level >= 0.6 or (combat_level > 0.0 and Music.current == theme_id + "_combat"):
+		Music.play(theme_id + "_combat")
 	else:
-		Music.play(biome_id)
+		Music.play(theme_id)
 
 
 # --- Playtest: piloto que juega como una persona ------------------------------------------------
@@ -1754,10 +1762,16 @@ func _bot_nav(delta: float) -> void:
 	var n_threat := 0
 	var nearest: Enemy = null
 	var nd := INF
+	# Presa: el enemigo más cercano aunque no ataque (los débiles son pasivos: hay que ir a por ellos).
+	var prey: Enemy = null
+	var pd := INF
 	for e in enemies:
 		if not e.alive or e.is_nest:
 			continue
 		var d := e.plane_pos.distance_to(player.plane_pos)
+		if d < pd:
+			pd = d
+			prey = e
 		if e.aggro and d < 900.0:
 			threat += e.plane_pos
 			n_threat += 1
@@ -1812,6 +1826,8 @@ func _bot_nav(delta: float) -> void:
 		player.target = goal_target
 	elif not player.target_valid() and nearest:
 		player.target = nearest
+	elif not player.target_valid() and prey and pd < 1400.0:
+		player.target = prey
 	# Movimiento
 	if goal != Vector2.INF and player.plane_pos.distance_to(goal) > goal_r and (nd > 450.0 or goal_r >= 300.0):
 		player.move_target = goal

@@ -15,7 +15,7 @@ var tex: Texture2D
 func _ready() -> void:
 	z_index = -20
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
-	var path := "res://assets/backgrounds/%s.png" % sector.biome_id
+	var path := "res://assets/backgrounds/%s.png" % sector.theme_id
 	if ResourceLoader.exists(path):
 		tex = load(path)
 	var r := RandomNumberGenerator.new()

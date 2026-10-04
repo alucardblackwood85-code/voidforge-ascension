@@ -14,13 +14,17 @@ var menu: StartMenu
 
 func _ready() -> void:
 	var list := W.vbox(10)
+	var shown := {}   # una especie puede aparecer en dos mapas: se muestra sólo en el primero
 	for bid in GameData.BIOMES.keys():
 		var b: Dictionary = GameData.BIOMES[bid]
 		if not b.has("enemies"):
 			continue
-		list.add_child(W.title("%s — %s" % [b["faction"], b["name"]], 20))
+		list.add_child(W.title("%s — %s (nivel %d+)" % [b["faction"], b["name"], b["min_level"]], 20))
 		var g := W.grid(5, 8)
 		for eid in b["enemies"].keys() + b["elites"]:
+			if shown.has(eid):
+				continue
+			shown[eid] = true
 			var e: Dictionary = GameData.ENEMIES[eid]
 			var c := W.card(Color(0.05, 0.08, 0.13, 0.92), (e["accent"] as Color).darkened(0.4), 8)
 			c.custom_minimum_size = Vector2(250, 0)

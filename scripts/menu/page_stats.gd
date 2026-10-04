@@ -98,10 +98,17 @@ func _ready() -> void:
 	var kb: Dictionary = GameState.data["kills_by"]
 	for bid in GameData.BIOMES.keys():
 		var b: Dictionary = GameData.BIOMES[bid]
-		if not b.has("enemies"):
+		# Una entrada por facción con las especies de sus dos mapas, sin repetir.
+		if not b.has("enemies") or GameData.theme_of(bid) != bid:
 			continue
 		var fac_total := 0
-		var ids: Array = b["enemies"].keys() + b["elites"]
+		var ids: Array = []
+		for bid2 in GameData.BIOMES.keys():
+			var b2: Dictionary = GameData.BIOMES[bid2]
+			if b2.has("enemies") and GameData.theme_of(bid2) == bid:
+				for eid in b2["enemies"].keys() + b2["elites"]:
+					if not ids.has(eid):
+						ids.append(eid)
 		for eid in ids:
 			fac_total += int(kb.get(eid, 0))
 		list.add_child(UiTheme.label("%s — %d bajas" % [b["faction"], fac_total], 15, UiTheme.TEXT))

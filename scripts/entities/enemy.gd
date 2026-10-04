@@ -116,7 +116,7 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	strafe_sign = 1.0 if randf() < 0.5 else -1.0
 	heading = randf() * TAU
 	anim = randf() * 10.0
-	shot_sfx = "e_shot_swarm" if arch == "swarm" else FACTION_SHOT.get(sector.biome_id, "e_shot_light")
+	shot_sfx = "e_shot_swarm" if arch == "swarm" else FACTION_SHOT.get(sector.theme_id, "e_shot_light")
 	_setup_shield()
 	# Los afijos llegan a partir del nivel 5 (antes castigaban demasiado al jugador nuevo).
 	if level >= 5:
@@ -147,14 +147,17 @@ func calm_down(t: float) -> void:
 	_set_state("move")
 
 
-## Al detectar al jugador avisa a su grupo cercano (los enemigos atacan en manada).
-func set_aggro() -> void:
+## Entra en combate. Si le atacan (`call_group`) avisa a su grupo cercano para que le defienda; al
+## detectar al jugador por proximidad entra solo (antes cualquier detección arrastraba a todo el grupo).
+func set_aggro(call_group: bool = true) -> void:
 	if aggro:
 		return
 	aggro = true
+	if not call_group:
+		return
 	# Avisa sólo a los vecinos directos (sin cadena: antes se activaba medio mapa en cascada).
 	for e in sector.enemies:
-		if e != self and not e.aggro and not e.is_nest and e.calm_t <= 0.0 and e.plane_pos.distance_to(plane_pos) < 350.0:
+		if e != self and not e.aggro and not e.is_nest and e.calm_t <= 0.0 and e.plane_pos.distance_to(plane_pos) < 300.0:
 			e.aggro = true
 
 
@@ -188,11 +191,11 @@ func _process(delta: float) -> void:
 		_boss_tick(delta, p, dist)
 	# Detección: 700 u, +80 u por nivel de alerta (antes, con alerta 3 se activaba todo el mapa).
 	calm_t = maxf(0.0, calm_t - delta)
-	if not aggro and calm_t <= 0.0 and not sector.showcase and dist < 700.0 + 80.0 * sector.alert:
-		set_aggro()
+	if not aggro and calm_t <= 0.0 and not sector.showcase and dist < float(sector.biome.get("temper", 600.0)) + 40.0 * sector.alert:
+		set_aggro(false)
 	# Abandona la persecución si el jugador se aleja (permite retirarse a recargar escudo).
 	if aggro and not is_nest and not has_meta("objective"):
-		if dist > 1500.0:
+		if dist > 1100.0:
 			leash_t += delta
 			if leash_t > 5.0:
 				aggro = false
@@ -547,7 +550,7 @@ func _spawn_children(n: int) -> void:
 	if spawned >= 12 or sector.enemies.size() >= GameData.MAX_ENEMIES:
 		return
 	spawned += n
-	var child: String = def.get("spawns", "chatarrax")
+	var child: String = def.get("spawns", sector.biome["enemies"].keys()[0])
 	sfx("e_spawn", -2.0)
 	for i in n:
 		var e := sector.spawn_enemy(child, plane_pos + Vector2.from_angle(randf() * TAU) * radius * 1.2, level, "base")
@@ -623,12 +626,61 @@ func die(by_player: bool) -> void:
 	queue_free()
 
 
+static var _glow: Texture2D
+
+
+## Textura de brillo radial compartida por las auras.
+static func _glow_tex() -> Texture2D:
+	if _glow == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 0.9))
+		g.set_color(1, Color(1, 1, 1, 0.0))
+		g.add_point(0.45, Color(1, 1, 1, 0.35))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 128
+		t.height = 128
+		_glow = t
+	return _glow
+
+
+## Aura de las variantes: más intensa cuanto más alta (Boss dorado, Mega rojo, Ultra violeta, Uber cian).
+func _draw_aura(v: Dictionary, alpha: float) -> void:
+	var tier: int = ["boss", "mega", "ultra", "uber"].find(variant) + 1
+	if tier <= 0:
+		return
+	var col: Color = v["color"]
+	var pulse := 0.75 + 0.25 * sin(anim * (3.0 + tier))
+	var eye := Vector2(0, -height)
+	var gr := radius * (1.7 + 0.25 * tier) * (0.95 + 0.05 * pulse)
+	draw_texture_rect(_glow_tex(), Rect2(eye - Vector2(gr, gr), Vector2(gr, gr) * 2.0), false, Color(col, minf(0.9, (0.45 + 0.12 * tier) * pulse * alpha)))
+	draw_ring(radius * 1.35, Color(col, (0.45 + 0.1 * tier) * pulse * alpha), 2.0 + tier, 0.0)
+	if tier >= 2:
+		draw_ring(radius * 1.6, Color(col, 0.3 * pulse * alpha), 1.5, 0.0)
+	if tier >= 3:
+		# Chispas en órbita: 3 (Ultra) o 5 (Uber).
+		var n := 3 if tier == 3 else 5
+		for i in n:
+			var a := anim * (1.6 if tier == 3 else 2.4) + TAU * i / n
+			var sp := Iso.to_screen(Vector2.from_angle(a) * radius * 1.5) + eye * 0.5
+			draw_circle(sp, 2.5 + tier * 0.5, Color(col.lightened(0.4), 0.9 * alpha))
+	if tier == 4:
+		# Uber: segundo anillo discontinuo que gira en sentido contrario.
+		draw_set_transform_matrix(Iso.MATRIX)
+		for k in 8:
+			var a0 := -anim * 1.2 + TAU * k / 8.0
+			draw_arc(Vector2.ZERO, radius * 1.9, a0, a0 + TAU / 16.0, 6, Color(col, 0.7 * alpha), 3.0 / Iso.K, true)
+		draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
 func _draw() -> void:
 	var v: Dictionary = GameData.VARIANTS[variant]
 	var alpha := 0.18 + 0.1 * sin(anim * 20.0) if phased else 1.0
 	if variant != "base":
-		var pulse := 0.6 + 0.4 * sin(anim * 4.0)
-		draw_ring(radius * 1.35, Color(v["color"], 0.5 * pulse * alpha), 3.0, height)
+		_draw_aura(v, alpha)
 	var fill: Color = def["color"]
 	var edge: Color = fill.lightened(0.35)
 	if flash > 0.0:
@@ -733,7 +785,7 @@ func _setup_shield() -> void:
 	if is_nest:
 		return
 	var frac := 0.0
-	if sector.biome_id in ["prismaticos", "vacio"]:
+	if sector.theme_id in ["prismaticos", "vacio"]:
 		frac = 0.4
 	elif level >= 20:
 		frac = 0.25

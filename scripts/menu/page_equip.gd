@@ -12,7 +12,7 @@ var menu: StartMenu
 func _ready() -> void:
 	add_theme_constant_override("separation", 10)
 	var tabs := W.hbox(6)
-	for t in [["ship", "NAVE"], ["pet", "PET / DRON"], ["hotbar", "BARRA RÁPIDA 1-0"]]:
+	for t in [["ship", "NAVE"], ["pet", "PET"], ["hotbar", "BARRA RÁPIDA 1-0"]]:
 		var b := Button.new()
 		b.text = "  %s  " % t[1]
 		b.focus_mode = Control.FOCUS_NONE
@@ -155,11 +155,24 @@ Comparado con lo equipado: " + cmp
 	return zone
 
 
-# --- Pet / dron ----------------------------------------------------------------------------
+# --- Pet ----------------------------------------------------------------------------
 func _pet_view() -> void:
 	if not GameState.data["unlocks"].get("pet", false):
+		# Sin pet: se compra en la tienda (créditos o Cristales Nexo).
 		var lc := W.card(Color(0.05, 0.08, 0.13, 0.92), UiTheme.WARN, 20)
-		lc.add_child(UiTheme.label("🔒 Tu pet se une al escuadrón tras completar 2 incursiones (%d/2)." % int(GameState.data["stats"]["runs"]), 18, UiTheme.WARN))
+		var lv := W.vbox(10)
+		lc.add_child(lv)
+		var lh := W.hbox(16)
+		lh.add_child(ShipPreview.make(_pet_tex(1), Vector2(180, 130)))
+		var lt := W.vbox(6)
+		lt.add_child(UiTheme.label("Aún no tienes pet", 22, UiTheme.WARN))
+		lt.add_child(UiTheme.label("Un pet acompaña a tu nave, dispara a tu objetivo o recoge botín, y evoluciona al subir de nivel:\ncada forma nueva abre un láser más y, desde la tercera, generadores de escudo.", 14, UiTheme.TEXT))
+		lt.add_child(W.button("Comprar pet en la Tienda", func():
+			menu.state["shop_tab"] = "drone_laser"
+			menu.show_page("shop"), true, 260))
+		lh.add_child(lt)
+		lv.add_child(lh)
+		lv.add_child(_stage_strip(0))
 		add_child(lc)
 		return
 	var row := W.hbox(14)
@@ -170,10 +183,11 @@ func _pet_view() -> void:
 	var head := W.card()
 	var hh := W.hbox(14)
 	head.add_child(hh)
-	hh.add_child(ShipPreview.make(SpriteLib.get_tex("drone", "drone"), Vector2(200, 150)))
-	var iv := W.vbox(6)
-	iv.add_child(UiTheme.label("Dron acompañante", 24, UiTheme.ACCENT))
 	var plv := GameState.pet_level()
+	var stage := GameData.pet_stage(plv)
+	hh.add_child(ShipPreview.make(_pet_tex(stage), Vector2(200, 150)))
+	var iv := W.vbox(6)
+	iv.add_child(UiTheme.label("Pet — %s" % GameData.PET_STAGE_NAMES[stage - 1], 24, UiTheme.ACCENT))
 	var pxp := int(GameState.data["pet"]["xp"])
 	iv.add_child(UiTheme.label("Nivel %d / %d  ·  +%d%% daño  ·  +%d%% cadencia" % [plv, GameData.PET_MAX_LEVEL, int(GameData.PET_DMG_PER_LEVEL * (plv - 1) * 100), int(GameData.PET_RATE_PER_LEVEL * (plv - 1) * 100)], 15, Color("5affc8")))
 	var pbar := ProgressBar.new()
@@ -188,6 +202,8 @@ func _pet_view() -> void:
 		pbar.value = pbar.max_value
 	iv.add_child(pbar)
 	iv.add_child(UiTheme.label("El pet recibe el 25%% de tu experiencia (%s / %s XP de pet)" % [GameData.format_num(pxp), GameData.format_num(GameData.pet_xp_for_level(mini(plv + 1, GameData.PET_MAX_LEVEL)))], 12, UiTheme.MUTED))
+	if stage < GameData.PET_STAGE_LEVELS.size():
+		iv.add_child(UiTheme.label("Siguiente forma: %s en el nivel %d (+1 láser%s)" % [GameData.PET_STAGE_NAMES[stage], GameData.PET_STAGE_LEVELS[stage], ", +1 generador de escudo" if stage + 1 >= 3 else ""], 13, UiTheme.WARN))
 	iv.add_child(UiTheme.label("Sigue a tu nave y ataca automáticamente a tu objetivo. Habilidad: [%s]" % Controls.key_label("drone"), 14, UiTheme.MUTED))
 	var roles := W.hbox(8)
 	var cur: String = GameState.data["drone"]["role"]
@@ -200,40 +216,21 @@ func _pet_view() -> void:
 	iv.add_child(UiTheme.label(Drone.ROLES[cur]["ability"], 13, UiTheme.TEXT))
 	hh.add_child(iv)
 	left.add_child(head)
-	var sec := W.card(Color(0.04, 0.06, 0.1, 0.9))
-	var sv := W.vbox(6)
-	sec.add_child(sv)
-	sv.add_child(UiTheme.label("LÁSERES DEL PET  (3.er slot en el nivel %d)" % GameData.PET_THIRD_SLOT_LEVEL, 16, UiTheme.ACCENT))
-	var slots := W.hbox(8)
-	var dl: Array = GameState.data["drone"]["lasers"]
-	for i in dl.size():
-		if i >= 2 and GameState.pet_level() < GameData.PET_THIRD_SLOT_LEVEL:
-			var lock := W.card(Color(0.03, 0.04, 0.07, 0.9), UiTheme.BORDER, 6)
-			lock.custom_minimum_size = Vector2(96, 112)
-			var ll := UiTheme.label("Bloqueado
-Pet nv %d" % GameData.PET_THIRD_SLOT_LEVEL, 12, UiTheme.MUTED)
-			ll.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lock.add_child(ll)
-			slots.add_child(lock)
-			continue
-		var uid := int(dl[i])
-		var it := GameState.find_item("drone_lasers", uid) if uid >= 0 else {}
-		var slot := DropSlot.make("drone_lasers", i, uid, W.item_info("drone_lasers", it) if not it.is_empty() else {}, "Láser %d" % (i + 1))
-		slot.dropped.connect(_on_drop)
-		slot.cleared.connect(func(sl): _equip("drone_lasers", sl.index, -1))
-		slots.add_child(slot)
-	sv.add_child(slots)
-	left.add_child(sec)
+	left.add_child(_stage_strip(stage))
+	left.add_child(_pet_slots("drone_lasers", "LÁSERES DEL PET", GameData.PET_MAX_LASERS, GameData.pet_laser_slots(plv)))
+	left.add_child(_pet_slots("drone_gens", "GENERADORES DE ESCUDO DEL PET  (proyectan el %d%% de su escudo sobre tu nave)" % int(GameData.PET_GEN_SHARE * 100), GameData.PET_MAX_GENS, GameData.pet_gen_slots(plv)))
 	row.add_child(left)
-	# Inventario de láseres de pet
+	# Inventario: láseres de pet y generadores de escudo
 	var zone := DropZone.new()
 	zone.kind = "drone_lasers"
+	zone.kinds = ["drone_gens"]
 	zone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	zone.add_theme_stylebox_override("panel", UiTheme.box(Color(0.04, 0.06, 0.1, 0.92), UiTheme.BORDER, 8, 1, 10))
-	zone.received.connect(func(d): _equip("drone_lasers", int(d["from_slot"]), -1))
+	zone.received.connect(func(d): _equip(d["kind"], int(d["from_slot"]), -1))
 	var v := W.vbox(8)
 	zone.add_child(v)
-	v.add_child(UiTheme.label("INVENTARIO DE PET", 16, UiTheme.ACCENT))
+	v.add_child(UiTheme.label("LÁSERES DE PET", 16, UiTheme.ACCENT))
+	var dl: Array = GameState.data["drone"]["lasers"]
 	var flow := HFlowContainer.new()
 	flow.add_theme_constant_override("h_separation", 8)
 	for it in GameState.data["drone_lasers"]:
@@ -242,14 +239,85 @@ Pet nv %d" % GameData.PET_THIRD_SLOT_LEVEL, 12, UiTheme.MUTED)
 		var d := DragItem.make("drone_lasers", int(it["uid"]), W.item_info("drone_lasers", it))
 		d.activated.connect(func(item): _quick_equip(item.kind, item.uid))
 		flow.add_child(d)
-	v.add_child(W.scroll(flow))
+	v.add_child(flow)
+	v.add_child(UiTheme.label("GENERADORES DE ESCUDO", 16, UiTheme.ACCENT))
+	var pg: Array = GameState.data["drone"]["gens"]
+	var gflow := HFlowContainer.new()
+	gflow.add_theme_constant_override("h_separation", 8)
+	for it in GameState.data["gens"]:
+		if pg.has(int(it["uid"])) or GameData.GENERATORS[it["id"]]["type"] != "shield":
+			continue
+		var info := W.item_info("gens", it)
+		var where := GameState.equipped_on("gens", int(it["uid"]))
+		if where != "":
+			info["tip"] += "\n(Equipado en %s: se moverá al pet)" % GameData.SHIPS[where]["name"]
+		var d := DragItem.make("drone_gens", int(it["uid"]), info)
+		d.activated.connect(func(item): _quick_equip(item.kind, item.uid))
+		gflow.add_child(d)
+	v.add_child(W.scroll(gflow))
 	v.add_child(W.button("Comprar láseres de pet en la Tienda", func():
-		menu.state["shop_tab"] = "pet"
+		menu.state["shop_tab"] = "drone_laser"
 		menu.show_page("shop")))
 	row.add_child(zone)
 
 
-# --- Barra rápida ---------------------------------------------------------------------------
+## Textura de la forma `stage` del pet (cae a la esfera si aún no existe).
+func _pet_tex(stage: int) -> Texture2D:
+	var t := SpriteLib.get_tex("drone", "pet_s%d" % stage)
+	return t if t else SpriteLib.get_tex("drone", "drone")
+
+
+## Tira con las 5 formas del pet y el nivel en que se alcanza cada una.
+func _stage_strip(current: int) -> Control:
+	var c := W.card(Color(0.04, 0.06, 0.1, 0.9))
+	var h := W.hbox(10)
+	c.add_child(h)
+	for i in GameData.PET_STAGE_LEVELS.size():
+		var st := i + 1
+		var col := W.vbox(2)
+		var pic := W.pic(_pet_tex(st), Vector2(110, 70))
+		if st > current:
+			pic.modulate = Color(0.4, 0.4, 0.45)
+		col.add_child(pic)
+		var reached := st <= current
+		var lab := UiTheme.label("%s\nNv %d · %d láser%s%s" % [GameData.PET_STAGE_NAMES[i], GameData.PET_STAGE_LEVELS[i], st, "es" if st > 1 else "", (" · %d esc." % (st - 2)) if st >= 3 else ""], 12, Color("5affc8") if st == current else (UiTheme.TEXT if reached else UiTheme.MUTED))
+		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(lab)
+		h.add_child(col)
+		if st < GameData.PET_STAGE_LEVELS.size():
+			h.add_child(UiTheme.label("›", 22, UiTheme.MUTED))
+	return c
+
+
+## Ranuras del pet (láseres o generadores): las cerradas indican la forma/nivel que las abre.
+func _pet_slots(kind: String, title: String, total: int, open: int) -> Control:
+	var sec := W.card(Color(0.04, 0.06, 0.1, 0.9))
+	var sv := W.vbox(6)
+	sec.add_child(sv)
+	sv.add_child(UiTheme.label(title, 16, UiTheme.ACCENT))
+	var slots := W.hbox(8)
+	var arr: Array = GameState.data["drone"]["lasers" if kind == "drone_lasers" else "gens"]
+	for i in total:
+		if i >= open:
+			# Láser i+1 llega con la forma i+1; generador i+1 con la forma i+3.
+			var st := i + 1 if kind == "drone_lasers" else i + 3
+			var lock := W.card(Color(0.03, 0.04, 0.07, 0.9), UiTheme.BORDER, 6)
+			lock.custom_minimum_size = Vector2(96, 112)
+			var ll := UiTheme.label("Bloqueado\n%s\nNv %d" % [GameData.PET_STAGE_NAMES[st - 1], GameData.PET_STAGE_LEVELS[st - 1]], 12, UiTheme.MUTED)
+			ll.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lock.add_child(ll)
+			slots.add_child(lock)
+			continue
+		var uid := int(arr[i])
+		var list_key := "drone_lasers" if kind == "drone_lasers" else "gens"
+		var it := GameState.find_item(list_key, uid) if uid >= 0 else {}
+		var slot := DropSlot.make(kind, i, uid, W.item_info(list_key, it) if not it.is_empty() else {}, ("Láser %d" if kind == "drone_lasers" else "Escudo %d") % (i + 1))
+		slot.dropped.connect(_on_drop)
+		slot.cleared.connect(func(sl): _equip(kind, sl.index, -1))
+		slots.add_child(slot)
+	sv.add_child(slots)
+	return sec
+
 func _hotbar_view() -> void:
 	var sec := W.card(Color(0.04, 0.06, 0.1, 0.9))
 	var sv := W.vbox(8)
