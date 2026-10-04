@@ -45,6 +45,9 @@ func _tooltip() -> String:
 	if e["type"] == "ammo":
 		var a: Dictionary = GameData.AMMO[e["id"]]
 		return "%s (%s daño)\nRestante: %d" % [a["name"], a["short"], int(sector.run_ammo.get(e["id"], 0))]
+	if e["type"] == "missile":
+		var md: Dictionary = GameData.MISSILES[e["id"]]
+		return "Misil %s\nDaño %d · precisión %d%%\nRestante: %d" % [md["name"], int(md["dmg"]), int(md["acc"] * 100), int(sector.run_missiles.get(e["id"], 0))]
 	var it: Dictionary = GameData.ITEMS[e["id"]]
 	return "%s\n%s\nRestante: %d" % [it["name"], it["desc"], int(sector.run_items.get(e["id"], 0))]
 
@@ -64,6 +67,13 @@ func _draw() -> void:
 			label = a["short"]
 			count = int(sector.run_ammo.get(e["id"], 0))
 			active = sector.active_ammo == e["id"]
+		elif e["type"] == "missile":
+			var md: Dictionary = GameData.MISSILES[e["id"]]
+			color = md["color"]
+			label = md["short"]
+			count = int(sector.run_missiles.get(e["id"], 0))
+			active = sector.active_missile == e["id"]
+			cd_frac = sector.missile_cd / GameData.MISSILE_INTERVAL if active else 0.0
 		else:
 			var it: Dictionary = GameData.ITEMS[e["id"]]
 			color = it["color"]
@@ -77,7 +87,7 @@ func _draw() -> void:
 		draw_rect(inner, Color(color, 0.18))
 		draw_rect(inner, Color(color, 0.8), false, 1.5)
 		var f := ThemeDB.fallback_font
-		var icon: Texture2D = SpriteLib.get_icon("ammo" if e["type"] == "ammo" else "items", e["id"])
+		var icon: Texture2D = SpriteLib.get_icon({"ammo": "ammo", "missile": "missiles"}.get(e["type"], "items"), e["id"])
 		if icon:
 			draw_texture_rect(icon, r.grow(-4), false)
 			draw_string_outline(f, Vector2(0, 26), label, HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, 3, Color.BLACK)

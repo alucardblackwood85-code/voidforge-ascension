@@ -171,6 +171,54 @@ const AMMO := {
 	"mk6": {"name": "Carga Mk-VI", "short": "x6", "mult": 6.0, "color": Color("ffd84a"), "recipe": {"credits": 50000, "graviton": 1, "materia_oscura": 2, "semilla_singular": 1}},
 }
 
+# --- Puntos de ascenso (mejoras permanentes de nave y cuenta) -----------------------------------
+# Se compran con Cristales Nexo, cada punto algo más caro que el anterior (ASCENT_COST_BASE +
+# ASCENT_COST_STEP x puntos ya comprados: del 8 al 72, unos 2.600 en total) y se reparten entre
+# 13 mejoras de 5 niveles. Reasignar todos cuesta ASCENT_RESET Nexo.
+const ASCENT_COST_BASE := 8
+const ASCENT_COST_STEP := 1
+const ASCENT_RESET := 50
+const ASCENT_MAX := 5
+const ASCENT_SKILLS := {
+	"hull": {"name": "Blindaje reforzado", "group": "Nave", "per": 0.02, "desc": "+%s de casco"},
+	"shield": {"name": "Ingeniería de escudos", "group": "Nave", "per": 0.02, "desc": "+%s de escudo"},
+	"speed": {"name": "Propulsión", "group": "Nave", "per": 0.01, "desc": "+%s de velocidad"},
+	"cargo": {"name": "Logística", "group": "Nave", "per": 0.05, "desc": "+%s de bodega"},
+	"repair": {"name": "Nanorreparación", "group": "Nave", "per": 0.06, "desc": "+%s de reparación de los kits"},
+	"firepower": {"name": "Potencia de fuego", "group": "Combate", "per": 0.015, "desc": "+%s de daño"},
+	"elite": {"name": "Cazador de élites", "group": "Combate", "per": 0.03, "desc": "+%s de daño a variantes y jefes"},
+	"missile_dmg": {"name": "Pirotecnia", "group": "Combate", "per": 0.04, "desc": "+%s de daño de misiles"},
+	"missile_acc": {"name": "Guiado avanzado", "group": "Combate", "per": 0.02, "desc": "+%s de precisión de misiles"},
+	"pet": {"name": "Vínculo con el pet", "group": "Combate", "per": 0.03, "desc": "+%s de daño y experiencia del pet"},
+	"credits": {"name": "Codicia", "group": "Cuenta", "per": 0.03, "desc": "+%s de créditos"},
+	"materials": {"name": "Fortuna", "group": "Cuenta", "per": 0.03, "desc": "+%s de materiales"},
+	"xp": {"name": "Instrucción", "group": "Cuenta", "per": 0.03, "desc": "+%s de experiencia"},
+}
+
+
+# --- Misiles teledirigidos ------------------------------------------------------------------
+# El lanzamisiles dispara solo 1 misil cada MISSILE_INTERVAL s al objetivo fijado. Cada misil tiene
+# daño base (varía ±20% por impacto, 8% de crítico x1,5), precisión (probabilidad de acertar, menor
+# contra blancos rápidos) y, los caros, daño en área. Receta = lote de 10.
+const MISSILE_INTERVAL := 4.0
+const MISSILE_RANGE := 820.0
+const MISSILE_LOT := 10
+const MISSILES := {
+	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 900.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 400, "ferrita": 10}},
+	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 1600.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 1200, "ferrita": 10, "plata": 10}},
+	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 2800.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 3000, "titanio": 8}},
+	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 2400.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 4500, "cobalto": 8, "paladio": 1}},
+	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 4200.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 9000, "titanio": 10, "iridio": 2}},
+	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6500.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 20000, "osmio": 2, "neutronio": 1}},
+}
+
+
+## Probabilidad de acierto: la del misil, más la bonificación del piloto, menos hasta un 12% contra
+## blancos rápidos (los que se mueven a 150 u/s o más).
+static func missile_hit_chance(def: Dictionary, target_speed: float, bonus: float = 0.0) -> float:
+	return clampf(float(def["acc"]) + bonus - 0.12 * clampf(target_speed / 150.0, 0.0, 1.0), 0.35, 0.98)
+
+
 # --- Consumibles / desplegables (4.3) — receta por unidad --------------------
 const ITEMS := {
 	"repair": {"name": "Kit de reparación", "short": "REP", "kind": "instant", "cd": 10.0, "color": Color("6fd17a"), "desc": "Repara 30% del casco.", "recipe": {"credits": 800, "nanoespuma": 6, "resina_plasma": 2}},

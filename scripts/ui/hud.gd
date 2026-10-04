@@ -256,6 +256,9 @@ func _draw_canvas() -> void:
 	# Munición activa
 	var am: Dictionary = GameData.AMMO[sector.active_ammo]
 	_text(Vector2(cx - 200, vs.y - 84), "Munición: %s (%s)  %s  ·  %d por andanada" % [am["name"], am["short"], GameData.format_num(sector.run_ammo.get(sector.active_ammo, 0)), p.lasers.size()], 14, am["color"], HORIZONTAL_ALIGNMENT_CENTER, 400)
+	var md: Dictionary = GameData.MISSILES[sector.active_missile]
+	var mleft := int(sector.run_missiles.get(sector.active_missile, 0))
+	_text(Vector2(cx - 200, vs.y - 102), "Misil: %s  %s  ·  %s" % [md["name"], GameData.format_num(mleft), ("listo" if sector.missile_cd <= 0.0 else "%.1f s" % sector.missile_cd) if mleft > 0 else "sin misiles"], 13, md["color"] if mleft > 0 else UiTheme.BAD, HORIZONTAL_ALIGNMENT_CENTER, 400)
 
 	# M11: tutorial
 	if hint != "":

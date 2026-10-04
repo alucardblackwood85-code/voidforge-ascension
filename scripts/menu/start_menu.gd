@@ -5,9 +5,11 @@ extends Control
 
 signal launch_requested(params: Dictionary)
 
+# Pestañas principales en el orden de uso: preparar la nave, conseguir equipo, mejorar la cuenta y
+# consultar; Ajustes va aparte, a la derecha.
 const PAGES := [
-	["hangar", "HANGAR"], ["equip", "EQUIPAMIENTO"], ["shop", "TIENDA"], ["craft", "CRAFTEO"],
-	["missions", "MISIONES"], ["stats", "ESTADÍSTICAS"], ["codex", "CÓDEX"], ["settings", "AJUSTES"],
+	["hangar", "Hangar"], ["equip", "Equipamiento"], ["shop", "Tienda"], ["craft", "Fabricación"],
+	["ascent", "Ascenso"], ["missions", "Misiones"], ["codex", "Códex"], ["stats", "Estadísticas"],
 ]
 
 var page_id := "hangar"
@@ -45,7 +47,10 @@ func _ready() -> void:
 	add_child(root)
 	# Barra superior
 	var top := PanelContainer.new()
-	top.add_theme_stylebox_override("panel", UiTheme.box(Color(0.02, 0.04, 0.08, 0.92), Color(0.15, 0.3, 0.45), 0, 1, 10))
+	var tsb := UiTheme.box(Color(0.02, 0.035, 0.07, 0.95), Color(0.15, 0.3, 0.45), 0, 0, 10)
+	tsb.border_width_bottom = 2
+	tsb.border_color = Color(UiTheme.ACCENT, 0.35)
+	top.add_theme_stylebox_override("panel", tsb)
 	root.add_child(top)
 	var top_v := W.vbox(8)
 	top.add_child(top_v)
@@ -114,6 +119,8 @@ func refresh() -> void:
 			page = PageCodex.new()
 		"settings":
 			page = PageSettings.new()
+		"ascent":
+			page = PageAscent.new()
 		"play":
 			page = PageStarmap.new()
 	page.set("menu", self)
@@ -124,14 +131,27 @@ func refresh() -> void:
 func _build_info() -> void:
 	for c in info_bar.get_children():
 		c.queue_free()
-	info_bar.add_child(UiTheme.label("VOIDFORGE", 28, UiTheme.ACCENT))
-	info_bar.add_child(UiTheme.label("ASCENSION", 28, UiTheme.ACCENT2))
+	var logo := W.hbox(10)
+	logo.add_child(UiTheme.heading("Voidforge", 32, UiTheme.ACCENT))
+	logo.add_child(UiTheme.heading("Ascension", 32, UiTheme.ACCENT2))
+	info_bar.add_child(logo)
 	info_bar.add_child(W.spacer())
+	# Monedas en cápsulas biseladas con su icono.
 	for k in ["credits", "nexo", "seals"]:
-		var h := W.hbox(4)
-		h.add_child(UiTheme.label(GameData.mat_name(k), 14, UiTheme.MUTED))
-		h.add_child(UiTheme.label(GameData.format_num(GameState.get_amount(k)), 18, GameData.mat_color(k) if k != "seals" else UiTheme.WARN))
-		info_bar.add_child(h)
+		var pill := PanelContainer.new()
+		pill.add_theme_stylebox_override("panel", UiTheme.bevel(Color(0.08, 0.11, 0.18), Color(0.03, 0.05, 0.09), UiTheme.BORDER, 6, 6))
+		pill.tooltip_text = GameData.mat_name(k)
+		var h := W.hbox(6)
+		pill.add_child(h)
+		var ic := W.icon("mat", k)
+		if ic:
+			h.add_child(W.pic(ic, Vector2(24, 24)))
+		else:
+			h.add_child(UiTheme.label(GameData.mat_name(k), 12, UiTheme.MUTED))
+		var v := UiTheme.label(GameData.format_num(GameState.get_amount(k)), 20, GameData.mat_color(k) if k != "seals" else UiTheme.WARN)
+		v.add_theme_font_override("font", UiTheme.display_font())
+		h.add_child(v)
+		info_bar.add_child(pill)
 	var lvl := GameState.level()
 	info_bar.add_child(RankBadge.make(lvl, 44))
 	var rv := W.vbox(0)
@@ -146,9 +166,8 @@ func _build_info() -> void:
 	rv.add_child(bar)
 	rv.add_child(UiTheme.label("Nivel %d · %s / %s XP" % [lvl, GameData.format_num(GameState.data["xp"]), GameData.format_num(nxt)], 11, UiTheme.MUTED))
 	info_bar.add_child(rv)
-	var play := W.button("  ▶  JUGAR  ", func(): show_page("play"), true, 170)
-	play.custom_minimum_size.y = 48
-	play.add_theme_font_size_override("font_size", 22)
+	var play := W.btn("Jugar  >", func(): show_page("play"), "gold", 190, 26)
+	play.custom_minimum_size.y = 52
 	info_bar.add_child(play)
 
 
@@ -156,22 +175,25 @@ func _build_nav() -> void:
 	for c in nav.get_children():
 		c.queue_free()
 	for p in PAGES:
-		var b := Button.new()
-		b.text = "  %s  " % p[1]
-		if p[0] == "missions":
+		var label: String = p[1]
+		var id: String = p[0]
+		if id == "missions":
 			var pend := Prog.unclaimed_count() + maxi(0, Prog.season_tier() - int(GameState.data["season"]["claimed"]))
 			if pend > 0:
-				b.text = "  MISIONES (%d)  " % pend
-				b.add_theme_color_override("font_color", UiTheme.GOOD)
+				label = "Misiones (%d)" % pend
+		if id == "ascent" and GameState.ascent_free() > 0:
+			label = "Ascenso (%d)" % GameState.ascent_free()
+		var b := W.btn(label, func(): show_page(id), "primary" if id == page_id else "normal", 0, 17)
 		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size.y = 36
-		var active: bool = p[0] == page_id
-		if active:
-			b.add_theme_stylebox_override("normal", UiTheme.box(Color(0.06, 0.25, 0.3), UiTheme.ACCENT, 4, 2, 8))
-			b.add_theme_color_override("font_color", Color.WHITE)
-		var id: String = p[0]
-		b.pressed.connect(func(): show_page(id))
+		b.custom_minimum_size.y = 40
+		if id == "missions" and label != "Misiones":
+			b.add_theme_color_override("font_color", UiTheme.GOOD)
 		nav.add_child(b)
+	nav.add_child(W.spacer())
+	var cfg := W.btn("Ajustes", func(): show_page("settings"), "primary" if page_id == "settings" else "normal", 0, 17)
+	cfg.focus_mode = Control.FOCUS_NONE
+	cfg.custom_minimum_size.y = 40
+	nav.add_child(cfg)
 
 
 func launch(params: Dictionary) -> void:

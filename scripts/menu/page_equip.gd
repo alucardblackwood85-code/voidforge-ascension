@@ -172,9 +172,9 @@ Comparado con lo equipado: " + cmp
 		flow.add_child(d)
 		count += 1
 	if count == 0:
-		var msg := "No tienes objetos libres de este tipo. Consíguelos en la Tienda o en Crafteo."
+		var msg := "No tienes objetos libres de este tipo. Consíguelos en la Tienda o en Fabricación."
 		if filter == "mods":
-			msg = "Aún no tienes módulos. Fabrica cajas de módulos en Crafteo → Cajas."
+			msg = "Aún no tienes módulos. Fabrica cajas de módulos en Fabricación → Cajas."
 		var l := UiTheme.label(msg, 14, UiTheme.MUTED)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = 560
@@ -406,6 +406,8 @@ func _hotbar_view() -> void:
 	flow.add_theme_constant_override("h_separation", 8)
 	for id in GameData.AMMO.keys():
 		flow.add_child(_entry_item({"type": "ammo", "id": id}))
+	for id in GameData.MISSILES.keys():
+		flow.add_child(_entry_item({"type": "missile", "id": id}))
 	for id in GameData.ITEMS.keys():
 		flow.add_child(_entry_item({"type": "item", "id": id}))
 	v.add_child(flow)
@@ -413,6 +415,10 @@ func _hotbar_view() -> void:
 
 
 func _entry_info(e: Dictionary) -> Dictionary:
+	if e["type"] == "missile":
+		var md: Dictionary = GameData.MISSILES[e["id"]]
+		return {"name": "Misil " + md["name"], "color": md["color"], "icon": W.icon("missile", e["id"]), "level": -1,
+			"tip": "Misil %s — daño %d, precisión %d%%%s\nEl lanzamisiles dispara solo 1 cada %d s.\nEn almacén: %s" % [md["name"], int(md["dmg"]), int(md["acc"] * 100), (", área %d u" % int(md["splash"])) if float(md["splash"]) > 0.0 else "", int(GameData.MISSILE_INTERVAL), GameData.format_num(GameState.data["missiles"].get(e["id"], 0))]}
 	if e["type"] == "ammo":
 		var a: Dictionary = GameData.AMMO[e["id"]]
 		return {"name": "%s (%s)" % [a["name"], a["short"]], "color": a["color"], "icon": W.icon("ammo", e["id"]), "level": -1,
@@ -423,7 +429,7 @@ func _entry_info(e: Dictionary) -> Dictionary:
 
 
 func _entry_item(e: Dictionary) -> DragItem:
-	var qty := int(GameState.data["ammo"].get(e["id"], 0)) if e["type"] == "ammo" else int(GameState.data["items"].get(e["id"], 0))
+	var qty := int(GameState.data[{"ammo": "ammo", "missile": "missiles"}.get(e["type"], "items")].get(e["id"], 0))
 	var d := DragItem.make("hotbar", -1, _entry_info(e), "x%s" % GameData.format_num(qty))
 	d.entry = e
 	d.activated.connect(func(item):

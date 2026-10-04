@@ -137,7 +137,7 @@ func _process(delta: float) -> void:
 func _fire(p: PlayerShip) -> void:
 	for l in lasers:
 		var def: Dictionary = l["def"]
-		var dmg: float = GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * sector.active_ammo_mult() * 0.5 * FIRE_INTERVAL * (1.0 + GameData.PET_DMG_PER_LEVEL * (pet_lvl - 1))
+		var dmg: float = GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * sector.active_ammo_mult() * 0.5 * FIRE_INTERVAL * (1.0 + GameData.PET_DMG_PER_LEVEL * (pet_lvl - 1)) * (1.0 + GameState.ascent_bonus("pet"))
 		l["hits"] += 1
 		var info := {"effect": "", "color": def["color"]}
 		match def["effect"]:

@@ -13,6 +13,8 @@ static func icon(kind: String, id: String) -> Texture2D:
 			return SpriteLib.get_icon("drone_lasers", id)
 		"ammo":
 			return SpriteLib.get_icon("ammo", id)
+		"missile", "missiles":
+			return SpriteLib.get_icon("missiles", id)
 		"item":
 			return SpriteLib.get_icon("items", id)
 		"box":
@@ -75,8 +77,41 @@ static func pic(tex: Texture2D, size: Vector2) -> TextureRect:
 	return t
 
 
+## Ventana con cabecera (como las de los MMO de naves): devuelve [panel, cuerpo].
+static func frame(title_text: String, accent: Color = UiTheme.ACCENT) -> Array:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UiTheme.bevel(Color(0.05, 0.08, 0.14, 0.95), Color(0.03, 0.05, 0.09, 0.95), UiTheme.BORDER, 4, 9))
+	var v := vbox(8)
+	p.add_child(v)
+	if title_text != "":
+		var head := PanelContainer.new()
+		head.add_theme_stylebox_override("panel", UiTheme.bevel(Color(accent.darkened(0.55), 0.95), Color(accent.darkened(0.8), 0.95), accent.darkened(0.2), 6, 6))
+		var hl := UiTheme.heading(title_text, 16, accent.lightened(0.3))
+		head.add_child(hl)
+		v.add_child(head)
+	var body := vbox(8)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(body)
+	return [p, body]
+
+
+## Fila «etiqueta ...... valor» de una tabla de estadísticas (filas alternas sombreadas).
+static func stat_row(name: String, value: String, odd: bool, col: Color = UiTheme.TEXT) -> Control:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UiTheme.box(Color(1, 1, 1, 0.035) if odd else Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 4))
+	var h := hbox(8)
+	p.add_child(h)
+	h.add_child(UiTheme.label(name, 14, UiTheme.MUTED))
+	h.add_child(spacer())
+	var v := UiTheme.label(value, 14, col)
+	v.add_theme_font_override("font", UiTheme.display_font())
+	v.add_theme_font_size_override("font_size", 16)
+	h.add_child(v)
+	return p
+
+
 static func title(text: String, size: int = 22) -> Label:
-	return UiTheme.label(text, size, UiTheme.ACCENT)
+	return UiTheme.heading(text, size, UiTheme.ACCENT)
 
 
 static func vbox(sep: int = 8) -> VBoxContainer:
@@ -136,8 +171,15 @@ static func cost_row(cost: Dictionary, times: int = 1) -> HFlowContainer:
 
 static func button(text: String, cb: Callable, primary: bool = false, min_w: int = 0) -> Button:
 	var b := UiTheme.button(text, cb, min_w)
+	UiTheme.style_button(b, "primary" if primary else "normal")
 	if primary:
-		b.add_theme_stylebox_override("normal", UiTheme.box(Color(0.04, 0.28, 0.32), UiTheme.ACCENT, 6, 2, 10))
-		b.add_theme_stylebox_override("hover", UiTheme.box(Color(0.06, 0.38, 0.42), Color.WHITE, 6, 2, 10))
 		b.add_theme_font_size_override("font_size", 18)
+	return b
+
+
+## Botón con estilo explícito: normal | primary | gold (compras) | danger.
+static func btn(text: String, cb: Callable, kind: String = "normal", min_w: int = 0, size: int = 16) -> Button:
+	var b := UiTheme.button(text, cb, min_w)
+	UiTheme.style_button(b, kind)
+	b.add_theme_font_size_override("font_size", size)
 	return b

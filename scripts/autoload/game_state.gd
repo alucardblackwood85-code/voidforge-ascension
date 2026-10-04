@@ -34,6 +34,7 @@ func new_profile() -> Dictionary:
 		"xp": 0,
 		"materials": {"ferrita": 40, "plata": 30, "nanoespuma": 12, "resina_plasma": 8},
 		"ammo": {"mk1": 4000, "mk2": 300},
+		"missiles": {"r1": 60},
 		"items": {"repair": 3, "boost": 2, "mine": 0, "shield_cell": 0},
 		"ships": ["kestrel_a1"],
 		"current_ship": "kestrel_a1",
@@ -85,6 +86,7 @@ func default_hotbar() -> Array:
 	hb[1] = {"type": "ammo", "id": "mk2"}
 	hb[2] = {"type": "item", "id": "repair"}
 	hb[3] = {"type": "item", "id": "boost"}
+	hb[4] = {"type": "missile", "id": "r1"}
 	return hb
 
 
@@ -137,6 +139,10 @@ func _migrate() -> void:
 	data["settings"].erase("wasd")
 	while data["drone"]["lasers"].size() < GameData.PET_MAX_LASERS:
 		data["drone"]["lasers"].append(-1)
+	if not data.has("missiles"):
+		data["missiles"] = {"r1": 60}
+	if not data.has("ascent"):
+		data["ascent"] = {"points": 0, "alloc": {}}
 	if not data["drone"].has("gens"):
 		data["drone"]["gens"] = [-1, -1, -1]
 	if data["drone_lasers"].is_empty():
@@ -249,7 +255,7 @@ func rank_name(lvl: int = -1) -> String:
 func add_xp(amount: int) -> int:
 	var before := level()
 	data["xp"] = int(data["xp"]) + amount
-	data["pet"]["xp"] = int(data["pet"]["xp"]) + int(amount * GameData.PET_XP_SHARE)
+	data["pet"]["xp"] = int(data["pet"]["xp"]) + int(amount * GameData.PET_XP_SHARE * (1.0 + ascent_bonus("pet")))
 	var after := level()
 	claim_rank_rewards()
 	if after > before:
@@ -458,8 +464,71 @@ func set_drone_role(role: String) -> void:
 	changed.emit()
 
 
+# --- Puntos de ascenso ---------------------------------------------------------------------------
+func _ascent() -> Dictionary:
+	if not data.has("ascent"):
+		data["ascent"] = {"points": 0, "alloc": {}}
+	return data["ascent"]
+
+
+## Precio en Nexo del siguiente punto (cada uno algo más caro que el anterior).
+func ascent_point_cost() -> int:
+	return GameData.ASCENT_COST_BASE + GameData.ASCENT_COST_STEP * int(_ascent()["points"])
+
+
+func ascent_total_points() -> int:
+	return GameData.ASCENT_SKILLS.size() * GameData.ASCENT_MAX
+
+
+func ascent_level(skill: String) -> int:
+	return int(_ascent()["alloc"].get(skill, 0))
+
+
+func ascent_free() -> int:
+	var used := 0
+	for k in _ascent()["alloc"].keys():
+		used += int(_ascent()["alloc"][k])
+	return int(_ascent()["points"]) - used
+
+
+func buy_ascent_point() -> bool:
+	if int(_ascent()["points"]) >= ascent_total_points() or not pay({"nexo": ascent_point_cost()}):
+		return false
+	_ascent()["points"] = int(_ascent()["points"]) + 1
+	save_game()
+	changed.emit()
+	return true
+
+
+func ascent_add(skill: String) -> bool:
+	if ascent_free() <= 0 or ascent_level(skill) >= GameData.ASCENT_MAX:
+		return false
+	_ascent()["alloc"][skill] = ascent_level(skill) + 1
+	save_game()
+	changed.emit()
+	return true
+
+
+## Devuelve todos los puntos repartidos a la reserva (cuesta ASCENT_RESET Nexo).
+func ascent_reset() -> bool:
+	if ascent_free() == int(_ascent()["points"]) or not pay({"nexo": GameData.ASCENT_RESET}):
+		return false
+	_ascent()["alloc"] = {}
+	save_game()
+	changed.emit()
+	return true
+
+
+## Bonificación total (fracción) de una mejora de ascenso: 0.06 = +6%.
+func ascent_bonus(skill: String) -> float:
+	var def: Dictionary = GameData.ASCENT_SKILLS.get(skill, {})
+	if def.is_empty():
+		return 0.0
+	return float(def["per"]) * ascent_level(skill)
+
+
 # --- Tienda (créditos/Nexo) y fabricación (materiales) ------------------------------------
-## kind: ship | laser | gen | drone_laser | ammo (lote de 100) | item
+## kind: ship | laser | gen | drone_laser | ammo (lote de 100) | item | missile (lote de 10) | pet
 ## Receta de crafteo (créditos + materiales). Naves y armas no piden Nexo al fabricarse; sólo las
 ## cajas Anómalas y las mejoras 13-16 lo usan (GDD 14).
 func recipe_of(kind: String, id: String) -> Dictionary:
@@ -494,6 +563,8 @@ func _raw_recipe(kind: String, id: String) -> Dictionary:
 			return GameData.MODULE_BOXES[id]["recipe"]
 		"pet":
 			return GameData.PET_RECIPE
+		"missile":
+			return GameData.MISSILES[id]["recipe"]
 	return {}
 
 
@@ -546,6 +617,8 @@ func _acquire(kind: String, id: String, qty: int, cost: Dictionary) -> bool:
 				data["ammo"][id] = int(data["ammo"].get(id, 0)) + 100
 			"item":
 				data["items"][id] = int(data["items"].get(id, 0)) + 1
+			"missile":
+				data["missiles"][id] = int(data["missiles"].get(id, 0)) + GameData.MISSILE_LOT
 			"pet":
 				data["unlocks"]["pet"] = true
 				if int(data["drone"]["lasers"][0]) < 0 and not data["drone_lasers"].is_empty():
@@ -687,6 +760,13 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 	bonus["hull"] += float(perma.get("hull", 0.0))
 	bonus["shield"] += float(perma.get("shield", 0.0))
 	bonus["dmg"] += float(perma.get("dmg", 0.0))
+	# Puntos de ascenso.
+	bonus["hull"] += ascent_bonus("hull")
+	bonus["shield"] += ascent_bonus("shield")
+	bonus["speed"] += ascent_bonus("speed")
+	bonus["dmg"] += ascent_bonus("firepower")
+	bonus["elite_dmg"] += ascent_bonus("elite")
+	bonus["repair_bonus"] += ascent_bonus("repair")
 	var hull_base := float(ship["hull"])
 	var shield_base := hull_base * GameData.SHIELD_FROM_HULL
 	var speed_base := float(ship["speed"])
@@ -696,7 +776,7 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 		"shield_base": shield_base, "shield": shield_base * (1.0 + bonus["shield"]),
 		"speed_base": speed_base, "speed": speed_base * (1.0 + bonus["speed"]),
 		"dmg_base": float(ship["dmg"]), "dmg": float(ship["dmg"]) * (1.0 + bonus["dmg"]),
-		"cargo": int(ship["cargo"]) * GameData.CARGO_UNIT,
+		"cargo": int(int(ship["cargo"]) * GameData.CARGO_UNIT * (1.0 + ascent_bonus("cargo"))),
 		"recharge": 1.0 + bonus["recharge"],
 		"recharge_delay": maxf(1.0, GameData.SHIELD_RECHARGE_DELAY * (1.0 - bonus["recharge_delay"])),
 		"shield_regen": bonus["shield_regen"],
@@ -764,7 +844,7 @@ func apply_run_result(result: Dictionary) -> void:
 	add_loot(loot)
 	if int(result.get("ammo_used", {}).get("mk2", 0)) > 0:
 		data["used_mk2"] = true
-	for k in ["ammo", "items"]:
+	for k in ["ammo", "items", "missiles"]:
 		var used: Dictionary = result.get(k + "_used", {})
 		for id in used.keys():
 			data[k][id] = maxi(0, int(data[k].get(id, 0)) - int(used[id]))

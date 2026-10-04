@@ -47,6 +47,12 @@ var loot: Dictionary = {}
 var cargo_used := 0
 var kills := 0
 var run_ammo: Dictionary = {}
+var run_missiles: Dictionary = {}
+var missiles_used: Dictionary = {}
+var active_missile := "r1"
+var missile_cd := 2.0
+var stat_missiles := 0
+var stat_missile_hits := 0
 var ammo_used: Dictionary = {}
 var ammo_frac := 0.0
 var active_ammo := "mk1"
@@ -137,8 +143,14 @@ func _ready() -> void:
 	xp_mult *= asc_reward
 	mod = Prog.weekly_mod() if not (demo or showcase) else {}
 	xp_mult *= float(mod.get("xp", 1.0))
+	xp_mult *= 1.0 + GameState.ascent_bonus("xp")
 	event_t = rng.randf_range(100.0, 160.0)
 	run_ammo = GameState.data["ammo"].duplicate()
+	run_missiles = GameState.data.get("missiles", {}).duplicate()
+	for e in GameState.current_loadout()["hotbar"]:
+		if e is Dictionary and e.get("type") == "missile" and int(run_missiles.get(e["id"], 0)) > 0:
+			active_missile = e["id"]
+			break
 	run_items = GameState.data["items"].duplicate()
 	auto_fire = Controls.is_touch and GameState.data["settings"].get("auto_fire_touch", true)
 
@@ -427,6 +439,7 @@ func _process(delta: float) -> void:
 	for k in item_cd.keys():
 		item_cd[k] = maxf(0.0, item_cd[k] - delta)
 	_separate_enemies()
+	_update_missiles(delta)
 	engage_t -= delta
 	if engage_t <= 0.0:
 		engage_t = 0.25
@@ -731,6 +744,15 @@ func use_hotbar(i: int) -> void:
 		hud.slot_feedback(i, false)
 		Sfx.play("ui_error", null, -8.0)
 		return
+	if entry["type"] == "missile":
+		if int(run_missiles.get(entry["id"], 0)) <= 0:
+			hud.toast("Sin misiles %s" % GameData.MISSILES[entry["id"]]["name"], 1.5, UiTheme.BAD)
+			hud.slot_feedback(i, false)
+			return
+		active_missile = entry["id"]
+		hud.slot_feedback(i, true)
+		Sfx.play("ui_select", null, -4.0)
+		return
 	if entry["type"] == "ammo":
 		if int(run_ammo.get(entry["id"], 0)) <= 0:
 			hud.toast("Sin %s" % GameData.AMMO[entry["id"]]["name"], 1.5, UiTheme.BAD)
@@ -826,6 +848,47 @@ func active_ammo_mult() -> float:
 
 
 # --- Combate ------------------------------------------------------------------------
+# --- Lanzamisiles: 1 misil cada 4 s al objetivo fijado ---------------------------------------------
+func _update_missiles(delta: float) -> void:
+	missile_cd = maxf(0.0, missile_cd - delta)
+	if missile_cd > 0.0 or not player.alive or not player.target_valid() or not (player.target is Enemy):
+		return
+	var tgt: Enemy = player.target
+	if tgt.plane_pos.distance_to(player.plane_pos) > GameData.MISSILE_RANGE:
+		return
+	if int(run_missiles.get(active_missile, 0)) <= 0:
+		# Se acabó ese tipo: pasa al más barato que quede.
+		var next := ""
+		for id in GameData.MISSILES.keys():
+			if int(run_missiles.get(id, 0)) > 0:
+				next = id
+				break
+		if next == "":
+			return
+		active_missile = next
+		hud.toast("Misiles agotados: cambiando a %s" % GameData.MISSILES[next]["name"], 1.5, UiTheme.WARN)
+	missile_cd = GameData.MISSILE_INTERVAL
+	run_missiles[active_missile] = int(run_missiles[active_missile]) - 1
+	missiles_used[active_missile] = int(missiles_used.get(active_missile, 0)) + 1
+	var def: Dictionary = GameData.MISSILES[active_missile]
+	var bonus: float = GameState.ascent_bonus("missile_acc")
+	var hit := randf() < GameData.missile_hit_chance(def, tgt.velocity.length(), bonus)
+	var crit := randf() < 0.08
+	var dmg: float = float(def["dmg"]) * randf_range(0.8, 1.2) * (1.5 if crit else 1.0) * float(player.stats["dmg"]) * (1.0 + GameState.ascent_bonus("missile_dmg"))
+	var m := Missile.new()
+	m.setup(self, def, player.plane_pos, tgt, dmg, hit, crit)
+	fx_top.add_child(m)
+	stat_missiles += 1
+	if hit:
+		stat_missile_hits += 1
+	Sfx.play("missile_launch", player.plane_pos, -4.0)
+
+
+func fx_text(p: Vector2, text: String, color: Color) -> void:
+	var f := _fx("number", p + Vector2(randf_range(-20, 20), -30), 0.0, color, 0.9)
+	f.text = text
+
+
 func spawn_player_bolt(origin: Vector2, target: Entity, dmg: float, info: Dictionary, dir: Vector2 = Vector2.ZERO) -> void:
 	var b := Projectile.new()
 	b.sector = self
@@ -1005,7 +1068,7 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		kills_by[e.id] = int(kills_by.get(e.id, 0)) + 1
 	_award_xp(GameData.enemy_xp(float(e.def["hp"]), level, rmult))
 	# Créditos y Nexo se acreditan al instante; los materiales quedan en una caja de botín.
-	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult * GameData.CREDIT_MULT * float(mod.get("credits", 1.0)))
+	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult * GameData.CREDIT_MULT * float(mod.get("credits", 1.0)) * (1.0 + GameState.ascent_bonus("credits")))
 	_gain("credits", credits)
 	var nexo_chance: float = float(e.def["nexo"]) * rmult * float(mod.get("nexo", 1.0))
 	if e.variant != "base":
@@ -1014,7 +1077,7 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		_gain("nexo", maxi(1, int(rmult) - 1))
 	var contents := {}
 	for mat in e.def["drops"].keys():
-		var q: float = GameData.level_reward(float(e.def["drops"][mat]), level) * rmult * float(mod.get("mats", 1.0))
+		var q: float = GameData.level_reward(float(e.def["drops"][mat]), level) * rmult * float(mod.get("mats", 1.0)) * (1.0 + GameState.ascent_bonus("materials"))
 		var rare: bool = GameData.MATERIALS.get(mat, {}).get("rarity", 0) >= 2
 		var n := int(ceil(q)) if rare else int(round(q))
 		if n > 0:
@@ -1484,7 +1547,7 @@ func _finish(outcome: String) -> void:
 			final_loot[k] = int(final_loot[k] * keep)
 	var result := {
 		"outcome": outcome, "level": level, "loot": final_loot, "raw_loot": loot,
-		"ammo_used": ammo_used, "items_used": items_used, "kills": kills,
+		"ammo_used": ammo_used, "items_used": items_used, "missiles_used": missiles_used, "kills": kills,
 		"objective_done": objective_done and outcome != "death", "time": elapsed,
 		"xp": run_xp, "kills_by": kills_by, "biome": biome_id, "asc": asc,
 		"modules": run_modules if outcome != "death" or params.get("insured", false) else [],

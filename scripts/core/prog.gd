@@ -124,7 +124,7 @@ static func time_to_next_day() -> int:
 # Siete pasos en orden, cada uno con su recompensa; se ven en el Hangar hasta reclamarlos todos.
 const TRAINING := [
 	{"id": "extract", "name": "Primera incursión", "desc": "Cumple el objetivo de un sector y extrae por el portal.", "reward": {"credits": 3000}},
-	{"id": "upgrade", "name": "Mejora un láser", "desc": "En Crafteo → Mejoras 1-16, sube un láser al nivel 1 (la recompensa anterior lo paga).", "reward": {"credits": 5000}},
+	{"id": "upgrade", "name": "Mejora un láser", "desc": "En Fabricación → Mejoras 1-16, sube un láser al nivel 1 (la recompensa anterior lo paga).", "reward": {"credits": 5000}},
 	{"id": "mk2", "name": "Munición fuerte", "desc": "Usa munición Mk-II (tecla 2) contra un enemigo duro durante una incursión.", "reward": {"mk2": 500}},
 	{"id": "gens", "name": "Generadores", "desc": "Compra un generador en la Tienda y llena los 3 espacios de generador de tu Kestrel.", "reward": {"credits": 4000}},
 	{"id": "pet", "name": "Tu pet", "desc": "Compra un pet en la Tienda → Pet y elige su rol en Equipamiento → Pet.", "reward": {"pet_laser": "pet_stinger"}},

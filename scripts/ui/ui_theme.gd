@@ -1,10 +1,13 @@
 class_name UiTheme
-## Tema visual de la interfaz: sci-fi oscuro y legible (19.1).
+## Tema visual de la interfaz: consola militar sci-fi oscura y legible (19.1), al estilo de los MMO de naves.
+## Tipografía propia «Voidforge Tech» (assets/fonts, generada con tools/make_font.py) para títulos, botones,
+## pestañas y cifras; el texto corrido usa la fuente por defecto, más legible a tamaño pequeño.
+## Botones y paneles biselados: degradado vertical, borde luminoso y esquinas cortadas en diagonal.
 
-const BG := Color("0b0f1a")
-const PANEL := Color(0.06, 0.08, 0.13, 0.94)
-const PANEL_LIGHT := Color(0.10, 0.13, 0.20, 0.96)
-const BORDER := Color("2a3a5a")
+const BG := Color("070b14")
+const PANEL := Color(0.05, 0.07, 0.12, 0.94)
+const PANEL_LIGHT := Color(0.09, 0.12, 0.19, 0.96)
+const BORDER := Color("27405e")
 const ACCENT := Color("4affff")
 const ACCENT2 := Color("ff4fd8")
 const TEXT := Color("dce6f5")
@@ -12,6 +15,26 @@ const MUTED := Color("7d8aa3")
 const GOOD := Color("6fd17a")
 const BAD := Color("ff5a5a")
 const WARN := Color("ffb84a")
+const GOLD := Color("ffd27a")
+
+const DISPLAY_FONT := "res://assets/fonts/voidforge_tech.fnt"
+const DISPLAY_MIN := 15          # desde este tamaño las etiquetas usan la tipografía propia
+
+static var _display: Font
+static var _bevels: Dictionary = {}
+
+
+## Tipografía propia; los caracteres que no tiene (★, ✔, flechas…) caen en la fuente por defecto.
+static func display_font() -> Font:
+	if _display == null:
+		if ResourceLoader.exists(DISPLAY_FONT):
+			var f: Font = load(DISPLAY_FONT)
+			if f is FontFile:
+				(f as FontFile).fallbacks = [ThemeDB.fallback_font]
+			_display = f
+		else:
+			_display = ThemeDB.fallback_font
+	return _display
 
 
 static func box(bg: Color, border: Color = BORDER, radius: int = 6, bw: int = 1, pad: int = 8) -> StyleBoxFlat:
@@ -24,32 +47,107 @@ static func box(bg: Color, border: Color = BORDER, radius: int = 6, bw: int = 1,
 	return s
 
 
+## Textura biselada (9 porciones): degradado de arriba a abajo, filete claro arriba, borde de color y
+## esquinas superior izquierda e inferior derecha cortadas en diagonal.
+static func bevel_tex(top: Color, bottom: Color, border: Color, cut: int = 7) -> Texture2D:
+	var key := "%s|%s|%s|%d" % [top.to_html(), bottom.to_html(), border.to_html(), cut]
+	if _bevels.has(key):
+		return _bevels[key]
+	var w := 48
+	var h := 32
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		var fill := top.lerp(bottom, float(y) / (h - 1))
+		for x in w:
+			# Distancia a las diagonales de las dos esquinas cortadas.
+			var tl := x + y - cut
+			var br := (w - 1 - x) + (h - 1 - y) - cut
+			if tl < 0 or br < 0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			var edge := x == 0 or y == 0 or x == w - 1 or y == h - 1 or tl == 0 or br == 0
+			var c := fill
+			if edge:
+				c = border
+			elif y == 1 or tl == 1:
+				c = fill.lerp(Color.WHITE, 0.18)   # filete de luz
+			img.set_pixel(x, y, c)
+	var t := ImageTexture.create_from_image(img)
+	_bevels[key] = t
+	return t
+
+
+static func bevel(top: Color, bottom: Color, border: Color, pad: int = 10, cut: int = 7) -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = bevel_tex(top, bottom, border, cut)
+	s.texture_margin_left = cut + 3
+	s.texture_margin_right = cut + 3
+	s.texture_margin_top = cut + 3
+	s.texture_margin_bottom = cut + 3
+	s.content_margin_left = pad + 4
+	s.content_margin_right = pad + 4
+	s.content_margin_top = pad * 0.6
+	s.content_margin_bottom = pad * 0.6
+	return s
+
+
+## Estilos de botón: normal (acero azul), primary (cian luminoso), gold (compra/premium), danger.
+static func button_styles(kind: String = "normal") -> Dictionary:
+	match kind:
+		"primary":
+			return {"normal": bevel(Color("12606a"), Color("083038"), ACCENT), "hover": bevel(Color("1a8592"), Color("0c4650"), Color.WHITE),
+				"pressed": bevel(Color("083038"), Color("12606a"), ACCENT), "disabled": bevel(Color("101820"), Color("0a1016"), Color("2a3a48"))}
+		"gold":
+			return {"normal": bevel(Color("6a4a12"), Color("382408"), GOLD), "hover": bevel(Color("92681a"), Color("4e330c"), Color.WHITE),
+				"pressed": bevel(Color("382408"), Color("6a4a12"), GOLD), "disabled": bevel(Color("1a1610"), Color("100d08"), Color("3a3020"))}
+		"danger":
+			return {"normal": bevel(Color("6a1a1a"), Color("380a0a"), BAD), "hover": bevel(Color("922626"), Color("4e1010"), Color.WHITE),
+				"pressed": bevel(Color("380a0a"), Color("6a1a1a"), BAD), "disabled": bevel(Color("1a1010"), Color("100808"), Color("3a2020"))}
+	return {"normal": bevel(Color("1c2a40"), Color("0d1524"), BORDER), "hover": bevel(Color("26405e"), Color("132238"), ACCENT),
+		"pressed": bevel(Color("0d1524"), Color("1c2a40"), ACCENT), "disabled": bevel(Color("0c111a"), Color("080c12"), Color("1c2636"))}
+
+
+static func style_button(b: Button, kind: String = "normal") -> void:
+	var st := button_styles(kind)
+	for k in st.keys():
+		b.add_theme_stylebox_override(k, st[k])
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_font_override("font", display_font())
+	b.text = b.text.to_upper()
+
+
 static func build() -> Theme:
 	var t := Theme.new()
 	t.default_font_size = 16
 	t.set_color("font_color", "Label", TEXT)
 	t.set_stylebox("panel", "PanelContainer", box(PANEL))
 	t.set_stylebox("panel", "Panel", box(PANEL))
-	t.set_stylebox("normal", "Button", box(PANEL_LIGHT, BORDER, 5, 1, 8))
-	t.set_stylebox("hover", "Button", box(Color(0.14, 0.2, 0.3), ACCENT, 5, 1, 8))
-	t.set_stylebox("pressed", "Button", box(Color(0.1, 0.3, 0.35), ACCENT, 5, 2, 8))
-	t.set_stylebox("disabled", "Button", box(Color(0.06, 0.07, 0.1), Color(0.15, 0.18, 0.25), 5, 1, 8))
-	t.set_stylebox("focus", "Button", box(Color(0, 0, 0, 0), ACCENT, 5, 1, 8))
+	var st := button_styles()
+	for k in st.keys():
+		t.set_stylebox(k, "Button", st[k])
+	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	t.set_font("font", "Button", display_font())
 	t.set_color("font_color", "Button", TEXT)
 	t.set_color("font_hover_color", "Button", Color.WHITE)
+	t.set_color("font_pressed_color", "Button", ACCENT)
 	t.set_color("font_disabled_color", "Button", MUTED)
+	t.set_font("font", "CheckBox", display_font())
+	t.set_font("font", "TabBar", display_font())
 	t.set_stylebox("panel", "TabContainer", box(PANEL, BORDER, 6, 1, 10))
-	t.set_stylebox("tab_selected", "TabContainer", box(Color(0.12, 0.18, 0.28), ACCENT, 4, 1, 10))
-	t.set_stylebox("tab_unselected", "TabContainer", box(PANEL_LIGHT, BORDER, 4, 1, 10))
-	t.set_stylebox("tab_hovered", "TabContainer", box(Color(0.14, 0.2, 0.3), ACCENT, 4, 1, 10))
-	t.set_color("font_selected_color", "TabContainer", ACCENT)
+	t.set_stylebox("tab_selected", "TabContainer", bevel(Color("1a8592"), Color("0c4650"), ACCENT))
+	t.set_stylebox("tab_unselected", "TabContainer", bevel(Color("1c2a40"), Color("0d1524"), BORDER))
+	t.set_stylebox("tab_hovered", "TabContainer", bevel(Color("26405e"), Color("132238"), ACCENT))
+	t.set_color("font_selected_color", "TabContainer", Color.WHITE)
 	t.set_color("font_unselected_color", "TabContainer", MUTED)
-	t.set_stylebox("background", "ProgressBar", box(Color(0, 0, 0, 0.6), BORDER, 3, 1, 0))
-	t.set_stylebox("fill", "ProgressBar", box(ACCENT, ACCENT, 3, 0, 0))
-	t.set_stylebox("panel", "TooltipPanel", box(Color(0.04, 0.05, 0.09, 0.97), ACCENT, 4, 1, 8))
+	t.set_stylebox("background", "ProgressBar", box(Color(0, 0, 0, 0.6), BORDER, 2, 1, 0))
+	t.set_stylebox("fill", "ProgressBar", box(ACCENT, ACCENT, 2, 0, 0))
+	t.set_stylebox("panel", "TooltipPanel", bevel(Color("101a2a"), Color("070c16"), ACCENT, 8, 5))
 	t.set_color("font_color", "TooltipLabel", TEXT)
-	t.set_stylebox("normal", "LineEdit", box(Color(0.03, 0.04, 0.07), BORDER, 4, 1, 6))
-	t.set_stylebox("normal", "SpinBox", box(Color(0.03, 0.04, 0.07), BORDER, 4, 1, 6))
+	t.set_stylebox("normal", "LineEdit", box(Color(0.03, 0.04, 0.07), BORDER, 2, 1, 6))
+	t.set_stylebox("normal", "SpinBox", box(Color(0.03, 0.04, 0.07), BORDER, 2, 1, 6))
+	t.set_stylebox("grabber_area", "HSlider", box(ACCENT.darkened(0.3), ACCENT, 2, 0, 0))
+	t.set_stylebox("grabber_area_highlight", "HSlider", box(ACCENT, ACCENT, 2, 0, 0))
+	t.set_stylebox("slider", "HSlider", box(Color(0, 0, 0, 0.6), BORDER, 2, 1, 2))
 	return t
 
 
@@ -62,12 +160,27 @@ static func label(text: String, size: int = 16, color: Color = TEXT) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
+	if size >= DISPLAY_MIN:
+		# La tipografía propia se usa siempre en mayúsculas (estilo consola militar).
+		l.add_theme_font_override("font", display_font())
+		l.uppercase = true
+	return l
+
+
+## Título de sección: tipografía propia, mayúsculas y sombra de neón.
+static func heading(text: String, size: int = 22, color: Color = ACCENT) -> Label:
+	var l := label(text.to_upper(), size, color)
+	l.add_theme_font_override("font", display_font())
+	l.add_theme_color_override("font_shadow_color", Color(color, 0.35))
+	l.add_theme_constant_override("shadow_offset_x", 0)
+	l.add_theme_constant_override("shadow_offset_y", 0)
+	l.add_theme_constant_override("shadow_outline_size", 6)
 	return l
 
 
 static func button(text: String, cb: Callable, min_w: int = 0) -> Button:
 	var b := Button.new()
-	b.text = text
+	b.text = text.to_upper()
 	b.pressed.connect(func(): Sfx.play("ui_click"))
 	b.pressed.connect(cb)
 	if min_w > 0:
