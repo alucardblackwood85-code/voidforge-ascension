@@ -367,6 +367,63 @@ def hy3d_material():
     env_reflections()
 
 
+def export_hangar_glb(path: str, faces: int = 15000, tex_size: int = 512):
+    """Modelo para el hangar en 3D en tiempo real (Godot): la nave ya orientada (proa +X, arriba +Z) y con la
+    proyección del sprite del perfil hy3d, reducida a `faces` caras y con un material exportable a glTF:
+    color (sprite con +20% de saturación) y emisión (cabinas y luces, como el perfil hy3d) en texturas de
+    `tex_size` px, metal 0,55, rugosidad 0,33 y barniz 0,5."""
+    import numpy as np
+    timg = next((n.image for n in mat.node_tree.nodes if n.type == "TEX_IMAGE"), None)
+    if timg is None:
+        raise SystemExit("export_hangar_glb: falta la textura del sprite")
+    w, h = timg.size
+    px = np.array(timg.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    rgb = px[:, :, :3]
+    gray = (rgb * np.array([0.299, 0.587, 0.114], dtype=np.float32)).sum(axis=2, keepdims=True)
+    col = np.clip(gray + (rgb - gray) * 1.2, 0.0, 1.0)
+    mx = col.max(axis=2); mn = col.min(axis=2)
+    sat = np.where(mx > 1e-4, (mx - mn) / np.maximum(mx, 1e-4), 0.0)
+    glow = np.clip((sat * mx - 0.3) / 0.3, 0.0, 1.0)          # mismo umbral que hy3d_material (0,3-0,6)
+
+    def make_img(name, arr):
+        im = bpy.data.images.new(name, w, h, alpha=False)
+        full = np.concatenate([arr, np.ones((h, w, 1), dtype=np.float32)], axis=2)
+        im.pixels[:] = full.ravel()
+        im.scale(tex_size, tex_size)
+        im.pack()
+        return im
+    albedo = make_img("albedo", col)
+    emissive = make_img("emissive", col * glow[..., None])
+    m2 = bpy.data.materials.new("hangar"); m2.use_nodes = True
+    nt = m2.node_tree; b = nt.nodes.get("Principled BSDF")
+    ta = nt.nodes.new("ShaderNodeTexImage"); ta.image = albedo; ta.extension = "EXTEND"
+    te = nt.nodes.new("ShaderNodeTexImage"); te.image = emissive; te.extension = "EXTEND"
+    nt.links.new(ta.outputs["Color"], b.inputs["Base Color"])
+    ec = "Emission Color" if "Emission Color" in b.inputs else "Emission"
+    nt.links.new(te.outputs["Color"], b.inputs[ec])
+    b.inputs["Emission Strength"].default_value = 2.0
+    b.inputs["Metallic"].default_value = 0.55
+    b.inputs["Roughness"].default_value = 0.33
+    for name in ("Coat Weight", "Clearcoat"):
+        if name in b.inputs:
+            b.inputs[name].default_value = 0.5
+    ship.data.materials.clear(); ship.data.materials.append(m2)
+    bpy.context.view_layer.objects.active = ship
+    n_faces = len(ship.data.polygons)
+    if n_faces > faces:
+        dec = ship.modifiers.new("dec", "DECIMATE"); dec.ratio = faces / n_faces
+        bpy.ops.object.modifier_apply(modifier="dec")
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(30))
+    except Exception:
+        pass
+    bpy.ops.object.select_all(action="DESELECT"); ship.select_set(True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True,
+                              export_image_format="JPEG", export_jpeg_quality=85, export_cameras=False, export_lights=False)
+    print("GLB", path, len(ship.data.polygons), "caras")
+
+
 scene.render.engine = "BLENDER_EEVEE"
 scene.render.film_transparent = True
 scene.render.resolution_x = scene.render.resolution_y = 384   # se reduce a 192 al empaquetar: más nitidez
@@ -449,6 +506,10 @@ elif mode == "spin":
         env_reflections()  # materiales PBR propios de Tripo: sólo el entorno para los reflejos
     normalize()
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=True)
+    glb_out = next((a[4:] for a in argv if a.startswith("glb=")), "")
+    if glb_out:
+        export_hangar_glb(glb_out, int(next((a[6:] for a in argv if a.startswith("faces=")), "15000")))
+        sys.exit(0)
     # Cámara fija mirando desde el sur de la pantalla (-Y), elevada `elev`.
     look_from(Vector((0, -math.cos(elev), math.sin(elev))))
     os.makedirs(out, exist_ok=True)

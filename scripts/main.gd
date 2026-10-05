@@ -58,6 +58,9 @@ func goto_menu() -> void:
 	_swap(h)
 	# Depuración: --menu=pagina[:pestaña] abre directamente esa página (p. ej. equip:pet, shop:drone_laser).
 	for arg in OS.get_cmdline_user_args():
+		# Depuración: --ship=id muestra esa nave en el hangar (sólo la vista; no cambia la partida guardada).
+		if arg.begins_with("--ship="):
+			h.state["ship"] = arg.get_slice("=", 1)
 		if arg.begins_with("--menu="):
 			var parts := arg.get_slice("=", 1).split(":")
 			if parts.size() > 1:
