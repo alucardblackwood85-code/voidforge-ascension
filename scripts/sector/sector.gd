@@ -1919,7 +1919,8 @@ func _bot_nav(delta: float) -> void:
 			var d: float = pt.plane_pos.distance_to(player.plane_pos)
 			if goal == Vector2.INF or d < goal.distance_to(player.plane_pos):
 				goal = pt.plane_pos
-				goal_r = 120.0 if pt.kind == "baliza" else 350.0
+				# La señal de socorro sólo empieza a menos de 260 u: antes de activarla hay que acercarse más.
+				goal_r = 120.0 if pt.kind == "baliza" else (350.0 if pt.started else 200.0)
 		elif pt.kind == "convoy":
 			goal = pt.plane_pos
 			goal_r = 300.0

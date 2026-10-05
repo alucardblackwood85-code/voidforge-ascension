@@ -896,10 +896,11 @@ func _aura_mult() -> float:
 func make_boss() -> void:
 	is_boss = true
 	is_elite = true
-	# v2: x4 (la v1 usaba x6; con vidas de DarkOrbit el jefe era una esponja de varios minutos).
-	hp_max *= 4.0
+	# v2: x3 (la v1 usaba x6; con vidas de DarkOrbit el jefe era una esponja de varios minutos; el bot
+	# confirmó con x4 que en el Abismo seguía ocupando casi toda la incursión).
+	hp_max *= 3.0
 	hp = hp_max
-	shield_max *= 4.0
+	shield_max *= 3.0
 	shield = shield_max
 	radius *= 1.4
 	speed *= 0.8
