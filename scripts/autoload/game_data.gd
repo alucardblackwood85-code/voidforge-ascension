@@ -3,7 +3,7 @@ extends Node
 ## Todas las cifras son valores iniciales de prototipo; se ajustan aquí sin tocar la lógica.
 
 # --- Constantes globales de combate ---------------------------------------
-const LASER_BASE_DAMAGE := 75.0       # v2: daño por disparo de un láser 1.00x con munición x1 (MP-1 de DarkOrbit)
+const LASER_BASE_DAMAGE := 140.0      # v2: daño por disparo de un láser 1.00x con munición x1 (LF-2 de DarkOrbit)
 const LASER_RANGE := 620.0            # alcance en unidades de plano
 const SPEED_UNIT := 2.3               # 100 de "Velocidad" GDD = 230 unidades/s
 const SHIELD_FROM_HULL := 0.0         # v2: sin escudo base; todo el escudo sale de los generadores (DarkOrbit)
@@ -101,32 +101,32 @@ const SHIP_CLASSES := {
 }
 
 const SHIPS := {
-	"kestrel_a1": {"name": "Kestrel A1", "class": "caza", "hull": 105000, "speed": 118, "dmg": 1.00, "cargo": 70, "lasers": 5, "gens": 3, "mods": 1, "note": "Muy ágil; frágil.", "cost": {"credits": 0}},
-	"raptor_v2": {"name": "Raptor V2", "class": "caza", "hull": 120000, "speed": 112, "dmg": 1.05, "cargo": 75, "lasers": 7, "gens": 3, "mods": 1, "note": "Mejor ofensiva; menor aceleración.", "cost": {"credits": 100000, "titanio": 30, "plata": 60}},
-	"needle_s": {"name": "Needle S", "class": "caza", "hull": 97500, "speed": 128, "dmg": 0.95, "cargo": 60, "lasers": 5, "gens": 2, "mods": 1, "note": "Máxima velocidad; poca vida.", "cost": {"credits": 40000, "cobalto": 30, "plata": 40}},
-	"falcon_r": {"name": "Falcon R", "class": "caza", "hull": 130000, "speed": 108, "dmg": 1.08, "cargo": 80, "lasers": 7, "gens": 3, "mods": 1, "note": "Equilibrado; coste alto de fabricación.", "cost": {"credits": 195000, "titanio": 60, "oro": 25, "platino": 4}},
-	"bulwark_t1": {"name": "Bulwark T1", "class": "tanque", "hull": 312500, "speed": 70, "dmg": 0.92, "cargo": 105, "lasers": 5, "gens": 5, "mods": 2, "note": "Gran vida; lento.", "cost": {"credits": 1500000, "titanio": 180, "osmio": 16}},
-	"bastion_h": {"name": "Bastion H", "class": "tanque", "hull": 355000, "speed": 64, "dmg": 0.95, "cargo": 110, "lasers": 7, "gens": 5, "mods": 2, "note": "Escudo eficiente; giro pesado.", "cost": {"credits": 4000000, "titanio": 240, "paladio": 30}},
-	"mammoth_k": {"name": "Mammoth K", "class": "tanque", "hull": 420000, "speed": 58, "dmg": 0.88, "cargo": 130, "lasers": 7, "gens": 6, "mods": 2, "note": "Máxima resistencia; DPS bajo.", "cost": {"credits": 6000000, "osmio": 50, "titanio": 300}},
-	"aegis_r": {"name": "Aegis R", "class": "tanque", "hull": 332500, "speed": 72, "dmg": 1.00, "cargo": 100, "lasers": 7, "gens": 5, "mods": 2, "note": "Tanque ofensivo; menor carga.", "cost": {"credits": 3000000, "iridio": 30, "titanio": 240}},
-	"mule_c1": {"name": "Mule C1", "class": "carguera", "hull": 180000, "speed": 78, "dmg": 0.82, "cargo": 260, "lasers": 4, "gens": 4, "mods": 1, "note": "Carga alta; defensa limitada.", "cost": {"credits": 60000, "ferrita": 400, "nanoespuma": 120}},
-	"atlas_c4": {"name": "Atlas C4", "class": "carguera", "hull": 215000, "speed": 74, "dmg": 0.86, "cargo": 340, "lasers": 5, "gens": 4, "mods": 2, "note": "Gran carga; lenta.", "cost": {"credits": 400000, "ferrita": 800, "titanio": 160}},
-	"nomad_c": {"name": "Nomad C", "class": "carguera", "hull": 170000, "speed": 88, "dmg": 0.88, "cargo": 230, "lasers": 5, "gens": 3, "mods": 1, "note": "Carguera móvil; poca vida.", "cost": {"credits": 150000, "cobalto": 100, "plata": 200}},
-	"prospector_ix": {"name": "Prospector IX", "class": "carguera", "hull": 235000, "speed": 70, "dmg": 0.90, "cargo": 390, "lasers": 5, "gens": 5, "mods": 2, "note": "Recolección máxima; silueta grande.", "cost": {"credits": 900000, "titanio": 300, "platino": 24}},
-	"vanguard_m": {"name": "Vanguard M", "class": "crucero", "hull": 245000, "speed": 92, "dmg": 1.08, "cargo": 150, "lasers": 9, "gens": 5, "mods": 2, "note": "Versátil; coste de mantenimiento medio.", "cost": {"credits": 15000000, "iridio": 80, "xenocristal": 100}},
-	"centurion_p": {"name": "Centurion P", "class": "crucero", "hull": 280000, "speed": 84, "dmg": 1.12, "cargo": 160, "lasers": 11, "gens": 5, "mods": 2, "note": "Alto DPS; menos movilidad.", "cost": {"credits": 35000000, "iridio": 140, "platino": 80}},
-	"orion_m7": {"name": "Orion M7", "class": "crucero", "hull": 262500, "speed": 90, "dmg": 1.05, "cargo": 180, "lasers": 9, "gens": 6, "mods": 2, "note": "Buen balance de slots.", "cost": {"credits": 25000000, "xenocristal": 160, "paladio": 80}},
-	"helios_d": {"name": "Helios D", "class": "crucero", "hull": 225000, "speed": 98, "dmg": 1.15, "cargo": 140, "lasers": 11, "gens": 4, "mods": 2, "note": "Ofensivo; menor resistencia.", "cost": {"credits": 30000000, "xenocristal": 180, "iridio": 120}},
-	"titan_b1": {"name": "Titan B1", "class": "batalla", "hull": 445000, "speed": 70, "dmg": 1.15, "cargo": 190, "lasers": 12, "gens": 7, "mods": 3, "note": "Potencia bruta; lento.", "cost": {"credits": 60000000, "osmio": 480, "neutronio": 32}},
-	"imperator_vx": {"name": "Imperator VX", "class": "batalla", "hull": 487500, "speed": 66, "dmg": 1.18, "cargo": 200, "lasers": 14, "gens": 7, "mods": 3, "note": "Muchos láseres; caro.", "cost": {"credits": 100000000, "iridio": 720, "neutronio": 48}},
-	"leviathan_k": {"name": "Leviathan K", "class": "batalla", "hull": 560000, "speed": 60, "dmg": 1.12, "cargo": 220, "lasers": 12, "gens": 8, "mods": 3, "note": "Vida máxima; baja velocidad.", "cost": {"credits": 125000000, "osmio": 960, "neutronio": 64}},
-	"nova_rex": {"name": "Nova Rex", "class": "batalla", "hull": 412500, "speed": 76, "dmg": 1.22, "cargo": 175, "lasers": 14, "gens": 6, "mods": 3, "note": "DPS alto; menos tanque que sus pares.", "cost": {"credits": 90000000, "xenocristal": 960, "neutronio": 48}},
+	"kestrel_a1": {"name": "Kestrel A1", "class": "caza", "hull": 105000, "speed": 118, "dmg": 1.00, "cargo": 70, "lasers": 7, "gens": 6, "mods": 1, "note": "Muy ágil; frágil.", "cost": {"credits": 0}},
+	"raptor_v2": {"name": "Raptor V2", "class": "caza", "hull": 120000, "speed": 112, "dmg": 1.05, "cargo": 75, "lasers": 9, "gens": 6, "mods": 1, "note": "Mejor ofensiva; menor aceleración.", "cost": {"credits": 100000, "titanio": 30, "plata": 60}},
+	"needle_s": {"name": "Needle S", "class": "caza", "hull": 97500, "speed": 128, "dmg": 0.95, "cargo": 60, "lasers": 7, "gens": 4, "mods": 1, "note": "Máxima velocidad; poca vida.", "cost": {"credits": 40000, "cobalto": 30, "plata": 40}},
+	"falcon_r": {"name": "Falcon R", "class": "caza", "hull": 130000, "speed": 108, "dmg": 1.08, "cargo": 80, "lasers": 9, "gens": 6, "mods": 1, "note": "Equilibrado; coste alto de fabricación.", "cost": {"credits": 195000, "titanio": 60, "oro": 25, "platino": 4}},
+	"bulwark_t1": {"name": "Bulwark T1", "class": "tanque", "hull": 312500, "speed": 70, "dmg": 0.92, "cargo": 105, "lasers": 7, "gens": 10, "mods": 2, "note": "Gran vida; lento.", "cost": {"credits": 1500000, "titanio": 180, "osmio": 16}},
+	"bastion_h": {"name": "Bastion H", "class": "tanque", "hull": 355000, "speed": 64, "dmg": 0.95, "cargo": 110, "lasers": 9, "gens": 10, "mods": 2, "note": "Escudo eficiente; giro pesado.", "cost": {"credits": 4000000, "titanio": 240, "paladio": 30}},
+	"mammoth_k": {"name": "Mammoth K", "class": "tanque", "hull": 420000, "speed": 58, "dmg": 0.88, "cargo": 130, "lasers": 9, "gens": 12, "mods": 2, "note": "Máxima resistencia; DPS bajo.", "cost": {"credits": 6000000, "osmio": 50, "titanio": 300}},
+	"aegis_r": {"name": "Aegis R", "class": "tanque", "hull": 332500, "speed": 72, "dmg": 1.00, "cargo": 100, "lasers": 9, "gens": 10, "mods": 2, "note": "Tanque ofensivo; menor carga.", "cost": {"credits": 3000000, "iridio": 30, "titanio": 240}},
+	"mule_c1": {"name": "Mule C1", "class": "carguera", "hull": 180000, "speed": 78, "dmg": 0.82, "cargo": 260, "lasers": 5, "gens": 8, "mods": 1, "note": "Carga alta; defensa limitada.", "cost": {"credits": 60000, "ferrita": 400, "nanoespuma": 120}},
+	"atlas_c4": {"name": "Atlas C4", "class": "carguera", "hull": 215000, "speed": 74, "dmg": 0.86, "cargo": 340, "lasers": 7, "gens": 8, "mods": 2, "note": "Gran carga; lenta.", "cost": {"credits": 400000, "ferrita": 800, "titanio": 160}},
+	"nomad_c": {"name": "Nomad C", "class": "carguera", "hull": 170000, "speed": 88, "dmg": 0.88, "cargo": 230, "lasers": 7, "gens": 6, "mods": 1, "note": "Carguera móvil; poca vida.", "cost": {"credits": 150000, "cobalto": 100, "plata": 200}},
+	"prospector_ix": {"name": "Prospector IX", "class": "carguera", "hull": 235000, "speed": 70, "dmg": 0.90, "cargo": 390, "lasers": 7, "gens": 10, "mods": 2, "note": "Recolección máxima; silueta grande.", "cost": {"credits": 900000, "titanio": 300, "platino": 24}},
+	"vanguard_m": {"name": "Vanguard M", "class": "crucero", "hull": 245000, "speed": 92, "dmg": 1.08, "cargo": 150, "lasers": 12, "gens": 10, "mods": 2, "note": "Versátil; coste de mantenimiento medio.", "cost": {"credits": 15000000, "iridio": 80, "xenocristal": 100}},
+	"centurion_p": {"name": "Centurion P", "class": "crucero", "hull": 280000, "speed": 84, "dmg": 1.12, "cargo": 160, "lasers": 14, "gens": 10, "mods": 2, "note": "Alto DPS; menos movilidad.", "cost": {"credits": 35000000, "iridio": 140, "platino": 80}},
+	"orion_m7": {"name": "Orion M7", "class": "crucero", "hull": 262500, "speed": 90, "dmg": 1.05, "cargo": 180, "lasers": 12, "gens": 12, "mods": 2, "note": "Buen balance de slots.", "cost": {"credits": 25000000, "xenocristal": 160, "paladio": 80}},
+	"helios_d": {"name": "Helios D", "class": "crucero", "hull": 225000, "speed": 98, "dmg": 1.15, "cargo": 140, "lasers": 14, "gens": 8, "mods": 2, "note": "Ofensivo; menor resistencia.", "cost": {"credits": 30000000, "xenocristal": 180, "iridio": 120}},
+	"titan_b1": {"name": "Titan B1", "class": "batalla", "hull": 445000, "speed": 70, "dmg": 1.15, "cargo": 190, "lasers": 16, "gens": 14, "mods": 3, "note": "Potencia bruta; lento.", "cost": {"credits": 60000000, "osmio": 480, "neutronio": 32}},
+	"imperator_vx": {"name": "Imperator VX", "class": "batalla", "hull": 487500, "speed": 66, "dmg": 1.18, "cargo": 200, "lasers": 18, "gens": 14, "mods": 3, "note": "Muchos láseres; caro.", "cost": {"credits": 100000000, "iridio": 720, "neutronio": 48}},
+	"leviathan_k": {"name": "Leviathan K", "class": "batalla", "hull": 560000, "speed": 60, "dmg": 1.12, "cargo": 220, "lasers": 16, "gens": 16, "mods": 3, "note": "Vida máxima; baja velocidad.", "cost": {"credits": 125000000, "osmio": 960, "neutronio": 64}},
+	"nova_rex": {"name": "Nova Rex", "class": "batalla", "hull": 412500, "speed": 76, "dmg": 1.22, "cargo": 175, "lasers": 18, "gens": 12, "mods": 3, "note": "DPS alto; menos tanque que sus pares.", "cost": {"credits": 90000000, "xenocristal": 960, "neutronio": 48}},
 	# Naves especiales (6.1): +8%..18% de poder efectivo y habilidad propia.
-	"specter_x": {"name": "Specter-X", "class": "caza", "special": true, "hull": 115500, "speed": 127, "dmg": 1.08, "cargo": 70, "lasers": 7, "gens": 3, "mods": 1, "ability": "phase", "note": "Fase: 1.5 s de intangibilidad.", "cost": {"credits": 2500000, "fragmento_vacio": 60, "fibra_fase": 40, "nexo": 300}},
-	"fortress_omega": {"name": "Fortress Ω", "class": "tanque", "special": true, "hull": 356250, "speed": 70, "dmg": 0.98, "cargo": 105, "lasers": 5, "gens": 5, "mods": 2, "ability": "anchor", "note": "Ancla defensiva: -35% velocidad, +35% escudo 6 s.", "cost": {"credits": 12000000, "osmio": 400, "paladio": 300, "nexo": 400}},
-	"ark_meridian": {"name": "Ark Meridian", "class": "carguera", "special": true, "hull": 201500, "speed": 82, "dmg": 0.86, "cargo": 312, "lasers": 4, "gens": 4, "mods": 1, "ability": "compressor", "note": "Compresor: recoge botín cercano 8 s.", "cost": {"credits": 3000000, "bioaleacion": 400, "nucleo_biomecanico": 20}},
-	"seraph_prime": {"name": "Seraph Prime", "class": "crucero", "special": true, "hull": 269500, "speed": 98, "dmg": 1.18, "cargo": 150, "lasers": 11, "gens": 5, "mods": 2, "ability": "prismatic", "note": "Sobrecarga prismática: +cadencia temporal.", "cost": {"credits": 60000000, "xenocristal": 1200, "aetherium": 60, "nexo": 600}},
-	"event_horizon": {"name": "Event Horizon", "class": "batalla", "special": true, "hull": 511750, "speed": 74, "dmg": 1.27, "cargo": 190, "lasers": 14, "gens": 7, "mods": 3, "ability": "gravity_well", "note": "Pozo gravitacional: atrae y ralentiza.", "cost": {"credits": 250000000, "graviton": 40, "semilla_singular": 30, "nexo": 1500}},
+	"specter_x": {"name": "Specter-X", "class": "caza", "special": true, "hull": 115500, "speed": 127, "dmg": 1.08, "cargo": 70, "lasers": 9, "gens": 6, "mods": 1, "ability": "phase", "note": "Fase: 1.5 s de intangibilidad.", "cost": {"credits": 2500000, "fragmento_vacio": 60, "fibra_fase": 40, "nexo": 300}},
+	"fortress_omega": {"name": "Fortress Ω", "class": "tanque", "special": true, "hull": 356250, "speed": 70, "dmg": 0.98, "cargo": 105, "lasers": 7, "gens": 10, "mods": 2, "ability": "anchor", "note": "Ancla defensiva: -35% velocidad, +35% escudo 6 s.", "cost": {"credits": 12000000, "osmio": 400, "paladio": 300, "nexo": 400}},
+	"ark_meridian": {"name": "Ark Meridian", "class": "carguera", "special": true, "hull": 201500, "speed": 82, "dmg": 0.86, "cargo": 312, "lasers": 5, "gens": 8, "mods": 1, "ability": "compressor", "note": "Compresor: recoge botín cercano 8 s.", "cost": {"credits": 3000000, "bioaleacion": 400, "nucleo_biomecanico": 20}},
+	"seraph_prime": {"name": "Seraph Prime", "class": "crucero", "special": true, "hull": 269500, "speed": 98, "dmg": 1.18, "cargo": 150, "lasers": 14, "gens": 10, "mods": 2, "ability": "prismatic", "note": "Sobrecarga prismática: +cadencia temporal.", "cost": {"credits": 60000000, "xenocristal": 1200, "aetherium": 60, "nexo": 600}},
+	"event_horizon": {"name": "Event Horizon", "class": "batalla", "special": true, "hull": 511750, "speed": 74, "dmg": 1.27, "cargo": 190, "lasers": 18, "gens": 14, "mods": 3, "ability": "gravity_well", "note": "Pozo gravitacional: atrae y ralentiza.", "cost": {"credits": 250000000, "graviton": 40, "semilla_singular": 30, "nexo": 1500}},
 }
 
 const ABILITIES := {
@@ -215,12 +215,12 @@ const MISSILE_INTERVAL := 4.0
 const MISSILE_RANGE := 820.0
 const MISSILE_LOT := 10
 const MISSILES := {
-	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 1000.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 1000}},
-	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 2000.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 5000, "ferrita": 3}},
-	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 3000.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 12000, "titanio": 3}},
-	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 4000.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 20000, "cobalto": 3, "paladio": 2}},
-	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 5000.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 35000, "titanio": 4, "iridio": 2}},
-	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6000.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 60000, "osmio": 2, "neutronio": 1}},
+	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 1000.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 700}},
+	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 2000.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 3500, "ferrita": 3}},
+	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 3000.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 8400, "titanio": 3}},
+	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 4000.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 14000, "cobalto": 3, "paladio": 2}},
+	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 5000.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 24500, "titanio": 4, "iridio": 2}},
+	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6000.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 42000, "osmio": 2, "neutronio": 1}},
 }
 
 
@@ -833,14 +833,14 @@ static func biome_factor(biome_id: String) -> Dictionary:
 
 ## Poder recomendado para un bioma, nivel y Ascensión (mismas potencias que el índice de poder).
 static func recommended_power(level: int, biome_id: String, asc: int = 0) -> float:
-	# v2: duelo equilibrado = vida efectiva x daño del enemigo frente a la del jugador (power_index):
-	# 1000 x raíz((vida + escudo) x daño medios del bioma respecto a Ferron).
+	# v2: 1000 x ((vida + escudo) x daño medios del bioma respecto a Ferron)^0,28. El exponente se calibró con
+	# el bot (pt11): con 0,5 los equipos que superaban los biomas altos marcaban un 7-12% del recomendado.
 	var e := eff_level(level, biome_id)
 	var bid := biome_id if BIOMES.get(biome_id, {}).has("enemies") else "ferron"
 	var ehp := (biome_avg(bid, "hp") + biome_avg(bid, "shield")) * level_hp(1.0, e) * pow(2.0, asc)
 	var dmg := biome_avg(bid, "dmg") * level_dmg(1.0, e) * pow(1.55, asc)
 	var base := (biome_avg("ferron", "hp") + biome_avg("ferron", "shield")) * biome_avg("ferron", "dmg")
-	return 1000.0 * sqrt(ehp * dmg / maxf(1.0, base))
+	return 1000.0 * pow(ehp * dmg / maxf(1.0, base), 0.28)
 
 
 ## v2: índice de poder del jugador en la misma escala: 1000 x raíz(vida efectiva x DPS) respecto a la

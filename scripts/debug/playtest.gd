@@ -225,16 +225,16 @@ const SCENARIOS := [
 	{"name": "Mule C1 (carguera) · nivel 2", "ship": "mule_c1", "laser": "l01", "lvl": 2, "gen": "sg_aegis1", "glvl": 2, "mods": -1, "biome": "ferron", "level": 2},
 	{"name": "Raptor V2 · L-02 nv4 · Forja 6", "ship": "raptor_v2", "laser": "l02", "lvl": 4, "gen": "sg_aegis2", "glvl": 4, "mods": 0, "biome": "ferron_forja", "level": 6},
 	{"name": "Kestrel de serie en Vesper 9 (salto de bioma)", "ship": "kestrel_a1", "laser": "l01", "lvl": 0, "gen": "sg_aegis1", "glvl": 0, "mods": -1, "biome": "vesper", "level": 9, "stock": true},
-	{"name": "Bulwark T1 · L-04 nv8 · Vesper 10", "ship": "bulwark_t1", "laser": "l04", "lvl": 8, "gen": "sg_bulwark", "glvl": 8, "mods": 1, "biome": "vesper", "level": 10, "objective": "baliza"},
-	{"name": "Vanguard M · L-05 nv10 · Prismáticos 17", "ship": "vanguard_m", "laser": "l05", "lvl": 10, "gen": "sg_flux", "glvl": 10, "mods": 2, "biome": "prismaticos", "level": 17, "objective": "baliza"},
-	{"name": "Centurion P · L-09 nv12 · Catedral 24", "ship": "centurion_p", "laser": "l09", "lvl": 12, "gen": "sg_quantum", "glvl": 12, "mods": 2, "biome": "prismaticos_catedral", "level": 24},
-	{"name": "Titan B1 · L-10 nv14 · Abismo 32", "ship": "titan_b1", "laser": "l10", "lvl": 14, "gen": "sg_fortress", "glvl": 14, "mods": 3, "biome": "vacio_abismo", "level": 32},
-	{"name": "Event Horizon · L-18 nv16 · Corazón Leviatán 40", "ship": "event_horizon", "laser": "l18", "lvl": 16, "gen": "sg_fortress", "glvl": 16, "mods": 4, "biome": "leviatan_corazon", "level": 40, "objective": "escolta"},
+	{"name": "Bulwark T1 · L-04 nv8 · Vesper 10", "ammo": "mk2", "ship": "bulwark_t1", "laser": "l04", "lvl": 8, "gen": "sg_bulwark", "glvl": 8, "mods": 1, "biome": "vesper", "level": 10, "objective": "baliza"},
+	{"name": "Vanguard M · L-05 nv10 · Prismáticos 17", "ammo": "mk3", "ship": "vanguard_m", "laser": "l05", "lvl": 10, "gen": "sg_flux", "glvl": 10, "mods": 2, "biome": "prismaticos", "level": 17, "objective": "baliza"},
+	{"name": "Centurion P · L-09 nv12 · Catedral 24", "ammo": "mk3", "ship": "centurion_p", "laser": "l09", "lvl": 12, "gen": "sg_quantum", "glvl": 12, "mods": 2, "biome": "prismaticos_catedral", "level": 24},
+	{"name": "Titan B1 · L-10 nv14 · Abismo 32", "ammo": "mk4", "ship": "titan_b1", "laser": "l10", "lvl": 14, "gen": "sg_fortress", "glvl": 14, "mods": 3, "biome": "vacio_abismo", "level": 32},
+	{"name": "Event Horizon · L-18 nv16 · Corazón Leviatán 40", "ammo": "mk5", "ship": "event_horizon", "laser": "l18", "lvl": 16, "gen": "sg_fortress", "glvl": 16, "mods": 4, "biome": "leviatan_corazon", "level": 40, "objective": "escolta"},
 	{"name": "Objetivo balizas · Raptor V2 L-02 nv6 · Forja 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron_forja", "level": 5, "objective": "baliza"},
 	{"name": "Objetivo socorro · Raptor V2 L-02 nv6 · Forja 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron_forja", "level": 5, "objective": "socorro"},
 	{"name": "Objetivo escolta · Raptor V2 L-02 nv6 · Forja 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron_forja", "level": 5, "objective": "escolta"},
 	{"name": "Objetivo comandante · Raptor V2 L-02 nv6 · Forja 5", "ship": "raptor_v2", "laser": "l02", "lvl": 6, "gen": "sg_aegis2", "glvl": 6, "mods": 0, "biome": "ferron_forja", "level": 5, "objective": "comandante"},
-	{"name": "Variantes · Vanguard M L-05 nv10 · Cinturón Ferron 20", "ship": "vanguard_m", "laser": "l05", "lvl": 10, "gen": "sg_flux", "glvl": 10, "mods": 2, "biome": "ferron", "level": 20, "objective": "limpieza"},
+	{"name": "Variantes · Vanguard M L-05 nv10 · Cinturón Ferron 20", "ammo": "mk3", "ship": "vanguard_m", "laser": "l05", "lvl": 10, "gen": "sg_flux", "glvl": 10, "mods": 2, "biome": "ferron", "level": 20, "objective": "limpieza"},
 ]
 
 
@@ -254,6 +254,9 @@ func _phase_combat() -> void:
 			GameState.data["missiles"] = {"r1": 200, "r2": 200, "r3": 100}
 			GameState.data["items"]["repair"] = 10
 			GameState.data["items"]["shield_cell"] = 6
+		# v2: munición de la etapa (el bot la usa contra todo; sin ella, x1 y x2 contra élites).
+		if sc.has("ammo"):
+			GameState.data["ammo"][sc["ammo"]] = 60000
 		GameState.data["sector_max"] = 99
 		var xp_before := int(GameState.data["xp"])
 		_biome = sc["biome"]
@@ -261,7 +264,7 @@ func _phase_combat() -> void:
 		_frame_us.clear()
 		_done = false
 		_sector = Sector.new()
-		_sector.params = {"level": sc["level"], "biome": sc["biome"], "seed": seed_i, "bot": true}
+		_sector.params = {"level": sc["level"], "biome": sc["biome"], "seed": seed_i, "bot": true, "bot_ammo": sc.get("ammo", "")}
 		if sc.has("objective"):
 			_sector.params["objective"] = sc["objective"]
 		_sector.finished.connect(func(_r): _done = true)

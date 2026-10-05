@@ -1688,9 +1688,12 @@ func _bot_tick(_delta: float) -> void:
 		player.try_ability()
 	if hp < 0.35:
 		player.try_boost()
-	# Munición fuerte contra élites, básica contra el resto.
+	# Munición fuerte contra élites, básica contra el resto (el playtest puede fijar la de su etapa).
 	var elite: bool = player.target is Enemy and (player.target as Enemy).is_elite
-	if elite and int(run_ammo.get("mk2", 0)) > 50:
+	var pref := String(params.get("bot_ammo", ""))
+	if pref != "" and int(run_ammo.get(pref, 0)) > 0:
+		active_ammo = pref
+	elif elite and int(run_ammo.get("mk2", 0)) > 50:
 		active_ammo = "mk2"
 	elif int(run_ammo.get("mk1", 0)) > 0:
 		active_ammo = "mk1"
