@@ -822,8 +822,7 @@ func _update_mines() -> void:
 			continue
 		for e in enemies:
 			if e.alive and e.plane_pos.distance_to(m["pos"]) < 90.0 + e.radius:
-				# v2: la mina hace el 60% de la vida efectiva de un alien medio del bioma.
-				player_explosion(m["pos"], 180.0, 0.6 * (GameData.biome_avg(GameData.tier_biome(level), "hp") + GameData.biome_avg(GameData.tier_biome(level), "shield")) * GameData.level_hp(1.0, eff_level))
+				player_explosion(m["pos"], 180.0, 2500.0 * GameData.level_hp(1.0, level) * 0.5)
 				mines.erase(m)
 				break
 	ground.mines = mines
@@ -859,10 +858,6 @@ func _update_missiles(delta: float) -> void:
 		return
 	var tgt: Enemy = player.target
 	if tgt.plane_pos.distance_to(player.plane_pos) > GameData.MISSILE_RANGE:
-		return
-	# v2: modo del lanzamisiles (Ajustes): todos los objetivos, sólo élites y jefes (por defecto) o nunca.
-	var mode: String = String(GameState.data["settings"].get("missile_mode", "elite"))
-	if mode == "off" or (mode == "elite" and not (tgt.is_elite or tgt.is_boss or tgt.variant != "base")):
 		return
 	if int(run_missiles.get(active_missile, 0)) <= 0:
 		# Se acabó ese tipo: pasa al más barato que quede.
@@ -1074,9 +1069,9 @@ func on_enemy_killed(e: Enemy, by_player: bool) -> void:
 		rmult *= 4.0
 	if not e.is_nest:
 		kills_by[e.id] = int(kills_by.get(e.id, 0)) + 1
-	_award_xp(GameData.enemy_xp(e.def, eff_level, rmult))
+	_award_xp(GameData.enemy_xp(float(e.def["hp"]), level, rmult))
 	# Créditos y Nexo se acreditan al instante; los materiales quedan en una caja de botín.
-	var credits := int(GameData.level_reward(float(e.def["credits"]), eff_level) * rmult * GameData.CREDIT_MULT * float(mod.get("credits", 1.0)) * (1.0 + GameState.ascent_bonus("credits")))
+	var credits := int(GameData.level_reward(float(e.def["credits"]), level) * rmult * GameData.CREDIT_MULT * float(mod.get("credits", 1.0)) * (1.0 + GameState.ascent_bonus("credits")))
 	_gain("credits", credits)
 	var nexo_chance: float = float(e.def["nexo"]) * rmult * float(mod.get("nexo", 1.0))
 	if e.variant != "base":
@@ -1139,10 +1134,10 @@ func on_poi(pt: ObjPoint, text: String) -> void:
 func on_point_done(pt: ObjPoint) -> void:
 	objective_progress += 1
 	if pt.kind == "convoy":
-		_gain("credits", int(10.0 * GameData.level_credits(level) * asc_reward))   # v2: convoy = 10 bajas medias
+		_gain("credits", int(GameData.level_reward(4000.0, level) * GameData.CREDIT_MULT * asc_reward))
 	elif pt.kind == "baliza":
 		# El objetivo más exigente: cada baliza paga créditos y deja una caja rara.
-		_gain("credits", int(4.0 * GameData.level_credits(level) * asc_reward))   # v2: baliza = 4 bajas medias
+		_gain("credits", int(GameData.level_reward(1500.0, level) * GameData.CREDIT_MULT * asc_reward))
 		var mats := {}
 		for k in biome["resources"].keys():
 			mats[k] = int(GameData.level_reward(6.0, level))

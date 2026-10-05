@@ -39,6 +39,22 @@ func _ready() -> void:
 	sv.add_child(row)
 	sv.add_child(UiTheme.label("Aumenta la escala en móviles y tabletas para pulsar los botones con comodidad.", 12, UiTheme.MUTED))
 	left.add_child(sc)
+	# v2: lanzamisiles automático (los misiles cuestan créditos: por defecto sólo contra élites y jefes).
+	var mfr: Array = W.frame("Lanzamisiles")
+	var mv: VBoxContainer = mfr[1]
+	var mrow := W.hbox(8)
+	mrow.add_child(UiTheme.label("Disparo automático", 15))
+	mrow.add_child(W.spacer())
+	var cur_mode: String = String(GameState.data["settings"].get("missile_mode", "elite"))
+	for opt in [["all", "Todos"], ["elite", "Élites y jefes"], ["off", "Nunca"]]:
+		var set_mode := func():
+			GameState.data["settings"]["missile_mode"] = opt[0]
+			GameState.save_game()
+			menu.refresh()
+		mrow.add_child(W.btn(opt[1], set_mode, "primary" if cur_mode == opt[0] else "normal", 0, 14))
+	mv.add_child(mrow)
+	mv.add_child(UiTheme.label("Cada misil cuesta créditos; contra enemigos normales los láseres salen más baratos.", 12, UiTheme.MUTED))
+	left.add_child(mfr[0])
 	# Copia de seguridad
 	var bfr: Array = W.frame("Copia de seguridad")
 	var bk: Control = bfr[0]

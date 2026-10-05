@@ -28,7 +28,7 @@ func new_profile() -> Dictionary:
 	data = {
 		"version": SAVE_VERSION,
 		"next_uid": 1,
-		"credits": 15000,   # v2: para un L-01 y un SG-Aegis I
+		"credits": 5000,
 		"nexo": 0,
 		"seals": 0,
 		"xp": 0,
@@ -55,7 +55,7 @@ func new_profile() -> Dictionary:
 		"kills_by": {},
 		"pity": {"since_relic": 0, "since_exotic": 0, "opened": 0},
 		"stats": {"kills": 0, "runs": 0, "deaths": 0, "extractions": 0, "time": 0, "credits_earned": 0, "boxes": 0},
-		"settings": {"auto_fire_touch": true, "audio": default_audio(), "missile_mode": "elite"},
+		"settings": {"auto_fire_touch": true, "audio": default_audio()},
 	}
 	# La Kestrel inicial sale con todos sus slots de láser llenos.
 	var n_lasers := int(GameData.SHIPS["kestrel_a1"]["lasers"])
@@ -579,18 +579,9 @@ func price_of(kind: String, id: String, currency: String = "credits") -> Diction
 
 
 ## La munición Mk-V/VI y las cajas de módulos sólo se fabrican (GDD 18.1 y 14.2).
-## v2: la munición x4-x6 y los misiles de gama alta (RT-4, R-5, R-6) sólo se fabrican con materiales
-## farmeados; la tienda los vende únicamente con Cristales Nexo, como atajo.
-const NEXO_ONLY := {"ammo": ["mk4", "mk5", "mk6"], "missile": ["rt4", "r5", "r6"]}
-
-
-func nexo_only(kind: String, id: String) -> bool:
-	return id in NEXO_ONLY.get(kind, [])
-
-
 func in_shop(kind: String, id: String) -> bool:
 	if kind == "ammo":
-		return true
+		return id in ["mk1", "mk2", "mk3", "mk4"]
 	if kind == "box":
 		return false
 	if kind == "ship":
@@ -599,7 +590,8 @@ func in_shop(kind: String, id: String) -> bool:
 
 
 func buy(kind: String, id: String, qty: int = 1, currency: String = "credits") -> bool:
-	if not in_shop(kind, id) or (currency == "credits" and nexo_only(kind, id)):
+	# Las cargas Mk-V y Mk-VI sólo se fabrican (GDD): la tienda no las vende.
+	if kind == "ammo" and not in_shop(kind, id):
 		return false
 	return _acquire(kind, id, qty, price_of(kind, id, currency))
 
@@ -644,12 +636,12 @@ func _acquire(kind: String, id: String, qty: int, cost: Dictionary) -> bool:
 
 func item_base_credits(list_key: String, id: String) -> int:
 	var table: Dictionary = GameData.LASERS if list_key == "lasers" else GameData.GENERATORS
-	return GameData.upgrade_base(int(table[id]["cost"].get("credits", 10000)))
+	return maxi(800, int(table[id]["cost"].get("credits", 2000)) / 4)
 
 
 func upgrade_item(list_key: String, uid: int) -> bool:
 	var it := find_item(list_key, uid)
-	if it.is_empty() or int(it["level"]) >= GameData.max_item_level(list_key):
+	if it.is_empty() or int(it["level"]) >= 16:
 		return false
 	var cost := GameData.upgrade_cost(int(it["level"]), item_base_credits(list_key, it["id"]))
 	if not pay(cost):
@@ -728,10 +720,6 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 		"accel": 0.0, "turn": 0.0, "crit": 0.0, "elite_dmg": 0.0, "hull_regen": 0.0, "recharge_delay": 0.0,
 		"repair_bonus": 0.0, "collision_res": 0.0, "shield_break": 0.0, "pierce": 0.0}
 	var traits: Array = []
-	# v2 (DarkOrbit): el escudo es la suma de los puntos de los generadores de escudo y la absorción, su media.
-	var shield_pts := 0.0
-	var absorb_sum := 0.0
-	var absorb_n := 0
 	for uid in lo["gens"]:
 		if int(uid) < 0:
 			continue
@@ -742,10 +730,6 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 		if not traits.has(it["id"]):
 			traits.append(it["id"])
 		var mult := GameData.component_mult(int(it["level"]))
-		if g["type"] == "shield":
-			shield_pts += float(g.get("shield_pts", 0)) * mult
-			absorb_sum += float(g.get("absorb", 0.0))
-			absorb_n += 1
 		for k in g["stats"].keys():
 			var v: float = g["stats"][k]
 			# Las penalizaciones no escalan con el nivel; sólo los beneficios.
@@ -756,7 +740,7 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 			var pit := find_item("gens", int(pet_gens[i])) if int(pet_gens[i]) >= 0 else {}
 			if not pit.is_empty():
 				var pg: Dictionary = GameData.GENERATORS[pit["id"]]
-				shield_pts += float(pg.get("shield_pts", 0)) * GameData.component_mult(int(pit["level"])) * GameData.PET_GEN_SHARE
+				bonus["shield"] += float(pg["stats"].get("shield", 0.0)) * GameData.component_mult(int(pit["level"])) * GameData.PET_GEN_SHARE
 	for uid in lo["mods"]:
 		if int(uid) < 0:
 			continue
@@ -789,13 +773,12 @@ func ship_stats(ship_id: String = "") -> Dictionary:
 	bonus["elite_dmg"] += ascent_bonus("elite")
 	bonus["repair_bonus"] += ascent_bonus("repair")
 	var hull_base := float(ship["hull"])
-	var shield_base := hull_base * GameData.SHIELD_FROM_HULL + shield_pts
+	var shield_base := hull_base * GameData.SHIELD_FROM_HULL
 	var speed_base := float(ship["speed"])
 	return {
 		"name": ship["name"],
 		"hull_base": hull_base, "hull": hull_base * (1.0 + bonus["hull"]),
 		"shield_base": shield_base, "shield": shield_base * (1.0 + bonus["shield"]),
-		"absorb": absorb_sum / absorb_n if absorb_n > 0 else 0.0,
 		"speed_base": speed_base, "speed": speed_base * (1.0 + bonus["speed"]),
 		"dmg_base": float(ship["dmg"]), "dmg": float(ship["dmg"]) * (1.0 + bonus["dmg"]),
 		"cargo": int(int(ship["cargo"]) * GameData.CARGO_UNIT * (1.0 + ascent_bonus("cargo"))),
@@ -848,7 +831,7 @@ func equipped_drone_lasers() -> Array:
 
 ## Daño por andanada de un láser: la cadencia del GDD se convierte en daño por andanada (VOLLEY_INTERVAL).
 static func laser_volley_damage(def: Dictionary, level: int) -> float:
-	return GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * float(def["rate"]) * GameData.laser_mult(level) * GameData.VOLLEY_INTERVAL * float(GameData.RARITY_DMG.get(def.get("rarity", "comun"), 1.0))
+	return GameData.LASER_BASE_DAMAGE * float(def["dmg"]) * float(def["rate"]) * GameData.laser_mult(level) * GameData.VOLLEY_INTERVAL
 
 
 ## DPS teórico con munición x1 contra objetivo sin resistencias (para comparar builds).

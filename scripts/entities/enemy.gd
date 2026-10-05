@@ -83,14 +83,16 @@ func setup(p_sector: Sector, p_id: String, p_level: int, p_variant: String, pos:
 	home = pos
 	if id == "nest":
 		is_nest = true
-		def = {"name": "Nido " + sector.biome.get("faction", "alienígena"), "arch": "nest", "hp": 4500, "dmg": 0, "vel": 0, "size": 48, "shape": "nest", "color": Color("4a3428"), "accent": Color("ff7a2a"), "credits": 3500, "drops": sector.biome["resources"].duplicate(), "nexo": 0.004}
+		# v2: el nido aguanta como 6 aliens medios de su bioma y paga como 4.
+		var nb: String = sector.biome_id if GameData.BIOMES.get(sector.biome_id, {}).has("enemies") else "ferron"
+		def = {"name": "Nido " + sector.biome.get("faction", "alienígena"), "arch": "nest", "hp": int(6.0 * GameData.biome_avg(nb, "hp")), "shield": 0, "dmg": 0, "vel": 0, "size": 48, "shape": "nest", "color": Color("4a3428"), "accent": Color("ff7a2a"), "credits": int(4.0 * GameData.biome_avg(nb, "credits")), "xp": int(4.0 * GameData.biome_avg(nb, "xp")), "drops": sector.biome["resources"].duplicate(), "nexo": 0.004}
 		for k in def["drops"].keys():
 			def["drops"][k] = maxi(1, int(def["drops"][k]) / 2)
 	else:
 		def = GameData.ENEMIES[id]
 	var v: Dictionary = GameData.VARIANTS[variant]
 	arch = def["arch"]
-	hp_max = GameData.level_hp(float(def["hp"]), sector.eff_level) * float(v["hp"]) * GameData.ENEMY_HP_MULT
+	hp_max = GameData.level_hp(float(def["hp"]), sector.eff_level) * float(v["hp"]) * GameData.ENEMY_HP_MULT * GameData.ALIEN_HP_SCALE
 	hp = hp_max
 	dmg = GameData.level_dmg(float(def["dmg"]), sector.eff_level) * float(v["dmg"]) * GameData.ENEMY_DMG_MULT
 	# M9: Ascensión (vida x2^A, daño x1,55^A).
@@ -780,45 +782,45 @@ const AFFIX_COLORS := {
 }
 
 
-## Prismáticos y Vacío llevan escudo siempre; el resto a partir del nivel 20 (M7/M8).
+## v2: todos los aliens llevan el escudo de su tabla (DarkOrbit), escalado como su vida.
 func _setup_shield() -> void:
 	if is_nest:
 		return
-	var frac := 0.0
-	if sector.theme_id in ["prismaticos", "vacio"]:
-		frac = 0.4
-	elif level >= 20:
-		frac = 0.25
-	if frac <= 0.0:
-		return
-	shield_max = hp_max * frac * float(sector.mod.get("shield", 1.0))
+	var v: Dictionary = GameData.VARIANTS[variant]
+	shield_max = GameData.level_hp(float(def.get("shield", 0)), sector.eff_level) * float(v["hp"]) * GameData.ALIEN_HP_SCALE * float(sector.mod.get("shield", 1.0))
+	if sector.asc > 0:
+		shield_max *= pow(2.0, sector.asc)
 	shield = shield_max
-	shield_armor = 18.0 * GameData.level_dmg(1.0, sector.eff_level) * (1.3 if frac >= 0.4 else 1.0)
+	shield_armor = 0.0
 
 
 ## Daño de un impacto contra el escudo y el casco (devuelve el daño que llega al casco).
 func _absorb(amount: float, info: Dictionary) -> float:
+	# v2 (DarkOrbit): mientras quede escudo, absorbe la mitad de cada impacto y el resto va al casco.
 	var effect: String = info.get("effect", "")
 	if shield <= 0.0:
 		return amount * (0.85 if effect == "ion" else 1.0)
 	if effect == "phase" and randf() < 0.08:
 		return amount
-	var vs_shield := amount
+	var absorb := GameData.ALIEN_SHIELD_ABSORB * (1.0 - clampf(float(info.get("pierce", 0.0)), 0.0, 0.9) * 0.5)
+	var to_shield := amount * absorb
+	var vs_shield := to_shield
 	if effect == "ion":
 		vs_shield *= 1.45
 	elif effect == "pet_ion":
 		vs_shield *= 1.35
 	vs_shield *= 1.0 + float(info.get("shield_break", 0.0))
-	var armor := shield_armor * (1.0 - clampf(float(info.get("pierce", 0.0)), 0.0, 0.9))
-	var eff := maxf(vs_shield * 0.15, vs_shield - armor)
-	if eff <= shield:
-		shield -= eff
-		return 0.0
-	# El sobrante atraviesa al casco en proporción.
-	var rest := (eff - shield) / eff * amount
+	var to_hull := amount - to_shield
+	if effect == "ion":
+		to_hull *= 0.85
+	if vs_shield <= shield:
+		shield -= vs_shield
+		return to_hull
+	# El sobrante del escudo roto pasa al casco en proporción.
+	var spill := (vs_shield - shield) / vs_shield * to_shield
 	shield = 0.0
 	sector.fx_ring(plane_pos, radius * 1.4, Color("4ab8ff"))
-	return rest
+	return to_hull + spill
 
 
 # --- M9: afijos de élite -----------------------------------------------------------------------

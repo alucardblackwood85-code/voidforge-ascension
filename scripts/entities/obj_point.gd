@@ -33,8 +33,8 @@ func setup(p_sector: Sector, p_kind: String, pos: Vector2) -> void:
 	height = 18.0 if kind == "convoy" else 0.0
 	anim = randf() * 10.0
 	if kind == "convoy":
-		# Más robusto en niveles altos (en el 40 caía en segundos): x1 en el nivel 1, x2 en el 40.
-		hp_max = 40.0 * GameData.level_hp(100.0, sector.level) * (1.0 + float(sector.level - 1) / 39.0)
+		# v2: aguanta 120 disparos medios de los aliens de su bioma (la v1 daba ~60 contra el daño de entonces).
+		hp_max = 120.0 * GameData.biome_avg(GameData.tier_biome(sector.level), "dmg") * GameData.level_dmg(1.0, sector.eff_level)
 		hp = hp_max
 	sync_screen()
 

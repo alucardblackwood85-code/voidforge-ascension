@@ -106,7 +106,7 @@ func _product(kind: String, id: String) -> Control:
 			var g: Dictionary = GameData.GENERATORS[id]
 			name = g["name"]
 			sub = "Escudo" if g["type"] == "shield" else "Velocidad"
-			stats = "%s\n%s" % [W.gen_stats(g["stats"]), g["trait"]]
+			stats = "%s\n%s" % [W.gen_desc(g), g["trait"]]
 			col = Color("4aa3ff") if g["type"] == "shield" else Color("ffd84a")
 			tex = W.icon("gen", id)
 			owned_txt = _count_owned("gens", id)
@@ -185,7 +185,11 @@ func _product(kind: String, id: String) -> Control:
 		qtys = [1, 10]
 	elif kind == "item":
 		qtys = [1, 5]
+	if GameState.nexo_only(kind, id):
+		v.add_child(UiTheme.label("Se fabrica con materiales (Fabricación) o se compra con Nexo.", 12, UiTheme.WARN))
 	for cur in ["credits", "nexo"]:
+		if cur == "credits" and GameState.nexo_only(kind, id):
+			continue
 		var price := GameState.price_of(kind, id, cur)
 		var row := W.hbox(6)
 		row.add_child(W.cost_row(price))

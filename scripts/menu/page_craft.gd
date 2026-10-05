@@ -2,10 +2,10 @@ class_name PageCraft
 extends HBoxContainer
 ## FABRICACIÓN: fabricación con los materiales recolectados en los sectores. Categorías: munición,
 ## consumibles, cajas de módulos (gacha con probabilidades visibles y pity), naves, láseres,
-## generadores, pet y mejoras de nivel 1-16. El panel derecho muestra el inventario de materiales.
+## generadores, pet y mejoras de nivel (láseres 1-30, generadores 1-16). El panel derecho muestra el inventario de materiales.
 
 const CATS := [["ammo", "Munición"], ["missile", "Misiles"], ["item", "Consumibles"], ["box", "Cajas de módulos"], ["ship", "Naves"],
-	["laser", "Láseres"], ["gen", "Generadores"], ["drone_laser", "Pet"], ["upgrade", "Mejoras 1-16"]]
+	["laser", "Láseres"], ["gen", "Generadores"], ["drone_laser", "Pet"], ["upgrade", "Mejoras"]]
 
 var menu: StartMenu
 var reveal: Control
@@ -106,7 +106,7 @@ func _recipe(kind: String, id: String) -> Control:
 		"gen":
 			var g: Dictionary = GameData.GENERATORS[id]
 			name = g["name"]
-			sub = W.gen_stats(g["stats"])
+			sub = W.gen_desc(g)
 			tex = W.icon("gen", id)
 			col = Color("4aa3ff") if g["type"] == "shield" else Color("ffd84a")
 		"drone_laser":
@@ -232,13 +232,14 @@ func _show_reveal(m: Dictionary) -> void:
 	c.create_tween().tween_property(c, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-# --- Mejoras 1-16 ----------------------------------------------------------------------------
+# --- Mejoras (v2: láseres 1-30, generadores 1-16) -----------------------------------------------
 func _upgrades(list: VBoxContainer) -> void:
-	list.add_child(UiTheme.label("Cada nivel añade +3% de daño a un láser o +1% al valor de un generador (máximo 16).", 14, UiTheme.MUTED))
+	list.add_child(UiTheme.label("Cada nivel añade +%d%% de daño a un láser (máximo %d) o +1%% al valor de un generador (máximo %d)." % [int(round(GameData.LASER_LEVEL_STEP * 100)), GameData.LASER_MAX_LEVEL, GameData.GEN_MAX_LEVEL], 14, UiTheme.MUTED))
 	for list_key in ["lasers", "gens"]:
 		for it in GameState.data[list_key]:
 			var info := W.item_info(list_key, it)
 			var lvl := int(it["level"])
+			var max_lvl := GameData.max_item_level(list_key)
 			var c := W.card(Color(0.05, 0.08, 0.13, 0.94), (info["color"] as Color).darkened(0.2), 8)
 			var h := W.hbox(12)
 			c.add_child(h)
@@ -246,21 +247,21 @@ func _upgrades(list: VBoxContainer) -> void:
 			var v := W.vbox(3)
 			v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var where := GameState.equipped_on(list_key, int(it["uid"]))
-			v.add_child(UiTheme.label("%s  Nv %d/16%s" % [info["name"], lvl, "  [%s]" % GameData.holder_name(where) if where != "" else ""], 15))
+			v.add_child(UiTheme.label("%s  Nv %d/%d%s" % [info["name"], lvl, max_lvl, "  [%s]" % GameData.holder_name(where) if where != "" else ""], 15))
 			var bar := ProgressBar.new()
-			bar.max_value = 16
+			bar.max_value = max_lvl
 			bar.value = lvl
 			bar.show_percentage = false
 			bar.custom_minimum_size = Vector2(300, 8)
 			v.add_child(bar)
-			if lvl < 16:
+			if lvl < max_lvl:
 				var cost := GameData.upgrade_cost(lvl, GameState.item_base_credits(list_key, it["id"]))
 				v.add_child(W.cost_row(cost))
 				h.add_child(v)
 				var uid := int(it["uid"])
 				var do_upgrade := func():
 					Sfx.play("craft" if GameState.upgrade_item(list_key, uid) else "ui_error")
-				var b := W.button("%s  → Nv %d" % ["+3%" if list_key == "lasers" else "+1%", lvl + 1], do_upgrade, false, 130)
+				var b := W.button("%s  → Nv %d" % ["+%d%%" % int(round(GameData.LASER_LEVEL_STEP * 100)) if list_key == "lasers" else "+1%", lvl + 1], do_upgrade, false, 130)
 				b.disabled = not GameState.can_afford(cost)
 				h.add_child(b)
 			else:

@@ -144,10 +144,9 @@ func _biome_card(id: String, selected: bool) -> Control:
 
 
 func power_index() -> float:
-	# 23.1: Poder = Casco^0.45 x Velocidad^0.20 x DañoEfectivo^0.70 x Escudo^0.35
+	# v2: Poder = raíz(vida efectiva x DPS), en la misma escala que el poder recomendado del bioma.
 	var st := GameState.ship_stats()
-	var dps := maxf(1.0, GameState.theoretical_dps())
-	return pow(st["hull"], 0.45) * pow(st["speed"], 0.2) * pow(dps, 0.7) * pow(st["shield"], 0.35) / 100.0
+	return GameData.power_index(float(st["hull"]) + float(st["shield"]), maxf(1.0, GameState.theoretical_dps()))
 
 
 func recommended_power(level: int) -> float:

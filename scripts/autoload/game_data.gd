@@ -3,21 +3,25 @@ extends Node
 ## Todas las cifras son valores iniciales de prototipo; se ajustan aquí sin tocar la lógica.
 
 # --- Constantes globales de combate ---------------------------------------
-const LASER_BASE_DAMAGE := 120.0      # daño por disparo de un láser 1.00x con munición x1
+const LASER_BASE_DAMAGE := 75.0       # v2: daño por disparo de un láser 1.00x con munición x1 (MP-1 de DarkOrbit)
 const LASER_RANGE := 620.0            # alcance en unidades de plano
 const SPEED_UNIT := 2.3               # 100 de "Velocidad" GDD = 230 unidades/s
-const SHIELD_FROM_HULL := 0.5         # escudo base = 50% del casco (el GDD no fija escudo base)
+const SHIELD_FROM_HULL := 0.0         # v2: sin escudo base; todo el escudo sale de los generadores (DarkOrbit)
 const SHIELD_RECHARGE_DELAY := 4.0
 const SHIELD_RECHARGE_RATE := 0.06    # fracción del escudo máximo por segundo
 const CARGO_UNIT := 20                # 1 de "Carga" GDD = 20 unidades de material
 const DEATH_LOOT_LOSS := 0.9          # al morir se pierde el 90% de lo recolectado en el sector (sin aviso)
 const VOLLEY_INTERVAL := 1.2          # la nave dispara una andanada con todos sus láseres cada 1.2 s
-const ENEMY_DMG_MULT := 1.3           # con disparos teledirigidos (casi siempre aciertan) el daño efectivo ya es ~3x el de v0.3
-const ENEMY_HP_MULT := 1.2
+const ENEMY_DMG_MULT := 1.0          # v2: daño de las tablas de DarkOrbit tal cual
+const ENEMY_HP_MULT := 1.0           # v2: vida de las tablas de DarkOrbit tal cual
+const ALIEN_HP_SCALE := 1.0          # v2: ajuste global de vida y escudo alienígena (1.0 = DarkOrbit exacto)
+const ALIEN_SHIELD_ABSORB := 0.5      # v2: los escudos alienígenas absorben la mitad de cada impacto
+const REPAIR_BOT_DELAY := 6.0         # v2: robot de reparación (DarkOrbit): empieza tras 6 s sin recibir daño
+const REPAIR_BOT_RATE := 0.015        # v2: fracción del casco reparada por segundo
 const ENEMY_BULLET_TURN := 1.2        # rad/s: persiguen a la nave; un impulso o un giro cerrado aún los esquiva
 const ASC_UNLOCK_LEVEL := 50          # M9: limpiar este nivel abre la Ascensión
 const ASC_MAX := 10
-const NEXO_RATE := 587.0              # créditos equivalentes a 1 Cristal Nexo (Specter-X: 246.4K créditos o 420 Nexo)
+const NEXO_RATE := 2500.0             # v2: créditos equivalentes a 1 Cristal Nexo (1 Uridium de DarkOrbit ~ 2.500 créditos)
 const LOOT_BOX_LIFE := 120.0          # segundos que permanece una caja de botín
 const MAX_ENEMIES := 160               # tope de enemigos vivos (rendimiento: más allá cae la tasa de fotogramas)
 const ENGAGE_BASE := 6                 # enemigos que atacan a la vez (+1 cada 12 niveles); el resto espera a distancia
@@ -97,32 +101,32 @@ const SHIP_CLASSES := {
 }
 
 const SHIPS := {
-	"kestrel_a1": {"name": "Kestrel A1", "class": "caza", "hull": 4200, "speed": 118, "dmg": 1.00, "cargo": 70, "lasers": 5, "gens": 3, "mods": 1, "note": "Muy ágil; frágil.", "cost": {"credits": 0}},
-	"raptor_v2": {"name": "Raptor V2", "class": "caza", "hull": 4800, "speed": 112, "dmg": 1.05, "cargo": 75, "lasers": 7, "gens": 3, "mods": 1, "note": "Mejor ofensiva; menor aceleración.", "cost": {"credits": 45000, "titanio": 30, "plata": 60}},
-	"needle_s": {"name": "Needle S", "class": "caza", "hull": 3900, "speed": 128, "dmg": 0.95, "cargo": 60, "lasers": 5, "gens": 2, "mods": 1, "note": "Máxima velocidad; poca vida.", "cost": {"credits": 38000, "cobalto": 30, "plata": 40}},
-	"falcon_r": {"name": "Falcon R", "class": "caza", "hull": 5200, "speed": 108, "dmg": 1.08, "cargo": 80, "lasers": 7, "gens": 3, "mods": 1, "note": "Equilibrado; coste alto de fabricación.", "cost": {"credits": 90000, "titanio": 60, "oro": 25, "platino": 4}},
-	"bulwark_t1": {"name": "Bulwark T1", "class": "tanque", "hull": 12500, "speed": 70, "dmg": 0.92, "cargo": 105, "lasers": 5, "gens": 5, "mods": 2, "note": "Gran vida; lento.", "cost": {"credits": 120000, "titanio": 90, "osmio": 8}},
-	"bastion_h": {"name": "Bastion H", "class": "tanque", "hull": 14200, "speed": 64, "dmg": 0.95, "cargo": 110, "lasers": 7, "gens": 5, "mods": 2, "note": "Escudo eficiente; giro pesado.", "cost": {"credits": 180000, "titanio": 120, "paladio": 15}},
-	"mammoth_k": {"name": "Mammoth K", "class": "tanque", "hull": 16800, "speed": 58, "dmg": 0.88, "cargo": 130, "lasers": 7, "gens": 6, "mods": 2, "note": "Máxima resistencia; DPS bajo.", "cost": {"credits": 240000, "osmio": 25, "titanio": 150}},
-	"aegis_r": {"name": "Aegis R", "class": "tanque", "hull": 13300, "speed": 72, "dmg": 1.00, "cargo": 100, "lasers": 7, "gens": 5, "mods": 2, "note": "Tanque ofensivo; menor carga.", "cost": {"credits": 210000, "iridio": 15, "titanio": 120}},
-	"mule_c1": {"name": "Mule C1", "class": "carguera", "hull": 7200, "speed": 78, "dmg": 0.82, "cargo": 260, "lasers": 4, "gens": 4, "mods": 1, "note": "Carga alta; defensa limitada.", "cost": {"credits": 60000, "ferrita": 200, "nanoespuma": 60}},
-	"atlas_c4": {"name": "Atlas C4", "class": "carguera", "hull": 8600, "speed": 74, "dmg": 0.86, "cargo": 340, "lasers": 5, "gens": 4, "mods": 2, "note": "Gran carga; lenta.", "cost": {"credits": 140000, "ferrita": 400, "titanio": 80}},
-	"nomad_c": {"name": "Nomad C", "class": "carguera", "hull": 6800, "speed": 88, "dmg": 0.88, "cargo": 230, "lasers": 5, "gens": 3, "mods": 1, "note": "Carguera móvil; poca vida.", "cost": {"credits": 85000, "cobalto": 50, "plata": 100}},
-	"prospector_ix": {"name": "Prospector IX", "class": "carguera", "hull": 9400, "speed": 70, "dmg": 0.90, "cargo": 390, "lasers": 5, "gens": 5, "mods": 2, "note": "Recolección máxima; silueta grande.", "cost": {"credits": 260000, "titanio": 150, "platino": 12}},
-	"vanguard_m": {"name": "Vanguard M", "class": "crucero", "hull": 9800, "speed": 92, "dmg": 1.08, "cargo": 150, "lasers": 9, "gens": 5, "mods": 2, "note": "Versátil; coste de mantenimiento medio.", "cost": {"credits": 350000, "iridio": 20, "xenocristal": 25}},
-	"centurion_p": {"name": "Centurion P", "class": "crucero", "hull": 11200, "speed": 84, "dmg": 1.12, "cargo": 160, "lasers": 11, "gens": 5, "mods": 2, "note": "Alto DPS; menos movilidad.", "cost": {"credits": 480000, "iridio": 35, "platino": 20}},
-	"orion_m7": {"name": "Orion M7", "class": "crucero", "hull": 10500, "speed": 90, "dmg": 1.05, "cargo": 180, "lasers": 9, "gens": 6, "mods": 2, "note": "Buen balance de slots.", "cost": {"credits": 420000, "xenocristal": 40, "paladio": 20}},
-	"helios_d": {"name": "Helios D", "class": "crucero", "hull": 9000, "speed": 98, "dmg": 1.15, "cargo": 140, "lasers": 11, "gens": 4, "mods": 2, "note": "Ofensivo; menor resistencia.", "cost": {"credits": 460000, "xenocristal": 45, "iridio": 30}},
-	"titan_b1": {"name": "Titan B1", "class": "batalla", "hull": 17800, "speed": 70, "dmg": 1.15, "cargo": 190, "lasers": 12, "gens": 7, "mods": 3, "note": "Potencia bruta; lento.", "cost": {"credits": 1200000, "osmio": 60, "neutronio": 4}},
-	"imperator_vx": {"name": "Imperator VX", "class": "batalla", "hull": 19500, "speed": 66, "dmg": 1.18, "cargo": 200, "lasers": 14, "gens": 7, "mods": 3, "note": "Muchos láseres; caro.", "cost": {"credits": 1800000, "iridio": 90, "neutronio": 6}},
-	"leviathan_k": {"name": "Leviathan K", "class": "batalla", "hull": 22400, "speed": 60, "dmg": 1.12, "cargo": 220, "lasers": 12, "gens": 8, "mods": 3, "note": "Vida máxima; baja velocidad.", "cost": {"credits": 2000000, "osmio": 120, "neutronio": 8}},
-	"nova_rex": {"name": "Nova Rex", "class": "batalla", "hull": 16500, "speed": 76, "dmg": 1.22, "cargo": 175, "lasers": 14, "gens": 6, "mods": 3, "note": "DPS alto; menos tanque que sus pares.", "cost": {"credits": 1900000, "xenocristal": 120, "neutronio": 6}},
+	"kestrel_a1": {"name": "Kestrel A1", "class": "caza", "hull": 105000, "speed": 118, "dmg": 1.00, "cargo": 70, "lasers": 5, "gens": 3, "mods": 1, "note": "Muy ágil; frágil.", "cost": {"credits": 0}},
+	"raptor_v2": {"name": "Raptor V2", "class": "caza", "hull": 120000, "speed": 112, "dmg": 1.05, "cargo": 75, "lasers": 7, "gens": 3, "mods": 1, "note": "Mejor ofensiva; menor aceleración.", "cost": {"credits": 100000, "titanio": 30, "plata": 60}},
+	"needle_s": {"name": "Needle S", "class": "caza", "hull": 97500, "speed": 128, "dmg": 0.95, "cargo": 60, "lasers": 5, "gens": 2, "mods": 1, "note": "Máxima velocidad; poca vida.", "cost": {"credits": 40000, "cobalto": 30, "plata": 40}},
+	"falcon_r": {"name": "Falcon R", "class": "caza", "hull": 130000, "speed": 108, "dmg": 1.08, "cargo": 80, "lasers": 7, "gens": 3, "mods": 1, "note": "Equilibrado; coste alto de fabricación.", "cost": {"credits": 195000, "titanio": 60, "oro": 25, "platino": 4}},
+	"bulwark_t1": {"name": "Bulwark T1", "class": "tanque", "hull": 312500, "speed": 70, "dmg": 0.92, "cargo": 105, "lasers": 5, "gens": 5, "mods": 2, "note": "Gran vida; lento.", "cost": {"credits": 1500000, "titanio": 180, "osmio": 16}},
+	"bastion_h": {"name": "Bastion H", "class": "tanque", "hull": 355000, "speed": 64, "dmg": 0.95, "cargo": 110, "lasers": 7, "gens": 5, "mods": 2, "note": "Escudo eficiente; giro pesado.", "cost": {"credits": 4000000, "titanio": 240, "paladio": 30}},
+	"mammoth_k": {"name": "Mammoth K", "class": "tanque", "hull": 420000, "speed": 58, "dmg": 0.88, "cargo": 130, "lasers": 7, "gens": 6, "mods": 2, "note": "Máxima resistencia; DPS bajo.", "cost": {"credits": 6000000, "osmio": 50, "titanio": 300}},
+	"aegis_r": {"name": "Aegis R", "class": "tanque", "hull": 332500, "speed": 72, "dmg": 1.00, "cargo": 100, "lasers": 7, "gens": 5, "mods": 2, "note": "Tanque ofensivo; menor carga.", "cost": {"credits": 3000000, "iridio": 30, "titanio": 240}},
+	"mule_c1": {"name": "Mule C1", "class": "carguera", "hull": 180000, "speed": 78, "dmg": 0.82, "cargo": 260, "lasers": 4, "gens": 4, "mods": 1, "note": "Carga alta; defensa limitada.", "cost": {"credits": 60000, "ferrita": 400, "nanoespuma": 120}},
+	"atlas_c4": {"name": "Atlas C4", "class": "carguera", "hull": 215000, "speed": 74, "dmg": 0.86, "cargo": 340, "lasers": 5, "gens": 4, "mods": 2, "note": "Gran carga; lenta.", "cost": {"credits": 400000, "ferrita": 800, "titanio": 160}},
+	"nomad_c": {"name": "Nomad C", "class": "carguera", "hull": 170000, "speed": 88, "dmg": 0.88, "cargo": 230, "lasers": 5, "gens": 3, "mods": 1, "note": "Carguera móvil; poca vida.", "cost": {"credits": 150000, "cobalto": 100, "plata": 200}},
+	"prospector_ix": {"name": "Prospector IX", "class": "carguera", "hull": 235000, "speed": 70, "dmg": 0.90, "cargo": 390, "lasers": 5, "gens": 5, "mods": 2, "note": "Recolección máxima; silueta grande.", "cost": {"credits": 900000, "titanio": 300, "platino": 24}},
+	"vanguard_m": {"name": "Vanguard M", "class": "crucero", "hull": 245000, "speed": 92, "dmg": 1.08, "cargo": 150, "lasers": 9, "gens": 5, "mods": 2, "note": "Versátil; coste de mantenimiento medio.", "cost": {"credits": 15000000, "iridio": 80, "xenocristal": 100}},
+	"centurion_p": {"name": "Centurion P", "class": "crucero", "hull": 280000, "speed": 84, "dmg": 1.12, "cargo": 160, "lasers": 11, "gens": 5, "mods": 2, "note": "Alto DPS; menos movilidad.", "cost": {"credits": 35000000, "iridio": 140, "platino": 80}},
+	"orion_m7": {"name": "Orion M7", "class": "crucero", "hull": 262500, "speed": 90, "dmg": 1.05, "cargo": 180, "lasers": 9, "gens": 6, "mods": 2, "note": "Buen balance de slots.", "cost": {"credits": 25000000, "xenocristal": 160, "paladio": 80}},
+	"helios_d": {"name": "Helios D", "class": "crucero", "hull": 225000, "speed": 98, "dmg": 1.15, "cargo": 140, "lasers": 11, "gens": 4, "mods": 2, "note": "Ofensivo; menor resistencia.", "cost": {"credits": 30000000, "xenocristal": 180, "iridio": 120}},
+	"titan_b1": {"name": "Titan B1", "class": "batalla", "hull": 445000, "speed": 70, "dmg": 1.15, "cargo": 190, "lasers": 12, "gens": 7, "mods": 3, "note": "Potencia bruta; lento.", "cost": {"credits": 60000000, "osmio": 480, "neutronio": 32}},
+	"imperator_vx": {"name": "Imperator VX", "class": "batalla", "hull": 487500, "speed": 66, "dmg": 1.18, "cargo": 200, "lasers": 14, "gens": 7, "mods": 3, "note": "Muchos láseres; caro.", "cost": {"credits": 100000000, "iridio": 720, "neutronio": 48}},
+	"leviathan_k": {"name": "Leviathan K", "class": "batalla", "hull": 560000, "speed": 60, "dmg": 1.12, "cargo": 220, "lasers": 12, "gens": 8, "mods": 3, "note": "Vida máxima; baja velocidad.", "cost": {"credits": 125000000, "osmio": 960, "neutronio": 64}},
+	"nova_rex": {"name": "Nova Rex", "class": "batalla", "hull": 412500, "speed": 76, "dmg": 1.22, "cargo": 175, "lasers": 14, "gens": 6, "mods": 3, "note": "DPS alto; menos tanque que sus pares.", "cost": {"credits": 90000000, "xenocristal": 960, "neutronio": 48}},
 	# Naves especiales (6.1): +8%..18% de poder efectivo y habilidad propia.
-	"specter_x": {"name": "Specter-X", "class": "caza", "special": true, "hull": 4620, "speed": 127, "dmg": 1.08, "cargo": 70, "lasers": 7, "gens": 3, "mods": 1, "ability": "phase", "note": "Fase: 1.5 s de intangibilidad.", "cost": {"credits": 150000, "fragmento_vacio": 6, "fibra_fase": 4, "nexo": 300}},
-	"fortress_omega": {"name": "Fortress Ω", "class": "tanque", "special": true, "hull": 14250, "speed": 70, "dmg": 0.98, "cargo": 105, "lasers": 5, "gens": 5, "mods": 2, "ability": "anchor", "note": "Ancla defensiva: -35% velocidad, +35% escudo 6 s.", "cost": {"credits": 400000, "osmio": 40, "paladio": 30, "nexo": 400}},
-	"ark_meridian": {"name": "Ark Meridian", "class": "carguera", "special": true, "hull": 8060, "speed": 82, "dmg": 0.86, "cargo": 312, "lasers": 4, "gens": 4, "mods": 1, "ability": "compressor", "note": "Compresor: recoge botín cercano 8 s.", "cost": {"credits": 220000, "bioaleacion": 40, "nucleo_biomecanico": 2}},
-	"seraph_prime": {"name": "Seraph Prime", "class": "crucero", "special": true, "hull": 10780, "speed": 98, "dmg": 1.18, "cargo": 150, "lasers": 11, "gens": 5, "mods": 2, "ability": "prismatic", "note": "Sobrecarga prismática: +cadencia temporal.", "cost": {"credits": 900000, "xenocristal": 120, "aetherium": 6, "nexo": 600}},
-	"event_horizon": {"name": "Event Horizon", "class": "batalla", "special": true, "hull": 20470, "speed": 74, "dmg": 1.27, "cargo": 190, "lasers": 14, "gens": 7, "mods": 3, "ability": "gravity_well", "note": "Pozo gravitacional: atrae y ralentiza.", "cost": {"credits": 5000000, "graviton": 4, "semilla_singular": 3, "nexo": 1500}},
+	"specter_x": {"name": "Specter-X", "class": "caza", "special": true, "hull": 115500, "speed": 127, "dmg": 1.08, "cargo": 70, "lasers": 7, "gens": 3, "mods": 1, "ability": "phase", "note": "Fase: 1.5 s de intangibilidad.", "cost": {"credits": 2500000, "fragmento_vacio": 60, "fibra_fase": 40, "nexo": 300}},
+	"fortress_omega": {"name": "Fortress Ω", "class": "tanque", "special": true, "hull": 356250, "speed": 70, "dmg": 0.98, "cargo": 105, "lasers": 5, "gens": 5, "mods": 2, "ability": "anchor", "note": "Ancla defensiva: -35% velocidad, +35% escudo 6 s.", "cost": {"credits": 12000000, "osmio": 400, "paladio": 300, "nexo": 400}},
+	"ark_meridian": {"name": "Ark Meridian", "class": "carguera", "special": true, "hull": 201500, "speed": 82, "dmg": 0.86, "cargo": 312, "lasers": 4, "gens": 4, "mods": 1, "ability": "compressor", "note": "Compresor: recoge botín cercano 8 s.", "cost": {"credits": 3000000, "bioaleacion": 400, "nucleo_biomecanico": 20}},
+	"seraph_prime": {"name": "Seraph Prime", "class": "crucero", "special": true, "hull": 269500, "speed": 98, "dmg": 1.18, "cargo": 150, "lasers": 11, "gens": 5, "mods": 2, "ability": "prismatic", "note": "Sobrecarga prismática: +cadencia temporal.", "cost": {"credits": 60000000, "xenocristal": 1200, "aetherium": 60, "nexo": 600}},
+	"event_horizon": {"name": "Event Horizon", "class": "batalla", "special": true, "hull": 511750, "speed": 74, "dmg": 1.27, "cargo": 190, "lasers": 14, "gens": 7, "mods": 3, "ability": "gravity_well", "note": "Pozo gravitacional: atrae y ralentiza.", "cost": {"credits": 250000000, "graviton": 40, "semilla_singular": 30, "nexo": 1500}},
 }
 
 const ABILITIES := {
@@ -139,36 +143,42 @@ const ABILITIES := {
 }
 
 # --- Láseres (7.1) -----------------------------------------------------------
+# v2: el daño de un láser crece con su rareza como la escala de DarkOrbit (LF-1/MP-1 65-75, LF-2 140,
+# LF-3 175, LF-4 200…); los nuestros llegan más lejos (exóticos x3,2) y conservan sus efectos.
+const RARITY_DMG := {"comun": 1.0, "poco_comun": 1.4, "raro": 1.9, "epico": 2.3, "reliquia": 2.7, "exotico": 3.2}
 # dmg = multiplicador por proyectil, shots = proyectiles por disparo, rate = disparos/s
 const LASERS := {
-	"l01": {"name": "L-01 Pulse", "rarity": "comun", "dmg": 1.00, "shots": 1, "rate": 1.0, "effect": "", "color": Color("ff2e2e"), "adv": "Sin efecto adicional.", "dis": "Barato y fiable.", "cost": {"credits": 2000}},
-	"l02": {"name": "L-02 Twin Pulse", "rarity": "comun", "dmg": 0.62, "shots": 2, "rate": 1.1, "effect": "twin", "color": Color("a6ff2e"), "adv": "Dos proyectiles paralelos.", "dis": "Peor precisión a distancia.", "cost": {"credits": 6000, "plata": 20}},
-	"l03": {"name": "L-03 Prism Needle", "rarity": "poco_comun", "dmg": 1.15, "shots": 1, "rate": 1.0, "effect": "pierce_armor", "color": Color("2ef6ff"), "adv": "+12% penetración de armadura.", "dis": "Menor tamaño de impacto.", "cost": {"credits": 18000, "xenocristal": 4, "plata": 30}},
-	"l04": {"name": "L-04 Cadence", "rarity": "poco_comun", "dmg": 0.90, "shots": 1, "rate": 1.3, "effect": "cadence", "color": Color("ffe62e"), "adv": "Cada 4.º disparo inflige 2x daño.", "dis": "Daño individual menor.", "cost": {"credits": 22000, "oro": 6, "cobalto": 20}},
-	"l05": {"name": "L-05 Ion Lance", "rarity": "raro", "dmg": 0.95, "shots": 1, "rate": 1.0, "effect": "ion", "color": Color("2e6bff"), "adv": "+45% daño a escudos.", "dis": "-15% daño a casco.", "cost": {"credits": 40000, "paladio": 6, "plata": 40}},
-	"l06": {"name": "L-06 Ember Ray", "rarity": "raro", "dmg": 0.85, "shots": 1, "rate": 1.3, "effect": "burn", "color": Color("ff7a1e"), "adv": "Aplica quemadura acumulable.", "dis": "Débil contra enemigos veloces.", "cost": {"credits": 42000, "resina_plasma": 30, "cobalto": 20}},
-	"l07": {"name": "L-07 Cryo Beam", "rarity": "raro", "dmg": 0.39, "shots": 1, "rate": 2.4, "effect": "slow", "color": Color("c8f0ff"), "adv": "Ralentiza hasta 18%.", "dis": "DPS bajo.", "cost": {"credits": 38000, "xenocristal": 8, "nanoespuma": 30}},
-	"l08": {"name": "L-08 Scatter Prism", "rarity": "raro", "dmg": 0.45, "shots": 5, "rate": 0.7, "effect": "scatter", "color": Color("ff2ec8"), "adv": "Abanico de 5 rayos.", "dis": "Ineficiente a distancia.", "cost": {"credits": 45000, "xenocristal": 10, "vidrio_estelar": 6}},
-	"l09": {"name": "L-09 Arc Chain", "rarity": "epico", "dmg": 0.92, "shots": 1, "rate": 1.0, "effect": "chain", "color": Color("5ac8ff"), "adv": "Salta a 2 objetivos, -30% por salto.", "dis": "Peor contra objetivo único.", "cost": {"credits": 120000, "iridio": 12, "polvo_cuantico": 6}},
-	"l10": {"name": "L-10 Siege Laser", "rarity": "epico", "dmg": 1.80, "shots": 1, "rate": 0.6, "effect": "siege", "color": Color("2effa0"), "adv": "+20% daño a unidades grandes.", "dis": "Cadencia lenta.", "cost": {"credits": 130000, "iridio": 15, "osmio": 10}},
-	"l11": {"name": "L-11 Phase Cutter", "rarity": "epico", "dmg": 1.05, "shots": 1, "rate": 1.3, "effect": "phase", "color": Color("e0a8ff"), "adv": "8% de ignorar escudo y golpear casco.", "dis": "Coste energético alto.", "cost": {"credits": 140000, "fibra_fase": 2, "iridio": 12}},
-	"l12": {"name": "L-12 Resonance", "rarity": "epico", "dmg": 0.88, "shots": 1, "rate": 1.3, "effect": "resonance", "color": Color("2edc4a"), "adv": "Golpes sucesivos: +3%, hasta +18%.", "dis": "Pierde acumulación al cambiar de objetivo.", "cost": {"credits": 135000, "polvo_cuantico": 10, "vidrio_estelar": 10}},
-	"l13": {"name": "L-13 Solar Spear", "rarity": "reliquia", "dmg": 2.20, "shots": 1, "rate": 0.4, "effect": "pierce", "color": Color("fff7c2"), "adv": "Perfora varios enemigos.", "dis": "Recalentamiento.", "cost": {"credits": 500000, "aetherium": 4, "polvo_cuantico": 20}},
-	"l14": {"name": "L-14 Null Ray", "rarity": "reliquia", "dmg": 1.12, "shots": 1, "rate": 1.0, "effect": "weaken", "color": Color("b8bcc8"), "adv": "Reduce 10% el daño enemigo 3 s.", "dis": "No se acumula.", "cost": {"credits": 480000, "materia_oscura": 4, "paladio": 20}},
-	"l15": {"name": "L-15 Singularity Beam", "rarity": "reliquia", "dmg": 1.35, "shots": 1, "rate": 0.6, "effect": "pull", "color": Color("7a2eff"), "adv": "Pequeña atracción al impactar.", "dis": "Consume munición 20% más rápido.", "cost": {"credits": 520000, "graviton": 1, "materia_oscura": 4}},
-	"l16": {"name": "L-16 Quantum Echo", "rarity": "exotico", "dmg": 1.00, "shots": 1, "rate": 1.0, "effect": "echo", "color": Color("ff9ee0"), "adv": "15% de repetir el disparo sin coste.", "dis": "Tirada aleatoria; no garantiza proc.", "cost": {"credits": 1500000, "polvo_cuantico": 60, "cronita": 6, "nexo": 500}},
-	"l17": {"name": "L-17 Triune", "rarity": "exotico", "dmg": 0.72, "shots": 3, "rate": 1.0, "effect": "triune", "color": Color("ffb02e"), "adv": "Tres impactos convergentes.", "dis": "Sufre contra objetivos pequeños.", "cost": {"credits": 1500000, "aetherium": 8, "antimateria": 3, "nexo": 500}},
-	"l18": {"name": "L-18 Oblivion", "rarity": "exotico", "dmg": 1.55, "shots": 1, "rate": 0.8, "effect": "oblivion", "color": Color("ff2e7a"), "adv": "Cada 10 impactos crea explosión 3x.", "dis": "Muy caro de fabricar/mejorar.", "cost": {"credits": 3000000, "antimateria": 6, "semilla_singular": 1, "nexo": 900}},
+	"l01": {"name": "L-01 Pulse", "rarity": "comun", "dmg": 1.00, "shots": 1, "rate": 1.0, "effect": "", "color": Color("ff2e2e"), "adv": "Sin efecto adicional.", "dis": "Barato y fiable.", "cost": {"credits": 10000}},
+	"l02": {"name": "L-02 Twin Pulse", "rarity": "comun", "dmg": 0.62, "shots": 2, "rate": 1.1, "effect": "twin", "color": Color("a6ff2e"), "adv": "Dos proyectiles paralelos.", "dis": "Peor precisión a distancia.", "cost": {"credits": 40000, "plata": 20}},
+	"l03": {"name": "L-03 Prism Needle", "rarity": "poco_comun", "dmg": 1.15, "shots": 1, "rate": 1.0, "effect": "pierce_armor", "color": Color("2ef6ff"), "adv": "+12% penetración de armadura.", "dis": "Menor tamaño de impacto.", "cost": {"credits": 250000, "xenocristal": 4, "plata": 30}},
+	"l04": {"name": "L-04 Cadence", "rarity": "poco_comun", "dmg": 0.90, "shots": 1, "rate": 1.3, "effect": "cadence", "color": Color("ffe62e"), "adv": "Cada 4.º disparo inflige 2x daño.", "dis": "Daño individual menor.", "cost": {"credits": 300000, "oro": 6, "cobalto": 20}},
+	"l05": {"name": "L-05 Ion Lance", "rarity": "raro", "dmg": 0.95, "shots": 1, "rate": 1.0, "effect": "ion", "color": Color("2e6bff"), "adv": "+45% daño a escudos.", "dis": "-15% daño a casco.", "cost": {"credits": 1500000, "paladio": 6, "plata": 40}},
+	"l06": {"name": "L-06 Ember Ray", "rarity": "raro", "dmg": 0.85, "shots": 1, "rate": 1.3, "effect": "burn", "color": Color("ff7a1e"), "adv": "Aplica quemadura acumulable.", "dis": "Débil contra enemigos veloces.", "cost": {"credits": 1600000, "resina_plasma": 30, "cobalto": 20}},
+	"l07": {"name": "L-07 Cryo Beam", "rarity": "raro", "dmg": 0.39, "shots": 1, "rate": 2.4, "effect": "slow", "color": Color("c8f0ff"), "adv": "Ralentiza hasta 18%.", "dis": "DPS bajo.", "cost": {"credits": 1400000, "xenocristal": 8, "nanoespuma": 30}},
+	"l08": {"name": "L-08 Scatter Prism", "rarity": "raro", "dmg": 0.45, "shots": 5, "rate": 0.7, "effect": "scatter", "color": Color("ff2ec8"), "adv": "Abanico de 5 rayos.", "dis": "Ineficiente a distancia.", "cost": {"credits": 1700000, "xenocristal": 10, "vidrio_estelar": 6}},
+	"l09": {"name": "L-09 Arc Chain", "rarity": "epico", "dmg": 0.92, "shots": 1, "rate": 1.0, "effect": "chain", "color": Color("5ac8ff"), "adv": "Salta a 2 objetivos, -30% por salto.", "dis": "Peor contra objetivo único.", "cost": {"credits": 8000000, "iridio": 12, "polvo_cuantico": 6}},
+	"l10": {"name": "L-10 Siege Laser", "rarity": "epico", "dmg": 1.80, "shots": 1, "rate": 0.6, "effect": "siege", "color": Color("2effa0"), "adv": "+20% daño a unidades grandes.", "dis": "Cadencia lenta.", "cost": {"credits": 9000000, "iridio": 15, "osmio": 10}},
+	"l11": {"name": "L-11 Phase Cutter", "rarity": "epico", "dmg": 1.05, "shots": 1, "rate": 1.3, "effect": "phase", "color": Color("e0a8ff"), "adv": "8% de ignorar escudo y golpear casco.", "dis": "Coste energético alto.", "cost": {"credits": 10000000, "fibra_fase": 2, "iridio": 12}},
+	"l12": {"name": "L-12 Resonance", "rarity": "epico", "dmg": 0.88, "shots": 1, "rate": 1.3, "effect": "resonance", "color": Color("2edc4a"), "adv": "Golpes sucesivos: +3%, hasta +18%.", "dis": "Pierde acumulación al cambiar de objetivo.", "cost": {"credits": 9500000, "polvo_cuantico": 10, "vidrio_estelar": 10}},
+	"l13": {"name": "L-13 Solar Spear", "rarity": "reliquia", "dmg": 2.20, "shots": 1, "rate": 0.4, "effect": "pierce", "color": Color("fff7c2"), "adv": "Perfora varios enemigos.", "dis": "Recalentamiento.", "cost": {"credits": 25000000, "aetherium": 4, "polvo_cuantico": 20}},
+	"l14": {"name": "L-14 Null Ray", "rarity": "reliquia", "dmg": 1.12, "shots": 1, "rate": 1.0, "effect": "weaken", "color": Color("b8bcc8"), "adv": "Reduce 10% el daño enemigo 3 s.", "dis": "No se acumula.", "cost": {"credits": 24000000, "materia_oscura": 4, "paladio": 20}},
+	"l15": {"name": "L-15 Singularity Beam", "rarity": "reliquia", "dmg": 1.35, "shots": 1, "rate": 0.6, "effect": "pull", "color": Color("7a2eff"), "adv": "Pequeña atracción al impactar.", "dis": "Consume munición 20% más rápido.", "cost": {"credits": 26000000, "graviton": 1, "materia_oscura": 4}},
+	"l16": {"name": "L-16 Quantum Echo", "rarity": "exotico", "dmg": 1.00, "shots": 1, "rate": 1.0, "effect": "echo", "color": Color("ff9ee0"), "adv": "15% de repetir el disparo sin coste.", "dis": "Tirada aleatoria; no garantiza proc.", "cost": {"credits": 60000000, "polvo_cuantico": 60, "cronita": 6, "nexo": 500}},
+	"l17": {"name": "L-17 Triune", "rarity": "exotico", "dmg": 0.72, "shots": 3, "rate": 1.0, "effect": "triune", "color": Color("ffb02e"), "adv": "Tres impactos convergentes.", "dis": "Sufre contra objetivos pequeños.", "cost": {"credits": 60000000, "aetherium": 8, "antimateria": 3, "nexo": 500}},
+	"l18": {"name": "L-18 Oblivion", "rarity": "exotico", "dmg": 1.55, "shots": 1, "rate": 0.8, "effect": "oblivion", "color": Color("ff2e7a"), "adv": "Cada 10 impactos crea explosión 3x.", "dis": "Muy caro de fabricar/mejorar.", "cost": {"credits": 90000000, "antimateria": 6, "semilla_singular": 1, "nexo": 900}},
 }
 
 # --- Munición (7.2) — receta por lote de 100 ---------------------------------
+# v2: coste por disparo x1 10 (LCB-10 de DarkOrbit), x2 25, x3 50, x4 90, x5 150, x6 250 créditos: el daño por
+# crédito baja x0,8 por nivel de carga (la v1 lo dividía hasta por 68). x1-x3 se compran con créditos; x4-x6 sólo se fabrican
+# (materiales farmeados) o se pagan con Cristales Nexo como atajo (GameState.in_shop / nexo_only).
 const AMMO := {
-	"mk1": {"name": "Carga Mk-I", "short": "x1", "mult": 1.0, "color": Color("d8d8d8"), "recipe": {"credits": 150, "ferrita": 4}},
-	"mk2": {"name": "Carga Mk-II", "short": "x2", "mult": 2.0, "color": Color("6fd17a"), "recipe": {"credits": 500, "ferrita": 6, "plata": 5, "resina_plasma": 2}},
-	"mk3": {"name": "Carga Mk-III", "short": "x3", "mult": 3.0, "color": Color("4aa3ff"), "recipe": {"credits": 1600, "oro": 3, "titanio": 4, "xenocristal": 1}},
-	"mk4": {"name": "Carga Mk-IV", "short": "x4", "mult": 4.0, "color": Color("b26bff"), "recipe": {"credits": 5000, "platino": 2, "iridio": 2, "polvo_cuantico": 1}},
-	"mk5": {"name": "Carga Mk-V", "short": "x5", "mult": 5.0, "color": Color("ff9a3c"), "recipe": {"credits": 15000, "neutronio": 1, "antimateria": 1, "cronita": 1}},
-	"mk6": {"name": "Carga Mk-VI", "short": "x6", "mult": 6.0, "color": Color("ffd84a"), "recipe": {"credits": 50000, "graviton": 1, "materia_oscura": 2, "semilla_singular": 1}},
+	"mk1": {"name": "Carga Mk-I", "short": "x1", "mult": 1.0, "color": Color("d8d8d8"), "recipe": {"credits": 1000}},
+	"mk2": {"name": "Carga Mk-II", "short": "x2", "mult": 2.0, "color": Color("6fd17a"), "recipe": {"credits": 2360, "plata": 5, "resina_plasma": 2}},
+	"mk3": {"name": "Carga Mk-III", "short": "x3", "mult": 3.0, "color": Color("4aa3ff"), "recipe": {"credits": 4640, "oro": 3, "titanio": 4, "xenocristal": 1}},
+	"mk4": {"name": "Carga Mk-IV", "short": "x4", "mult": 4.0, "color": Color("b26bff"), "recipe": {"credits": 7710, "platino": 2, "iridio": 2, "polvo_cuantico": 1}},
+	"mk5": {"name": "Carga Mk-V", "short": "x5", "mult": 5.0, "color": Color("ff9a3c"), "recipe": {"credits": 7200, "neutronio": 1, "antimateria": 1, "cronita": 1}},
+	"mk6": {"name": "Carga Mk-VI", "short": "x6", "mult": 6.0, "color": Color("ffd84a"), "recipe": {"credits": 3000, "graviton": 1, "materia_oscura": 1}},
 }
 
 # --- Puntos de ascenso (mejoras permanentes de nave y cuenta) -----------------------------------
@@ -205,12 +215,12 @@ const MISSILE_INTERVAL := 4.0
 const MISSILE_RANGE := 820.0
 const MISSILE_LOT := 10
 const MISSILES := {
-	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 900.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 100, "ferrita": 3}},
-	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 1600.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 300, "ferrita": 3, "plata": 3}},
-	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 2800.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 800, "titanio": 3}},
-	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 2400.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 1200, "cobalto": 3, "paladio": 1}},
-	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 4200.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 2500, "titanio": 4, "iridio": 1}},
-	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6500.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 6000, "osmio": 1, "neutronio": 1}},
+	"r1": {"name": "R-1 Chispa", "short": "R1", "dmg": 1000.0, "acc": 0.84, "splash": 0.0, "speed": 520.0, "color": Color("ffb84a"), "recipe": {"credits": 1000}},
+	"r2": {"name": "R-2 Aguja", "short": "R2", "dmg": 2000.0, "acc": 0.86, "splash": 0.0, "speed": 560.0, "color": Color("6fd17a"), "recipe": {"credits": 5000, "ferrita": 3}},
+	"r3": {"name": "R-3 Martillo", "short": "R3", "dmg": 3000.0, "acc": 0.80, "splash": 0.0, "speed": 480.0, "color": Color("4aa3ff"), "recipe": {"credits": 12000, "titanio": 3}},
+	"rt4": {"name": "RT-4 Rastreador", "short": "RT4", "dmg": 4000.0, "acc": 0.97, "splash": 0.0, "speed": 620.0, "color": Color("b26bff"), "recipe": {"credits": 20000, "cobalto": 3, "paladio": 2}},
+	"r5": {"name": "R-5 Tormenta", "short": "R5", "dmg": 5000.0, "acc": 0.84, "splash": 140.0, "speed": 520.0, "color": Color("ff9a3c"), "recipe": {"credits": 35000, "titanio": 4, "iridio": 2}},
+	"r6": {"name": "R-6 Singular", "short": "R6", "dmg": 6000.0, "acc": 0.88, "splash": 190.0, "speed": 540.0, "color": Color("ffd84a"), "recipe": {"credits": 60000, "osmio": 2, "neutronio": 1}},
 }
 
 
@@ -222,43 +232,43 @@ static func missile_hit_chance(def: Dictionary, target_speed: float, bonus: floa
 
 # --- Consumibles / desplegables (4.3) — receta por unidad --------------------
 const ITEMS := {
-	"repair": {"name": "Kit de reparación", "short": "REP", "kind": "instant", "cd": 10.0, "color": Color("6fd17a"), "desc": "Repara 30% del casco.", "recipe": {"credits": 800, "nanoespuma": 6, "resina_plasma": 2}},
-	"boost": {"name": "Impulso consumible", "short": "IMP", "kind": "instant", "cd": 12.0, "color": Color("ffe04a"), "desc": "+40% velocidad durante 5 s.", "recipe": {"credits": 600, "resina_plasma": 3, "cobalto": 2}},
-	"mine": {"name": "Mina de proximidad", "short": "MIN", "kind": "deploy", "cd": 3.0, "color": Color("ff5a5a"), "desc": "Desplegable. Explota cerca de enemigos (daño en área).", "recipe": {"credits": 1200, "ferrita": 10, "cobalto": 4}},
-	"shield_cell": {"name": "Celda de escudo", "short": "ESC", "kind": "instant", "cd": 15.0, "color": Color("4ab8ff"), "desc": "Recarga 40% del escudo.", "recipe": {"credits": 1000, "paladio": 1, "plata": 6}},
+	"repair": {"name": "Kit de reparación", "short": "REP", "kind": "instant", "cd": 10.0, "color": Color("6fd17a"), "desc": "Repara 30% del casco.", "recipe": {"credits": 5000, "nanoespuma": 6, "resina_plasma": 2}},
+	"boost": {"name": "Impulso consumible", "short": "IMP", "kind": "instant", "cd": 12.0, "color": Color("ffe04a"), "desc": "+40% velocidad durante 5 s.", "recipe": {"credits": 3000, "resina_plasma": 3, "cobalto": 2}},
+	"mine": {"name": "Mina de proximidad", "short": "MIN", "kind": "deploy", "cd": 3.0, "color": Color("ff5a5a"), "desc": "Desplegable. Explota cerca de enemigos (daño en área).", "recipe": {"credits": 8000, "ferrita": 10, "cobalto": 4}},
+	"shield_cell": {"name": "Celda de escudo", "short": "ESC", "kind": "instant", "cd": 15.0, "color": Color("4ab8ff"), "desc": "Recarga 40% del escudo.", "recipe": {"credits": 6000, "paladio": 1, "plata": 6}},
 }
 
 # --- Generadores (8) ---------------------------------------------------------
 const GENERATORS := {
-	"sg_aegis1": {"name": "SG-Aegis I", "type": "shield", "stats": {"shield": 0.04}, "trait": "Sin penalización.", "cost": {"credits": 3000}},
-	"sg_aegis2": {"name": "SG-Aegis II", "type": "shield", "stats": {"shield": 0.07, "speed": -0.01}, "trait": "+2% masa / -1% velocidad.", "cost": {"credits": 9000, "titanio": 10}},
-	"sg_flux": {"name": "SG-Flux", "type": "shield", "stats": {"shield": 0.05, "recharge": 0.08, "hull": -0.04}, "trait": "-4% casco.", "cost": {"credits": 14000, "paladio": 3}},
-	"sg_bulwark": {"name": "SG-Bulwark", "type": "shield", "stats": {"shield": 0.11, "speed": -0.04}, "trait": "-4% velocidad.", "cost": {"credits": 20000, "titanio": 30, "osmio": 2}},
-	"sg_pulse": {"name": "SG-Pulse", "type": "shield", "stats": {"shield": 0.06}, "trait": "Al romperse: onda que empuja enemigos; CD 30 s.", "cost": {"credits": 26000, "paladio": 5}},
-	"sg_reflect": {"name": "SG-Reflect", "type": "shield", "stats": {"shield": 0.05}, "trait": "3% de reflejar proyectil ligero.", "cost": {"credits": 26000, "vidrio_estelar": 6}},
-	"sg_repair": {"name": "SG-Repair", "type": "shield", "stats": {"shield": 0.04, "shield_regen": 0.004}, "trait": "Regenera 0.4% escudo/s fuera de daño.", "cost": {"credits": 24000, "nanoespuma": 40}},
-	"sg_null": {"name": "SG-Null", "type": "shield", "stats": {"shield": 0.08}, "trait": "-8% duración de estados enemigos.", "cost": {"credits": 40000, "gel_entropico": 6}},
-	"sg_fortress": {"name": "SG-Fortress", "type": "shield", "stats": {"shield": 0.13, "speed": -0.06}, "trait": "-6% velocidad, +5% consumo energético.", "cost": {"credits": 60000, "osmio": 8, "paladio": 6}},
-	"sg_quantum": {"name": "SG-Quantum", "type": "shield", "stats": {"shield": 0.09}, "trait": "10% de reducir un impacto en 35%; CD 5 s.", "cost": {"credits": 90000, "polvo_cuantico": 10}},
-	"vg_thrust1": {"name": "VG-Thrust I", "type": "speed", "stats": {"speed": 0.025}, "trait": "Sin penalización.", "cost": {"credits": 3000}},
-	"vg_thrust2": {"name": "VG-Thrust II", "type": "speed", "stats": {"speed": 0.04, "shield": -0.02}, "trait": "-2% escudo.", "cost": {"credits": 9000, "cobalto": 10}},
-	"vg_vector": {"name": "VG-Vector", "type": "speed", "stats": {"speed": 0.03, "accel": 0.08, "hull": -0.03}, "trait": "-3% casco.", "cost": {"credits": 14000, "cobalto": 20}},
-	"vg_blink": {"name": "VG-Blink", "type": "speed", "stats": {"speed": 0.04, "boost_cd": -0.08}, "trait": "Reduce 8% CD de impulso.", "cost": {"credits": 20000, "cobalto": 25, "oro": 4}},
-	"vg_racer": {"name": "VG-Racer", "type": "speed", "stats": {"speed": 0.07, "shield": -0.07}, "trait": "-7% escudo.", "cost": {"credits": 26000, "cobalto": 30}},
-	"vg_inertia": {"name": "VG-Inertia", "type": "speed", "stats": {"speed": 0.03, "turn": 0.12}, "trait": "+12% control de giro.", "cost": {"credits": 18000, "titanio": 20}},
-	"vg_overdrive": {"name": "VG-Overdrive", "type": "speed", "stats": {"speed": 0.05}, "trait": "Tras impulso: +6% 2 s; CD 8 s.", "cost": {"credits": 40000, "resina_plasma": 40}},
-	"vg_phase": {"name": "VG-Phase", "type": "speed", "stats": {"speed": 0.045}, "trait": "5% de ignorar ralentizaciones.", "cost": {"credits": 50000, "fibra_fase": 1}},
-	"vg_comet": {"name": "VG-Comet", "type": "speed", "stats": {"speed": 0.08, "hull": -0.08}, "trait": "-8% casco.", "cost": {"credits": 60000, "cobalto": 60, "oro": 10}},
-	"vg_horizon": {"name": "VG-Horizon", "type": "speed", "stats": {"speed": 0.06}, "trait": "Bajo 25% vida: +12% 4 s; CD 25 s.", "cost": {"credits": 80000, "cronita": 1}},
+	"sg_aegis1": {"name": "SG-Aegis I", "type": "shield", "shield_pts": 1000, "absorb": 0.40, "stats": {}, "trait": "Sin penalización.", "cost": {"credits": 8000}},
+	"sg_aegis2": {"name": "SG-Aegis II", "type": "shield", "shield_pts": 2000, "absorb": 0.50, "stats": {"speed": -0.01}, "trait": "+2% masa / -1% velocidad.", "cost": {"credits": 16000, "titanio": 10}},
+	"sg_flux": {"name": "SG-Flux", "type": "shield", "shield_pts": 3000, "absorb": 0.55, "stats": {"recharge": 0.08, "hull": -0.04}, "trait": "-4% casco.", "cost": {"credits": 60000, "paladio": 3}},
+	"sg_bulwark": {"name": "SG-Bulwark", "type": "shield", "shield_pts": 5000, "absorb": 0.60, "stats": {"speed": -0.04}, "trait": "-4% velocidad.", "cost": {"credits": 128000, "titanio": 30, "osmio": 2}},
+	"sg_pulse": {"name": "SG-Pulse", "type": "shield", "shield_pts": 4000, "absorb": 0.60, "stats": {}, "trait": "Al romperse: onda que empuja enemigos; CD 30 s.", "cost": {"credits": 250000, "paladio": 5}},
+	"sg_reflect": {"name": "SG-Reflect", "type": "shield", "shield_pts": 4000, "absorb": 0.60, "stats": {}, "trait": "3% de reflejar proyectil ligero.", "cost": {"credits": 250000, "vidrio_estelar": 6}},
+	"sg_repair": {"name": "SG-Repair", "type": "shield", "shield_pts": 3500, "absorb": 0.60, "stats": {"shield_regen": 0.004}, "trait": "Regenera 0.4% escudo/s fuera de daño.", "cost": {"credits": 220000, "nanoespuma": 40}},
+	"sg_null": {"name": "SG-Null", "type": "shield", "shield_pts": 7000, "absorb": 0.65, "stats": {}, "trait": "-8% duración de estados enemigos.", "cost": {"credits": 1500000, "gel_entropico": 6}},
+	"sg_fortress": {"name": "SG-Fortress", "type": "shield", "shield_pts": 9500, "absorb": 0.70, "stats": {"speed": -0.06}, "trait": "-6% velocidad, +5% consumo energético.", "cost": {"credits": 6000000, "osmio": 8, "paladio": 6}},
+	"sg_quantum": {"name": "SG-Quantum", "type": "shield", "shield_pts": 10000, "absorb": 0.80, "stats": {}, "trait": "10% de reducir un impacto en 35%; CD 5 s.", "cost": {"credits": 15000000, "polvo_cuantico": 10}},
+	"vg_thrust1": {"name": "VG-Thrust I", "type": "speed", "stats": {"speed": 0.025}, "trait": "Sin penalización.", "cost": {"credits": 8000}},
+	"vg_thrust2": {"name": "VG-Thrust II", "type": "speed", "stats": {"speed": 0.04, "shield": -0.02}, "trait": "-2% escudo.", "cost": {"credits": 16000, "cobalto": 10}},
+	"vg_vector": {"name": "VG-Vector", "type": "speed", "stats": {"speed": 0.03, "accel": 0.08, "hull": -0.03}, "trait": "-3% casco.", "cost": {"credits": 60000, "cobalto": 20}},
+	"vg_blink": {"name": "VG-Blink", "type": "speed", "stats": {"speed": 0.04, "boost_cd": -0.08}, "trait": "Reduce 8% CD de impulso.", "cost": {"credits": 128000, "cobalto": 25, "oro": 4}},
+	"vg_racer": {"name": "VG-Racer", "type": "speed", "stats": {"speed": 0.07, "shield": -0.07}, "trait": "-7% escudo.", "cost": {"credits": 250000, "cobalto": 30}},
+	"vg_inertia": {"name": "VG-Inertia", "type": "speed", "stats": {"speed": 0.03, "turn": 0.12}, "trait": "+12% control de giro.", "cost": {"credits": 90000, "titanio": 20}},
+	"vg_overdrive": {"name": "VG-Overdrive", "type": "speed", "stats": {"speed": 0.05}, "trait": "Tras impulso: +6% 2 s; CD 8 s.", "cost": {"credits": 1500000, "resina_plasma": 40}},
+	"vg_phase": {"name": "VG-Phase", "type": "speed", "stats": {"speed": 0.045}, "trait": "5% de ignorar ralentizaciones.", "cost": {"credits": 3000000, "fibra_fase": 1}},
+	"vg_comet": {"name": "VG-Comet", "type": "speed", "stats": {"speed": 0.08, "hull": -0.08}, "trait": "-8% casco.", "cost": {"credits": 6000000, "cobalto": 60, "oro": 10}},
+	"vg_horizon": {"name": "VG-Horizon", "type": "speed", "stats": {"speed": 0.06}, "trait": "Bajo 25% vida: +12% 4 s; CD 25 s.", "cost": {"credits": 12000000, "cronita": 1}},
 }
 
 # --- Variantes (12.1) --------------------------------------------------------
 const VARIANTS := {
 	"base": {"name": "", "hp": 1.0, "reward": 1.0, "dmg": 1.0, "scale": 1.0, "color": Color(0, 0, 0, 0)},
-	"boss": {"name": "Boss", "hp": 2.0, "reward": 2.0, "dmg": 1.35, "scale": 1.25, "color": Color("ffb84a")},
-	"mega": {"name": "Mega", "hp": 3.0, "reward": 3.0, "dmg": 1.60, "scale": 1.45, "color": Color("ff5a5a")},
-	"ultra": {"name": "Ultra", "hp": 4.0, "reward": 4.0, "dmg": 1.90, "scale": 1.6, "color": Color("d05aff")},
-	"uber": {"name": "Uber", "hp": 5.0, "reward": 5.0, "dmg": 2.25, "scale": 1.8, "color": Color("4affff")},
+	"boss": {"name": "Boss", "hp": 4.0, "reward": 4.0, "dmg": 2.0, "scale": 1.25, "color": Color("ffb84a")},
+	"mega": {"name": "Mega", "hp": 5.0, "reward": 5.0, "dmg": 2.4, "scale": 1.45, "color": Color("ff5a5a")},
+	"ultra": {"name": "Ultra", "hp": 6.0, "reward": 6.0, "dmg": 2.8, "scale": 1.6, "color": Color("d05aff")},
+	"uber": {"name": "Uber", "hp": 8.0, "reward": 8.0, "dmg": 3.2, "scale": 1.8, "color": Color("4affff")},
 }
 
 # --- Bestiario (15) — 50 especies en 5 facciones ------------------------------------
@@ -266,60 +276,60 @@ const VARIANTS := {
 # nexo: probabilidad de Cristal Nexo (0.05% = 0.0005). spawns: especie que genera (nodrizas/invocadores).
 const ENEMIES := {
 	# Enjambre Ferron (1-10)
-	"xenomita": {"name": "Xenomita", "arch": "harasser", "hp": 900, "dmg": 55, "vel": 115, "size": 22, "shape": "insect", "color": Color("8c8f96"), "accent": Color("ff3a3a"), "credits": 1000, "drops": {"ferrita": 20, "plata": 20, "platino": 1}, "nexo": 0.0005},
-	"chatarrax": {"name": "Chatarrax", "arch": "swarm", "hp": 650, "dmg": 38, "vel": 125, "size": 16, "shape": "scrap", "color": Color("7a6a50"), "accent": Color("ffd23a"), "credits": 780, "drops": {"ferrita": 28, "nanoespuma": 8, "plata": 10}, "nexo": 0.0003},
-	"ferroclasto": {"name": "Ferróclasto", "arch": "tank", "hp": 3100, "dmg": 105, "vel": 58, "size": 40, "shape": "oval", "color": Color("6b6f78"), "accent": Color("ff6a2a"), "credits": 2200, "drops": {"ferrita": 35, "titanio": 15, "osmio": 2}, "nexo": 0.0008},
-	"aguijon_khepri": {"name": "Aguijón Khepri", "arch": "hunter", "hp": 1200, "dmg": 80, "vel": 135, "size": 20, "shape": "needle", "color": Color("2a2a30"), "accent": Color("ff8a2a"), "credits": 1450, "drops": {"plata": 18, "cobalto": 12, "oro": 3}, "nexo": 0.0006},
-	"taladro_vorak": {"name": "Taladro Vorak", "arch": "charger", "hp": 2400, "dmg": 120, "vel": 82, "size": 30, "shape": "drill", "color": Color("8a7a2a"), "accent": Color("4ab8ff"), "credits": 1900, "drops": {"titanio": 18, "ferrita": 25, "iridio": 2}, "nexo": 0.0007},
-	"nodo_bastion": {"name": "Nodo Bastión", "arch": "support", "hp": 2200, "dmg": 45, "vel": 55, "size": 30, "shape": "hex", "color": Color("2f4a3a"), "accent": Color("4ab8ff"), "credits": 2100, "drops": {"paladio": 6, "plata": 22, "ferrita": 20}, "nexo": 0.0008},
-	"mina_garra": {"name": "Mina Garra", "arch": "miner", "hp": 500, "dmg": 150, "vel": 90, "size": 16, "shape": "claw", "color": Color("5a5a60"), "accent": Color("ff2a2a"), "credits": 900, "drops": {"ferrita": 12, "resina_plasma": 7, "cobalto": 5}, "nexo": 0.0004},
-	"recolector_morbido": {"name": "Recolector Mórbido", "arch": "harasser", "hp": 1800, "dmg": 60, "vel": 75, "size": 28, "shape": "skull", "color": Color("7a5a5a"), "accent": Color("aaff5a"), "credits": 1700, "drops": {"oro": 5, "plata": 15, "nanoespuma": 20}, "nexo": 0.0006},
-	"artillero_ciclope": {"name": "Artillero Cíclope", "arch": "artillery", "hp": 2600, "dmg": 155, "vel": 62, "size": 32, "shape": "tri", "color": Color("3a3a40"), "accent": Color("ff2a2a"), "credits": 2350, "drops": {"iridio": 4, "titanio": 18, "ferrita": 18}, "nexo": 0.0009},
-	"madre_remache": {"name": "Madre Remache", "arch": "mother", "hp": 5200, "dmg": 90, "vel": 48, "size": 56, "shape": "mother", "color": Color("5a4a40"), "accent": Color("ff3a3a"), "credits": 4200, "drops": {"ferrita": 50, "oro": 8, "platino": 3, "cristal_helix": 1}, "nexo": 0.0015, "spawns": "chatarrax"},
+	"xenomita": {"name": "Xenomita", "arch": "harasser", "hp": 750, "shield": 370, "dmg": 13, "vel": 115, "size": 22, "shape": "insect", "color": Color("8c8f96"), "accent": Color("ff3a3a"), "credits": 380, "xp": 380, "drops": {"ferrita": 20, "plata": 20, "platino": 1}, "nexo": 0.0005},
+	"chatarrax": {"name": "Chatarrax", "arch": "swarm", "hp": 540, "shield": 270, "dmg": 9, "vel": 125, "size": 16, "shape": "scrap", "color": Color("7a6a50"), "accent": Color("ffd23a"), "credits": 280, "xp": 280, "drops": {"ferrita": 28, "nanoespuma": 8, "plata": 10}, "nexo": 0.0003},
+	"ferroclasto": {"name": "Ferróclasto", "arch": "tank", "hp": 2700, "shield": 2700, "dmg": 73, "vel": 58, "size": 40, "shape": "oval", "color": Color("6b6f78"), "accent": Color("ff6a2a"), "credits": 1000, "xp": 1000, "drops": {"ferrita": 35, "titanio": 15, "osmio": 2}, "nexo": 0.0008},
+	"aguijon_khepri": {"name": "Aguijón Khepri", "arch": "hunter", "hp": 1000, "shield": 1000, "dmg": 55, "vel": 135, "size": 20, "shape": "needle", "color": Color("2a2a30"), "accent": Color("ff8a2a"), "credits": 450, "xp": 450, "drops": {"plata": 18, "cobalto": 12, "oro": 3}, "nexo": 0.0006},
+	"taladro_vorak": {"name": "Taladro Vorak", "arch": "charger", "hp": 2100, "shield": 2100, "dmg": 83, "vel": 82, "size": 30, "shape": "drill", "color": Color("8a7a2a"), "accent": Color("4ab8ff"), "credits": 830, "xp": 830, "drops": {"titanio": 18, "ferrita": 25, "iridio": 2}, "nexo": 0.0007},
+	"nodo_bastion": {"name": "Nodo Bastión", "arch": "support", "hp": 1900, "shield": 1900, "dmg": 32, "vel": 55, "size": 30, "shape": "hex", "color": Color("2f4a3a"), "accent": Color("4ab8ff"), "credits": 770, "xp": 770, "drops": {"paladio": 6, "plata": 22, "ferrita": 20}, "nexo": 0.0008},
+	"mina_garra": {"name": "Mina Garra", "arch": "miner", "hp": 420, "shield": 210, "dmg": 35, "vel": 90, "size": 16, "shape": "claw", "color": Color("5a5a60"), "accent": Color("ff2a2a"), "credits": 220, "xp": 220, "drops": {"ferrita": 12, "resina_plasma": 7, "cobalto": 5}, "nexo": 0.0004},
+	"recolector_morbido": {"name": "Recolector Mórbido", "arch": "harasser", "hp": 1500, "shield": 750, "dmg": 14, "vel": 75, "size": 28, "shape": "skull", "color": Color("7a5a5a"), "accent": Color("aaff5a"), "credits": 700, "xp": 700, "drops": {"oro": 5, "plata": 15, "nanoespuma": 20}, "nexo": 0.0006},
+	"artillero_ciclope": {"name": "Artillero Cíclope", "arch": "artillery", "hp": 2300, "shield": 2300, "dmg": 100, "vel": 62, "size": 32, "shape": "tri", "color": Color("3a3a40"), "accent": Color("ff2a2a"), "credits": 890, "xp": 890, "drops": {"iridio": 4, "titanio": 18, "ferrita": 18}, "nexo": 0.0009},
+	"madre_remache": {"name": "Madre Remache", "arch": "mother", "hp": 4300, "shield": 2200, "dmg": 21, "vel": 48, "size": 56, "shape": "mother", "color": Color("5a4a40"), "accent": Color("ff3a3a"), "credits": 1800, "xp": 1800, "drops": {"ferrita": 50, "oro": 8, "platino": 3, "cristal_helix": 1}, "nexo": 0.0015, "spawns": "chatarrax"},
 	# Biomancia Vesper (11-20)
-	"larva_vesper": {"name": "Larva Vesper", "arch": "swarm", "hp": 700, "dmg": 42, "vel": 118, "size": 17, "shape": "needle", "color": Color("6a3a8a"), "accent": Color("c86bff"), "credits": 850, "drops": {"quitina": 18, "resina_plasma": 8, "bioaleacion": 2}, "nexo": 0.0004},
-	"mantis_necral": {"name": "Mantis Necral", "arch": "hunter", "hp": 1500, "dmg": 92, "vel": 128, "size": 24, "shape": "insect", "color": Color("4a2a5a"), "accent": Color("6aff6a"), "credits": 1600, "drops": {"quitina": 20, "gel_entropico": 4, "oro": 2}, "nexo": 0.0006},
-	"bulbo_sangrante": {"name": "Bulbo Sangrante", "arch": "artillery", "hp": 2100, "dmg": 135, "vel": 55, "size": 30, "shape": "oval", "color": Color("7a2a3a"), "accent": Color("ff2a4a"), "credits": 1950, "drops": {"bioaleacion": 8, "resina_plasma": 12, "gel_entropico": 5}, "nexo": 0.0007},
-	"caparazon_orax": {"name": "Caparazón Orax", "arch": "tank", "hp": 4200, "dmg": 110, "vel": 52, "size": 44, "shape": "oval", "color": Color("2a2a2a"), "accent": Color("ff8a2a"), "credits": 2700, "drops": {"quitina": 35, "bioaleacion": 10, "platino": 1}, "nexo": 0.0009},
-	"sifon_myr": {"name": "Sifón Myr", "arch": "drainer", "hp": 1900, "dmg": 75, "vel": 92, "size": 26, "shape": "claw", "color": Color("3a5a7a"), "accent": Color("4ab8ff"), "credits": 1850, "drops": {"resina_plasma": 14, "paladio": 3, "bioaleacion": 6}, "nexo": 0.0007},
-	"espora_kraal": {"name": "Espora Kraal", "arch": "miner", "hp": 620, "dmg": 130, "vel": 80, "size": 17, "shape": "claw", "color": Color("4a6a3a"), "accent": Color("8aff4a"), "credits": 920, "drops": {"gel_entropico": 7, "quitina": 12, "nanoespuma": 6}, "nexo": 0.0004},
-	"cirujano_vex": {"name": "Cirujano Vex", "arch": "support", "hp": 1700, "dmg": 50, "vel": 95, "size": 26, "shape": "insect", "color": Color("d8d0d0"), "accent": Color("ff3a3a"), "credits": 2050, "drops": {"bioaleacion": 9, "polvo_cuantico": 2, "plata": 12}, "nexo": 0.0008},
-	"raptor_medula": {"name": "Raptor de Médula", "arch": "ambusher", "hp": 1300, "dmg": 105, "vel": 145, "size": 24, "shape": "needle", "color": Color("2a2a3a"), "accent": Color("8a6aff"), "credits": 1750, "drops": {"quitina": 17, "oro": 3, "fibra_fase": 1}, "nexo": 0.0007},
-	"nexo_umbilical": {"name": "Nexo Umbilical", "arch": "mother", "hp": 3400, "dmg": 72, "vel": 60, "size": 40, "shape": "nest", "color": Color("6a3a4a"), "accent": Color("ff6ad8"), "credits": 2900, "drops": {"bioaleacion": 14, "gel_entropico": 8, "cristal_helix": 1}, "nexo": 0.0011, "spawns": "larva_vesper"},
-	"matriarca_vesper": {"name": "Matriarca Vesper", "arch": "mother", "hp": 6500, "dmg": 125, "vel": 45, "size": 62, "shape": "mother", "color": Color("5a2a6a"), "accent": Color("c86bff"), "credits": 4800, "drops": {"bioaleacion": 25, "quitina": 40, "fragmento_vacio": 1}, "nexo": 0.0018, "spawns": "larva_vesper"},
+	"larva_vesper": {"name": "Larva Vesper", "arch": "swarm", "hp": 3400, "shield": 1700, "dmg": 74, "vel": 118, "size": 17, "shape": "needle", "color": Color("6a3a8a"), "accent": Color("c86bff"), "credits": 960, "xp": 960, "drops": {"quitina": 18, "resina_plasma": 8, "bioaleacion": 2}, "nexo": 0.0004},
+	"mantis_necral": {"name": "Mantis Necral", "arch": "hunter", "hp": 7300, "shield": 3700, "dmg": 160, "vel": 128, "size": 24, "shape": "insect", "color": Color("4a2a5a"), "accent": Color("6aff6a"), "credits": 1900, "xp": 1900, "drops": {"quitina": 20, "gel_entropico": 4, "oro": 2}, "nexo": 0.0006},
+	"bulbo_sangrante": {"name": "Bulbo Sangrante", "arch": "artillery", "hp": 10000, "shield": 5100, "dmg": 240, "vel": 55, "size": 30, "shape": "oval", "color": Color("7a2a3a"), "accent": Color("ff2a4a"), "credits": 2600, "xp": 2600, "drops": {"bioaleacion": 8, "resina_plasma": 12, "gel_entropico": 5}, "nexo": 0.0007},
+	"caparazon_orax": {"name": "Caparazón Orax", "arch": "tank", "hp": 34000, "shield": 17000, "dmg": 460, "vel": 52, "size": 44, "shape": "oval", "color": Color("2a2a2a"), "accent": Color("ff8a2a"), "credits": 10000, "xp": 5100, "drops": {"quitina": 35, "bioaleacion": 10, "platino": 1}, "nexo": 0.0009},
+	"sifon_myr": {"name": "Sifón Myr", "arch": "drainer", "hp": 15000, "shield": 7600, "dmg": 320, "vel": 92, "size": 26, "shape": "claw", "color": Color("3a5a7a"), "accent": Color("4ab8ff"), "credits": 5000, "xp": 2500, "drops": {"resina_plasma": 14, "paladio": 3, "bioaleacion": 6}, "nexo": 0.0007},
+	"espora_kraal": {"name": "Espora Kraal", "arch": "miner", "hp": 3000, "shield": 1500, "dmg": 230, "vel": 80, "size": 17, "shape": "claw", "color": Color("4a6a3a"), "accent": Color("8aff4a"), "credits": 860, "xp": 860, "drops": {"gel_entropico": 7, "quitina": 12, "nanoespuma": 6}, "nexo": 0.0004},
+	"cirujano_vex": {"name": "Cirujano Vex", "arch": "support", "hp": 14000, "shield": 6800, "dmg": 210, "vel": 95, "size": 26, "shape": "insect", "color": Color("d8d0d0"), "accent": Color("ff3a3a"), "credits": 4500, "xp": 2300, "drops": {"bioaleacion": 9, "polvo_cuantico": 2, "plata": 12}, "nexo": 0.0008},
+	"raptor_medula": {"name": "Raptor de Médula", "arch": "ambusher", "hp": 10000, "shield": 5200, "dmg": 450, "vel": 145, "size": 24, "shape": "needle", "color": Color("2a2a3a"), "accent": Color("8a6aff"), "credits": 3600, "xp": 1800, "drops": {"quitina": 17, "oro": 3, "fibra_fase": 1}, "nexo": 0.0007},
+	"nexo_umbilical": {"name": "Nexo Umbilical", "arch": "mother", "hp": 27000, "shield": 14000, "dmg": 310, "vel": 60, "size": 40, "shape": "nest", "color": Color("6a3a4a"), "accent": Color("ff6ad8"), "credits": 8400, "xp": 4200, "drops": {"bioaleacion": 14, "gel_entropico": 8, "cristal_helix": 1}, "nexo": 0.0011, "spawns": "larva_vesper"},
+	"matriarca_vesper": {"name": "Matriarca Vesper", "arch": "mother", "hp": 52000, "shield": 26000, "dmg": 530, "vel": 45, "size": 62, "shape": "mother", "color": Color("5a2a6a"), "accent": Color("c86bff"), "credits": 15000, "xp": 7600, "drops": {"bioaleacion": 25, "quitina": 40, "fragmento_vacio": 1}, "nexo": 0.0018, "spawns": "larva_vesper"},
 	# Legión Prismática (21-30)
-	"esquirla_lux": {"name": "Esquirla Lux", "arch": "harasser", "hp": 1000, "dmg": 65, "vel": 120, "size": 20, "shape": "hex", "color": Color("d8e8ff"), "accent": Color("ffffff"), "credits": 1150, "drops": {"xenocristal": 12, "vidrio_estelar": 10, "plata": 10}, "nexo": 0.0005},
-	"prisma_rho": {"name": "Prisma Rho", "arch": "hunter", "hp": 1650, "dmg": 95, "vel": 116, "size": 24, "shape": "tri", "color": Color("8af7ff"), "accent": Color("ffffff"), "credits": 1750, "drops": {"xenocristal": 18, "oro": 4, "vidrio_estelar": 8}, "nexo": 0.0007},
-	"espejo_kappa": {"name": "Espejo Kappa", "arch": "defender", "hp": 2400, "dmg": 70, "vel": 74, "size": 32, "shape": "hex", "color": Color("1a1a24"), "accent": Color("9ad8ff"), "credits": 2200, "drops": {"vidrio_estelar": 18, "paladio": 4, "xenocristal": 10}, "nexo": 0.0008},
-	"lanza_solaris": {"name": "Lanza Solaris", "arch": "sniper", "hp": 1800, "dmg": 180, "vel": 68, "size": 28, "shape": "needle", "color": Color("fff0a0"), "accent": Color("ffd84a"), "credits": 2450, "drops": {"xenocristal": 20, "iridio": 4, "polvo_cuantico": 2}, "nexo": 0.0010},
-	"corona_lumen": {"name": "Corona Lumen", "arch": "support", "hp": 2300, "dmg": 55, "vel": 72, "size": 30, "shape": "nest", "color": Color("c8d8ff"), "accent": Color("ffe8a0"), "credits": 2250, "drops": {"vidrio_estelar": 16, "paladio": 5, "polvo_cuantico": 2}, "nexo": 0.0009},
-	"golem_faceta": {"name": "Gólem Faceta", "arch": "tank", "hp": 4700, "dmg": 115, "vel": 50, "size": 46, "shape": "hex", "color": Color("9ad8e8"), "accent": Color("ff9aff"), "credits": 3100, "drops": {"xenocristal": 30, "platino": 4, "osmio": 3}, "nexo": 0.0011},
-	"cortador_helio": {"name": "Cortador Helio", "arch": "charger", "hp": 2200, "dmg": 125, "vel": 98, "size": 30, "shape": "drill", "color": Color("ff9a3a"), "accent": Color("fff0a0"), "credits": 2380, "drops": {"vidrio_estelar": 14, "oro": 5, "iridio": 3}, "nexo": 0.0009},
-	"orbe_lambda": {"name": "Orbe Lambda", "arch": "artillery", "hp": 2600, "dmg": 145, "vel": 58, "size": 30, "shape": "oval", "color": Color("6ab8d8"), "accent": Color("aaffff"), "credits": 2700, "drops": {"polvo_cuantico": 4, "xenocristal": 20, "plata": 16}, "nexo": 0.0010},
-	"arconte_espectral": {"name": "Arconte Espectral", "arch": "elite", "hp": 4200, "dmg": 165, "vel": 88, "size": 38, "shape": "insect", "color": Color("e8f0ff"), "accent": Color("8affff"), "credits": 3900, "drops": {"aetherium": 2, "xenocristal": 25, "vidrio_estelar": 20}, "nexo": 0.0016},
-	"catedral_prismatica": {"name": "Catedral Prismática", "arch": "mother", "hp": 7600, "dmg": 135, "vel": 42, "size": 68, "shape": "mother", "color": Color("b8e8ff"), "accent": Color("ffffff"), "credits": 5400, "drops": {"xenocristal": 45, "aetherium": 3, "cristal_helix": 2}, "nexo": 0.0020, "spawns": "esquirla_lux"},
+	"esquirla_lux": {"name": "Esquirla Lux", "arch": "harasser", "hp": 22000, "shield": 22000, "dmg": 640, "vel": 120, "size": 20, "shape": "hex", "color": Color("d8e8ff"), "accent": Color("ffffff"), "credits": 7500, "xp": 1900, "drops": {"xenocristal": 12, "vidrio_estelar": 10, "plata": 10}, "nexo": 0.0005},
+	"prisma_rho": {"name": "Prisma Rho", "arch": "hunter", "hp": 36000, "shield": 36000, "dmg": 960, "vel": 116, "size": 24, "shape": "tri", "color": Color("8af7ff"), "accent": Color("ffffff"), "credits": 12000, "xp": 2900, "drops": {"xenocristal": 18, "oro": 4, "vidrio_estelar": 8}, "nexo": 0.0007},
+	"espejo_kappa": {"name": "Espejo Kappa", "arch": "defender", "hp": 53000, "shield": 53000, "dmg": 690, "vel": 74, "size": 32, "shape": "hex", "color": Color("1a1a24"), "accent": Color("9ad8ff"), "credits": 16000, "xp": 4100, "drops": {"vidrio_estelar": 18, "paladio": 4, "xenocristal": 10}, "nexo": 0.0008},
+	"lanza_solaris": {"name": "Lanza Solaris", "arch": "sniper", "hp": 29000, "shield": 23000, "dmg": 1400, "vel": 68, "size": 28, "shape": "needle", "color": Color("fff0a0"), "accent": Color("ffd84a"), "credits": 7800, "xp": 3900, "drops": {"xenocristal": 20, "iridio": 4, "polvo_cuantico": 2}, "nexo": 0.0010},
+	"corona_lumen": {"name": "Corona Lumen", "arch": "support", "hp": 37000, "shield": 29000, "dmg": 440, "vel": 72, "size": 30, "shape": "nest", "color": Color("c8d8ff"), "accent": Color("ffe8a0"), "credits": 9700, "xp": 4900, "drops": {"vidrio_estelar": 16, "paladio": 5, "polvo_cuantico": 2}, "nexo": 0.0009},
+	"golem_faceta": {"name": "Gólem Faceta", "arch": "tank", "hp": 75000, "shield": 60000, "dmg": 880, "vel": 50, "size": 46, "shape": "hex", "color": Color("9ad8e8"), "accent": Color("ff9aff"), "credits": 19000, "xp": 9300, "drops": {"xenocristal": 30, "platino": 4, "osmio": 3}, "nexo": 0.0011},
+	"cortador_helio": {"name": "Cortador Helio", "arch": "charger", "hp": 49000, "shield": 49000, "dmg": 1220, "vel": 98, "size": 30, "shape": "drill", "color": Color("ff9a3a"), "accent": Color("fff0a0"), "credits": 15000, "xp": 3800, "drops": {"vidrio_estelar": 14, "oro": 5, "iridio": 3}, "nexo": 0.0009},
+	"orbe_lambda": {"name": "Orbe Lambda", "arch": "artillery", "hp": 42000, "shield": 33000, "dmg": 1140, "vel": 58, "size": 30, "shape": "oval", "color": Color("6ab8d8"), "accent": Color("aaffff"), "credits": 11000, "xp": 5400, "drops": {"polvo_cuantico": 4, "xenocristal": 20, "plata": 16}, "nexo": 0.0010},
+	"arconte_espectral": {"name": "Arconte Espectral", "arch": "elite", "hp": 67000, "shield": 54000, "dmg": 1310, "vel": 88, "size": 38, "shape": "insect", "color": Color("e8f0ff"), "accent": Color("8affff"), "credits": 17000, "xp": 8400, "drops": {"aetherium": 2, "xenocristal": 25, "vidrio_estelar": 20}, "nexo": 0.0016},
+	"catedral_prismatica": {"name": "Catedral Prismática", "arch": "mother", "hp": 120000, "shield": 97000, "dmg": 1050, "vel": 42, "size": 68, "shape": "mother", "color": Color("b8e8ff"), "accent": Color("ffffff"), "credits": 29000, "xp": 14000, "drops": {"xenocristal": 45, "aetherium": 3, "cristal_helix": 2}, "nexo": 0.0020, "spawns": "esquirla_lux"},
 	# Culto del Vacío (31-40)
-	"acaro_umbral": {"name": "Ácaro Umbral", "arch": "swarm", "hp": 950, "dmg": 68, "vel": 132, "size": 17, "shape": "claw", "color": Color("141418"), "accent": Color("ffffff"), "credits": 1250, "drops": {"fragmento_vacio": 2, "ferrita": 12, "gel_entropico": 3}, "nexo": 0.0006},
-	"cuchilla_nula": {"name": "Cuchilla Nula", "arch": "ambusher", "hp": 1750, "dmg": 112, "vel": 138, "size": 24, "shape": "tri", "color": Color("101014"), "accent": Color("ff2ad8"), "credits": 1950, "drops": {"fibra_fase": 2, "fragmento_vacio": 3, "iridio": 2}, "nexo": 0.0008},
-	"monje_graviton": {"name": "Monje Gravitón", "arch": "control", "hp": 2500, "dmg": 82, "vel": 70, "size": 30, "shape": "nest", "color": Color("2a2a3a"), "accent": Color("8a4aff"), "credits": 2550, "drops": {"graviton": 1, "materia_oscura": 2, "oro": 4}, "nexo": 0.0011},
-	"pozo_menor": {"name": "Pozo Menor", "arch": "trap", "hp": 1800, "dmg": 95, "vel": 35, "size": 28, "shape": "oval", "color": Color("0a0a10"), "accent": Color("b86aff"), "credits": 2300, "drops": {"materia_oscura": 3, "polvo_cuantico": 3, "plata": 18}, "nexo": 0.0009},
-	"profeta_nadir": {"name": "Profeta Nadir", "arch": "support", "hp": 2700, "dmg": 70, "vel": 78, "size": 30, "shape": "skull", "color": Color("3a3a48"), "accent": Color("d8a8ff"), "credits": 2750, "drops": {"aetherium": 2, "fibra_fase": 2, "paladio": 4}, "nexo": 0.0012},
-	"carcelero_obsidiana": {"name": "Carcelero Obsidiana", "arch": "defender", "hp": 5200, "dmg": 130, "vel": 48, "size": 44, "shape": "hex", "color": Color("1a1418"), "accent": Color("ff2a2a"), "credits": 3450, "drops": {"materia_oscura": 5, "osmio": 4, "platino": 3}, "nexo": 0.0013},
-	"hereje_fase": {"name": "Hereje de Fase", "arch": "ambusher", "hp": 2100, "dmg": 125, "vel": 110, "size": 26, "shape": "needle", "color": Color("1a2a4a"), "accent": Color("4ab8ff"), "credits": 2500, "drops": {"fibra_fase": 4, "aetherium": 1, "oro": 5}, "nexo": 0.0010},
-	"campana_vacio": {"name": "Campana del Vacío", "arch": "artillery", "hp": 3300, "dmg": 175, "vel": 52, "size": 36, "shape": "oval", "color": Color("1a1a2a"), "accent": Color("d86aff"), "credits": 3200, "drops": {"fragmento_vacio": 5, "materia_oscura": 4, "iridio": 4}, "nexo": 0.0013},
-	"hierofante_cero": {"name": "Hierofante Cero", "arch": "elite", "hp": 5000, "dmg": 180, "vel": 76, "size": 40, "shape": "skull", "color": Color("202028"), "accent": Color("ffffff"), "credits": 4300, "drops": {"aetherium": 3, "graviton": 1, "fragmento_vacio": 6}, "nexo": 0.0018},
-	"arca_nadir": {"name": "Arca Nadir", "arch": "mother", "hp": 8600, "dmg": 145, "vel": 40, "size": 72, "shape": "mother", "color": Color("0e0e14"), "accent": Color("ff2ad8"), "credits": 6100, "drops": {"materia_oscura": 8, "fibra_fase": 5, "semilla_singular": 1}, "nexo": 0.0024, "spawns": "cuchilla_nula"},
+	"acaro_umbral": {"name": "Ácaro Umbral", "arch": "swarm", "hp": 30000, "shield": 25000, "dmg": 880, "vel": 132, "size": 17, "shape": "claw", "color": Color("141418"), "accent": Color("ffffff"), "credits": 6900, "xp": 3500, "drops": {"fragmento_vacio": 2, "ferrita": 12, "gel_entropico": 3}, "nexo": 0.0006},
+	"cuchilla_nula": {"name": "Cuchilla Nula", "arch": "ambusher", "hp": 56000, "shield": 47000, "dmg": 1490, "vel": 138, "size": 24, "shape": "tri", "color": Color("101014"), "accent": Color("ff2ad8"), "credits": 12000, "xp": 6000, "drops": {"fibra_fase": 2, "fragmento_vacio": 3, "iridio": 2}, "nexo": 0.0008},
+	"monje_graviton": {"name": "Monje Gravitón", "arch": "control", "hp": 70000, "shield": 70000, "dmg": 650, "vel": 70, "size": 30, "shape": "nest", "color": Color("2a2a3a"), "accent": Color("8a4aff"), "credits": 37000, "xp": 4700, "drops": {"graviton": 1, "materia_oscura": 2, "oro": 4}, "nexo": 0.0011},
+	"pozo_menor": {"name": "Pozo Menor", "arch": "trap", "hp": 51000, "shield": 51000, "dmg": 750, "vel": 35, "size": 28, "shape": "oval", "color": Color("0a0a10"), "accent": Color("b86aff"), "credits": 28000, "xp": 3500, "drops": {"materia_oscura": 3, "polvo_cuantico": 3, "plata": 18}, "nexo": 0.0009},
+	"profeta_nadir": {"name": "Profeta Nadir", "arch": "support", "hp": 86000, "shield": 72000, "dmg": 880, "vel": 78, "size": 30, "shape": "skull", "color": Color("3a3a48"), "accent": Color("d8a8ff"), "credits": 18000, "xp": 8900, "drops": {"aetherium": 2, "fibra_fase": 2, "paladio": 4}, "nexo": 0.0012},
+	"carcelero_obsidiana": {"name": "Carcelero Obsidiana", "arch": "defender", "hp": 150000, "shield": 150000, "dmg": 1050, "vel": 48, "size": 44, "shape": "hex", "color": Color("1a1418"), "accent": Color("ff2a2a"), "credits": 72000, "xp": 9000, "drops": {"materia_oscura": 5, "osmio": 4, "platino": 3}, "nexo": 0.0013},
+	"hereje_fase": {"name": "Hereje de Fase", "arch": "ambusher", "hp": 67000, "shield": 56000, "dmg": 1660, "vel": 110, "size": 26, "shape": "needle", "color": Color("1a2a4a"), "accent": Color("4ab8ff"), "credits": 14000, "xp": 7100, "drops": {"fibra_fase": 4, "aetherium": 1, "oro": 5}, "nexo": 0.0010},
+	"campana_vacio": {"name": "Campana del Vacío", "arch": "artillery", "hp": 93000, "shield": 93000, "dmg": 1400, "vel": 52, "size": 36, "shape": "oval", "color": Color("1a1a2a"), "accent": Color("d86aff"), "credits": 48000, "xp": 6000, "drops": {"fragmento_vacio": 5, "materia_oscura": 4, "iridio": 4}, "nexo": 0.0013},
+	"hierofante_cero": {"name": "Hierofante Cero", "arch": "elite", "hp": 140000, "shield": 140000, "dmg": 1400, "vel": 76, "size": 40, "shape": "skull", "color": Color("202028"), "accent": Color("ffffff"), "credits": 70000, "xp": 8700, "drops": {"aetherium": 3, "graviton": 1, "fragmento_vacio": 6}, "nexo": 0.0018},
+	"arca_nadir": {"name": "Arca Nadir", "arch": "mother", "hp": 240000, "shield": 240000, "dmg": 1140, "vel": 40, "size": 72, "shape": "mother", "color": Color("0e0e14"), "accent": Color("ff2ad8"), "credits": 110000, "xp": 14000, "drops": {"materia_oscura": 8, "fibra_fase": 5, "semilla_singular": 1}, "nexo": 0.0024, "spawns": "cuchilla_nula"},
 	# Dominio Leviatán (41-50)
-	"dardo_leviatan": {"name": "Dardo Leviatán", "arch": "hunter", "hp": 2400, "dmg": 135, "vel": 150, "size": 26, "shape": "needle", "color": Color("1a3a6a"), "accent": Color("6ac8ff"), "credits": 2850, "drops": {"bioaleacion": 8, "neutronio": 1, "quitina": 18}, "nexo": 0.0011},
-	"mandibula_kron": {"name": "Mandíbula Kron", "arch": "charger", "hp": 3900, "dmg": 165, "vel": 92, "size": 36, "shape": "skull", "color": Color("1a1a1a"), "accent": Color("ff3a2a"), "credits": 3600, "drops": {"osmio": 4, "bioaleacion": 10, "gel_entropico": 6}, "nexo": 0.0014},
-	"custodio_abisal": {"name": "Custodio Abisal", "arch": "tank", "hp": 6800, "dmg": 150, "vel": 50, "size": 50, "shape": "oval", "color": Color("1a2438"), "accent": Color("b86aff"), "credits": 4500, "drops": {"neutronio": 3, "materia_oscura": 4, "osmio": 5}, "nexo": 0.0017},
-	"tejedor_cronal": {"name": "Tejedor Cronal", "arch": "control", "hp": 3400, "dmg": 105, "vel": 82, "size": 32, "shape": "insect", "color": Color("d8d0c0"), "accent": Color("6affe8"), "credits": 3800, "drops": {"cronita": 4, "fibra_fase": 3, "polvo_cuantico": 5}, "nexo": 0.0015},
-	"sangre_quasar": {"name": "Sangre de Quásar", "arch": "artillery", "hp": 4100, "dmg": 205, "vel": 60, "size": 36, "shape": "oval", "color": Color("c82a2a"), "accent": Color("ffb84a"), "credits": 4300, "drops": {"resina_plasma": 20, "antimateria": 2, "iridio": 5}, "nexo": 0.0017},
-	"pastor_nidos": {"name": "Pastor de Nidos", "arch": "mother", "hp": 4600, "dmg": 115, "vel": 62, "size": 44, "shape": "mother", "color": Color("e8e0d0"), "accent": Color("4a8aff"), "credits": 4200, "drops": {"nucleo_biomecanico": 1, "bioaleacion": 15, "cristal_helix": 2}, "nexo": 0.0018, "spawns": "dardo_leviatan"},
-	"espectro_parallax": {"name": "Espectro Parallax", "arch": "ambusher", "hp": 3200, "dmg": 175, "vel": 118, "size": 30, "shape": "tri", "color": Color("e8e8f0"), "accent": Color("ff4a8a"), "credits": 4050, "drops": {"aetherium": 3, "fibra_fase": 4, "cronita": 2}, "nexo": 0.0017},
-	"nexo_devorador": {"name": "Nexo Devorador", "arch": "drainer", "hp": 5100, "dmg": 140, "vel": 70, "size": 40, "shape": "claw", "color": Color("2a2a3a"), "accent": Color("8a2aff"), "credits": 4600, "drops": {"materia_oscura": 5, "graviton": 1, "bioaleacion": 12}, "nexo": 0.0019},
-	"heraldo_singular": {"name": "Heraldo Singular", "arch": "elite", "hp": 7200, "dmg": 220, "vel": 84, "size": 46, "shape": "insect", "color": Color("f0f0f8"), "accent": Color("1a1a1a"), "credits": 5800, "drops": {"semilla_singular": 1, "neutronio": 4, "aetherium": 4}, "nexo": 0.0026},
-	"leviatan_genesis": {"name": "Leviatán Génesis", "arch": "mother", "hp": 12500, "dmg": 240, "vel": 38, "size": 90, "shape": "mother", "color": Color("2a4a7a"), "accent": Color("e8e0d0"), "credits": 9000, "drops": {"semilla_singular": 2, "nucleo_biomecanico": 3, "antimateria": 4, "neutronio": 6}, "nexo": 0.0035, "spawns": "dardo_leviatan"},
+	"dardo_leviatan": {"name": "Dardo Leviatán", "arch": "hunter", "hp": 150000, "shield": 150000, "dmg": 1840, "vel": 150, "size": 26, "shape": "needle", "color": Color("1a3a6a"), "accent": Color("6ac8ff"), "credits": 78000, "xp": 9800, "drops": {"bioaleacion": 8, "neutronio": 1, "quitina": 18}, "nexo": 0.0011},
+	"mandibula_kron": {"name": "Mandíbula Kron", "arch": "charger", "hp": 240000, "shield": 240000, "dmg": 2240, "vel": 92, "size": 36, "shape": "skull", "color": Color("1a1a1a"), "accent": Color("ff3a2a"), "credits": 120000, "xp": 15000, "drops": {"osmio": 4, "bioaleacion": 10, "gel_entropico": 6}, "nexo": 0.0014},
+	"custodio_abisal": {"name": "Custodio Abisal", "arch": "tank", "hp": 370000, "shield": 240000, "dmg": 3150, "vel": 50, "size": 50, "shape": "oval", "color": Color("1a2438"), "accent": Color("b86aff"), "credits": 250000, "xp": 31000, "drops": {"neutronio": 3, "materia_oscura": 4, "osmio": 5}, "nexo": 0.0017},
+	"tejedor_cronal": {"name": "Tejedor Cronal", "arch": "control", "hp": 210000, "shield": 210000, "dmg": 1440, "vel": 82, "size": 32, "shape": "insect", "color": Color("d8d0c0"), "accent": Color("6affe8"), "credits": 110000, "xp": 13000, "drops": {"cronita": 4, "fibra_fase": 3, "polvo_cuantico": 5}, "nexo": 0.0015},
+	"sangre_quasar": {"name": "Sangre de Quásar", "arch": "artillery", "hp": 220000, "shield": 150000, "dmg": 4290, "vel": 60, "size": 36, "shape": "oval", "color": Color("c82a2a"), "accent": Color("ffb84a"), "credits": 160000, "xp": 19000, "drops": {"resina_plasma": 20, "antimateria": 2, "iridio": 5}, "nexo": 0.0017},
+	"pastor_nidos": {"name": "Pastor de Nidos", "arch": "mother", "hp": 250000, "shield": 170000, "dmg": 2450, "vel": 62, "size": 44, "shape": "mother", "color": Color("e8e0d0"), "accent": Color("4a8aff"), "credits": 170000, "xp": 22000, "drops": {"nucleo_biomecanico": 1, "bioaleacion": 15, "cristal_helix": 2}, "nexo": 0.0018, "spawns": "dardo_leviatan"},
+	"espectro_parallax": {"name": "Espectro Parallax", "arch": "ambusher", "hp": 200000, "shield": 200000, "dmg": 2360, "vel": 118, "size": 30, "shape": "tri", "color": Color("e8e8f0"), "accent": Color("ff4a8a"), "credits": 100000, "xp": 13000, "drops": {"aetherium": 3, "fibra_fase": 4, "cronita": 2}, "nexo": 0.0017},
+	"nexo_devorador": {"name": "Nexo Devorador", "arch": "drainer", "hp": 280000, "shield": 180000, "dmg": 2980, "vel": 70, "size": 40, "shape": "claw", "color": Color("2a2a3a"), "accent": Color("8a2aff"), "credits": 190000, "xp": 24000, "drops": {"materia_oscura": 5, "graviton": 1, "bioaleacion": 12}, "nexo": 0.0019},
+	"heraldo_singular": {"name": "Heraldo Singular", "arch": "elite", "hp": 390000, "shield": 260000, "dmg": 4640, "vel": 84, "size": 46, "shape": "insect", "color": Color("f0f0f8"), "accent": Color("1a1a1a"), "credits": 260000, "xp": 32000, "drops": {"semilla_singular": 1, "neutronio": 4, "aetherium": 4}, "nexo": 0.0026},
+	"leviatan_genesis": {"name": "Leviatán Génesis", "arch": "mother", "hp": 670000, "shield": 450000, "dmg": 5080, "vel": 38, "size": 90, "shape": "mother", "color": Color("2a4a7a"), "accent": Color("e8e0d0"), "credits": 420000, "xp": 53000, "drops": {"semilla_singular": 2, "nucleo_biomecanico": 3, "antimateria": 4, "neutronio": 6}, "nexo": 0.0035, "spawns": "dardo_leviatan"},
 }
 
 # --- Biomas (11.1) -------------------------------------------------------------
@@ -428,7 +438,7 @@ const OBJECTIVES := {
 }
 
 # --- Rangos y experiencia --------------------------------------------------------
-# XP total necesaria para alcanzar el nivel N (N >= 2) = 10 000 x 2^(N-1): 20K, 40K, 80K… nivel 21 máximo.
+# v2: XP total necesaria para alcanzar el nivel N (N >= 2) = 10 000 x 2^(N-2): 10K, 20K, 40K… (DarkOrbit).
 const MAX_LEVEL := 21
 const RANKS := [
 	"Soldado Básico", "Soldado", "Soldado de Primera", "Cabo", "Cabo Primero", "Sargento",
@@ -440,7 +450,7 @@ const RANKS := [
 static func xp_for_level(lvl: int) -> int:
 	if lvl <= 1:
 		return 0
-	return 10000 * int(pow(2.0, lvl - 1))
+	return 10000 * int(pow(2.0, lvl - 2))
 
 static func level_from_xp(xp: int) -> int:
 	var lvl := 1
@@ -448,21 +458,55 @@ static func level_from_xp(xp: int) -> int:
 		lvl += 1
 	return lvl
 
-## M2: XP por baja = vida base / 8, escalada como la vida enemiga del nivel (x5,8 en el 40) y por la variante.
-static func enemy_xp(base_hp: float, level: int, reward_mult: float) -> int:
-	return int(round(base_hp / 8.0 * level_hp(1.0, level) / level_hp(1.0, 1) * reward_mult))
+## v2: XP por baja = la del alien (tabla de DarkOrbit), por el escalado dentro del bioma y la variante.
+static func enemy_xp(def: Dictionary, eff: int, reward_mult: float) -> int:
+	return int(round(float(def.get("xp", 0)) * level_reward(1.0, eff) * reward_mult))
+
+
+## v2: alien de referencia del bioma de un nivel (el bioma con mayor nivel mínimo que no lo supera).
+static func tier_biome(level: int) -> String:
+	var best := "ferron"
+	var best_min := 0
+	for bid in BIOMES.keys():
+		var b: Dictionary = BIOMES[bid]
+		if b.get("locked", false) or not b.has("enemies"):
+			continue
+		var mn := int(b.get("min_level", 1))
+		if mn <= level and mn > best_min:
+			best = bid
+			best_min = mn
+	return best
+
+
+## Media de una columna de las especies del bioma (ponderada por su peso de aparición).
+static func biome_avg(biome_id: String, key: String) -> float:
+	var pool: Dictionary = BIOMES[biome_id].get("enemies", {})
+	var s := 0.0
+	var w := 0.0
+	for id in pool.keys():
+		s += float(ENEMIES[id].get(key, 0)) * float(pool[id])
+		w += float(pool[id])
+	return s / maxf(1.0, w)
 
 
 ## XP de referencia de una baja media del nivel (para objetivos y primeras limpiezas).
 static func level_kill_xp(level: int) -> int:
-	return enemy_xp(2000.0, level, 1.0)
+	var bid := tier_biome(level)
+	return int(round(biome_avg(bid, "xp") * level_reward(1.0, eff_level(level, bid))))
+
+
+## v2: créditos de una baja media del nivel: la unidad de las recompensas en créditos (misiones, objetivos,
+## temporada, seguro), para que sigan a la escala de DarkOrbit en cada bioma.
+static func level_credits(level: int) -> int:
+	var bid := tier_biome(level)
+	return int(round(biome_avg(bid, "credits") * level_reward(1.0, eff_level(level, bid))))
 
 
 # --- M1: economía ------------------------------------------------------------------------
-const CREDIT_MULT := 0.15              # créditos por baja (antes x1: la flota se compraba en ~3 h; objetivo EH ~150 h)
+const CREDIT_MULT := 1.0               # v2: créditos de la tabla de DarkOrbit tal cual (v1: 0,15)
 ## Multiplicador de precio de nave por clase (receta completa: créditos y materiales).
-const SHIP_TIER_MULT := {"caza": 1.0, "tanque": 2.0, "carguera": 2.0, "crucero": 4.0, "batalla": 8.0}
-const SPECIAL_SHIP_MULT := 10.0
+const SHIP_TIER_MULT := {"caza": 1.0, "tanque": 1.0, "carguera": 1.0, "crucero": 1.0, "batalla": 1.0}  # v2: precios finales ya en la tabla
+const SPECIAL_SHIP_MULT := 1.0
 const OBJECTIVE_XP_KILLS := 10         # M2: completar el objetivo = 10 bajas medias del nivel
 const FIRST_CLEAR_XP_KILLS := 50       # M2: primera limpieza = 50 bajas medias
 
@@ -488,7 +532,7 @@ const PET_STAGE_NAMES := ["Esfera", "Explorador", "Vigía", "Centinela", "Guardi
 const PET_MAX_LASERS := 5
 const PET_MAX_GENS := 3
 const PET_GEN_SHARE := 0.5
-const PET_RECIPE := {"credits": 36000}  # tienda: ~50 400 créditos u ~86 Cristales Nexo
+const PET_RECIPE := {"credits": 500000}  # v2
 
 
 ## Nombre de quien lleva equipado un objeto: una nave o el pet ("drone").
@@ -541,7 +585,7 @@ const RANK_REWARDS := {
 	7: [{"kind": "ship", "id": "raptor_v2"}],
 	8: [{"kind": "perma", "stat": "hull", "amount": 0.01}, {"kind": "ammo", "id": "mk3", "amount": 500}],
 	9: [{"kind": "module", "rarity": 3}],
-	10: [{"kind": "nexo", "amount": 150}, {"kind": "credits", "amount": 250000}],
+	10: [{"kind": "nexo", "amount": 150}, {"kind": "credits", "amount": 2500000}],
 	11: [{"kind": "perma", "stat": "dmg", "amount": 0.01}],
 	12: [{"kind": "ship", "id": "vanguard_m"}],
 	13: [{"kind": "module", "rarity": 3}, {"kind": "ammo", "id": "mk4", "amount": 500}],
@@ -551,7 +595,7 @@ const RANK_REWARDS := {
 	17: [{"kind": "module", "rarity": 4}],
 	18: [{"kind": "ship", "id": "seraph_prime"}],
 	19: [{"kind": "perma", "stat": "hull", "amount": 0.02}],
-	20: [{"kind": "nexo", "amount": 500}, {"kind": "credits", "amount": 5000000}],
+	20: [{"kind": "nexo", "amount": 500}, {"kind": "credits", "amount": 50000000}],
 	21: [{"kind": "ship", "id": "event_horizon"}, {"kind": "perma", "stat": "dmg", "amount": 0.02}],
 }
 
@@ -580,17 +624,18 @@ static func reward_text(r: Dictionary) -> String:
 # --- M12: seguro de carga -------------------------------------------------------------------
 const INSURED_KEEP := 0.5              # con seguro, al morir se conserva el 50% del botín
 
+## v2: el seguro vale 12 bajas medias del nivel.
 static func insurance_cost(level: int) -> int:
-	return int(round(1500.0 * level_reward(1.0, level) * (1.0 + level * 0.15) / 100.0)) * 100
+	return maxi(100, int(round(12.0 * level_credits(level) / 100.0)) * 100)
 
 # --- Dron: láseres exclusivos (10.2) ---------------------------------------------------
 const DRONE_LASERS := {
-	"pet_pulse": {"name": "Pet-Pulse", "dmg": 0.55, "color": Color("d8ffd0"), "effect": "", "desc": "Disparo estable, bajo consumo.", "cost": {"credits": 3000}},
-	"pet_stinger": {"name": "Pet-Stinger", "dmg": 0.50, "color": Color("ffe86a"), "effect": "stinger", "desc": "Cada 5 impactos aplica un golpe 2x.", "cost": {"credits": 15000, "cobalto": 20}},
-	"pet_ion": {"name": "Pet-Ion", "dmg": 0.50, "color": Color("6aa8ff"), "effect": "pet_ion", "desc": "+35% daño a escudos.", "cost": {"credits": 18000, "paladio": 4}},
-	"pet_arc": {"name": "Pet-Arc", "dmg": 0.45, "color": Color("8ad8ff"), "effect": "chain", "desc": "Puede saltar a un segundo enemigo.", "cost": {"credits": 30000, "iridio": 6}},
-	"pet_guard": {"name": "Pet-Guard", "dmg": 0.30, "color": Color("e8e8f0"), "effect": "guard", "desc": "Daño bajo; 5% de destruir proyectiles cercanos.", "cost": {"credits": 25000, "titanio": 30}},
-	"pet_marker": {"name": "Pet-Marker", "dmg": 0.35, "color": Color("ff6a6a"), "effect": "marker", "desc": "Marca al objetivo: la nave inflige +3% de daño 3 s.", "cost": {"credits": 28000, "xenocristal": 8}},
+	"pet_pulse": {"name": "Pet-Pulse", "dmg": 0.55, "color": Color("d8ffd0"), "effect": "", "desc": "Disparo estable, bajo consumo.", "cost": {"credits": 10000}},
+	"pet_stinger": {"name": "Pet-Stinger", "dmg": 0.50, "color": Color("ffe86a"), "effect": "stinger", "desc": "Cada 5 impactos aplica un golpe 2x.", "cost": {"credits": 150000, "cobalto": 20}},
+	"pet_ion": {"name": "Pet-Ion", "dmg": 0.50, "color": Color("6aa8ff"), "effect": "pet_ion", "desc": "+35% daño a escudos.", "cost": {"credits": 200000, "paladio": 4}},
+	"pet_arc": {"name": "Pet-Arc", "dmg": 0.45, "color": Color("8ad8ff"), "effect": "chain", "desc": "Puede saltar a un segundo enemigo.", "cost": {"credits": 1500000, "iridio": 6}},
+	"pet_guard": {"name": "Pet-Guard", "dmg": 0.30, "color": Color("e8e8f0"), "effect": "guard", "desc": "Daño bajo; 5% de destruir proyectiles cercanos.", "cost": {"credits": 800000, "titanio": 30}},
+	"pet_marker": {"name": "Pet-Marker", "dmg": 0.35, "color": Color("ff6a6a"), "effect": "marker", "desc": "Marca al objetivo: la nave inflige +3% de daño 3 s.", "cost": {"credits": 1000000, "xenocristal": 8}},
 }
 
 # --- Módulos (9) ----------------------------------------------------------------------
@@ -617,10 +662,10 @@ const MODULE_SUB_NAMES := {
 }
 # Cajas crafteables (14.2): pesos por rareza [común, raro, épico, reliquia, exótico].
 const MODULE_BOXES := {
-	"estandar": {"name": "Caja Estándar", "weights": [60.0, 28.0, 10.0, 1.8, 0.2], "recipe": {"credits": 8000, "polvo_cuantico": 3, "cristal_helix": 1}},
-	"afinada": {"name": "Caja Afinada", "weights": [35.0, 40.0, 20.0, 4.4, 0.6], "recipe": {"credits": 20000, "cristal_helix": 3, "xenocristal": 10}},
-	"reliquia": {"name": "Caja Reliquia", "weights": [0.0, 0.0, 80.0, 18.0, 2.0], "recipe": {"credits": 60000, "aetherium": 2, "cristal_helix": 4, "seals": 5}},
-	"anomala": {"name": "Caja Anómala", "weights": [20.0, 35.0, 30.0, 12.0, 3.0], "recipe": {"credits": 40000, "fragmento_vacio": 3, "materia_oscura": 2, "nexo": 50}},
+	"estandar": {"name": "Caja Estándar", "weights": [60.0, 28.0, 10.0, 1.8, 0.2], "recipe": {"credits": 100000, "polvo_cuantico": 3, "cristal_helix": 1}},
+	"afinada": {"name": "Caja Afinada", "weights": [35.0, 40.0, 20.0, 4.4, 0.6], "recipe": {"credits": 300000, "cristal_helix": 3, "xenocristal": 10}},
+	"reliquia": {"name": "Caja Reliquia", "weights": [0.0, 0.0, 80.0, 18.0, 2.0], "recipe": {"credits": 1500000, "aetherium": 2, "cristal_helix": 4, "seals": 5}},
+	"anomala": {"name": "Caja Anómala", "weights": [20.0, 35.0, 30.0, 12.0, 3.0], "recipe": {"credits": 600000, "fragmento_vacio": 3, "materia_oscura": 2, "nexo": 50}},
 }
 const PITY_RELIC := 40    # Reliquia garantizada tras 40 cajas sin Reliquia/Exótico
 const PITY_EXOTIC := 100  # a partir de 100 sin Exótico, su probabilidad sube
@@ -660,19 +705,28 @@ static func nexo_price(recipe: Dictionary) -> Dictionary:
 
 
 # --- Fórmulas (12.2, 14.1, 23) -----------------------------------------------
+## v2: en DarkOrbit la dificultad la dan los aliens de cada mapa (bioma), no un nivel. Dentro de un bioma
+## cada nivel de amenaza por encima del mínimo suma +8% de vida y recompensa y +5% de daño. `level` aquí es
+## el nivel efectivo (eff_level: 1 = nivel mínimo del bioma).
 static func level_hp(base: float, level: int) -> float:
-	return base * pow(1.0 + 0.085 * level, 1.18)
+	return base * (1.0 + 0.08 * maxi(0, level - 1))
 
-## M7: el daño enemigo crece algo más despacio (0,045 en vez de 0,060) para que el equipo pueda seguirle el paso.
 static func level_dmg(base: float, level: int) -> float:
-	return base * pow(1.0 + 0.045 * level, 1.10)
+	return base * (1.0 + 0.05 * maxi(0, level - 1))
 
 static func level_reward(base: float, level: int) -> float:
-	return base * (1.0 + 0.045 * level)
+	return base * (1.0 + 0.08 * maxi(0, level - 1))
 
 ## Multiplicador de componente por nivel: +1% por nivel sobre el valor base.
-## Los láseres ganan +3% por nivel de mejora (antes +1%: mejorar casi no se notaba).
-const LASER_LEVEL_STEP := 0.03
+## v2: los láseres tienen 30 niveles de mejora de +2% (hasta +60%); los generadores, 16 de +1%.
+const LASER_LEVEL_STEP := 0.02
+const LASER_MAX_LEVEL := 30
+const GEN_MAX_LEVEL := 16
+const UPGRADE_GROWTH := 1.15           # v2: cada nivel cuesta un 15% más (v1: 32%; DarkOrbit: 21,5%)
+
+
+static func max_item_level(list_key: String) -> int:
+	return LASER_MAX_LEVEL if list_key == "lasers" else GEN_MAX_LEVEL
 
 
 static func laser_mult(level: int) -> float:
@@ -682,10 +736,12 @@ static func laser_mult(level: int) -> float:
 static func component_mult(level: int) -> float:
 	return 1.0 + 0.01 * level
 
-## Coste para subir un componente desde `level` a `level + 1` (Coste(n) = Base x 1.32^(n-1)).
+## Coste para subir un componente desde `level` a `level + 1` (v2: Coste(n) = Base x 1,15^(n-1)).
+## Los materiales suben de rareza por tramos: el jugador tiene que farmear cada bioma para completar el
+## equipo (sin Cristales Nexo obligatorios, a diferencia de la v1).
 static func upgrade_cost(level: int, base_credits: int) -> Dictionary:
 	var n := level + 1
-	var credits := int(round(base_credits * pow(1.32, n - 1)))
+	var credits := int(round(base_credits * pow(UPGRADE_GROWTH, n - 1) / 100.0)) * 100
 	var cost := {"credits": credits}
 	if n <= 4:
 		cost["ferrita"] = 10 * n
@@ -698,11 +754,21 @@ static func upgrade_cost(level: int, base_credits: int) -> Dictionary:
 		cost["platino"] = n - 7
 		cost["iridio"] = n - 7
 		cost["polvo_cuantico"] = n - 8
+	elif n <= 20:
+		cost["neutronio"] = int(ceil((n - 12) / 2.0))
+		cost["aetherium"] = int(ceil((n - 12) / 3.0))
+		cost["polvo_cuantico"] = n - 8
 	else:
-		cost["neutronio"] = n - 11
-		cost["aetherium"] = n - 12
-		cost["nexo"] = 10 * (n - 12)
+		cost["graviton"] = int(ceil((n - 20) / 3.0))
+		cost["materia_oscura"] = int(ceil((n - 20) / 3.0))
+		cost["neutronio"] = n - 18
 	return cost
+
+
+## v2: base de la mejora = 2.500 x raíz(precio / 10.000): crece más despacio que el precio, así que los
+## objetos caros no disparan el coste (L-01: 2.500; L-18: 237.000 por el primer nivel).
+static func upgrade_base(price: int) -> int:
+	return maxi(1000, int(round(2500.0 * sqrt(maxf(1.0, float(price)) / 10000.0))))
 
 static func format_num(v: float) -> String:
 	var a := absf(v)
@@ -767,11 +833,21 @@ static func biome_factor(biome_id: String) -> Dictionary:
 
 ## Poder recomendado para un bioma, nivel y Ascensión (mismas potencias que el índice de poder).
 static func recommended_power(level: int, biome_id: String, asc: int = 0) -> float:
+	# v2: duelo equilibrado = vida efectiva x daño del enemigo frente a la del jugador (power_index):
+	# 1000 x raíz((vida + escudo) x daño medios del bioma respecto a Ferron).
 	var e := eff_level(level, biome_id)
-	var f := biome_factor(biome_id)
-	var hp: float = f["hp"] * level_hp(1.0, e) / level_hp(1.0, 1) * pow(2.0, asc)
-	var dmg: float = f["dmg"] * level_dmg(1.0, e) / level_dmg(1.0, 1) * pow(1.55, asc)
-	return 1000.0 * pow(hp, 0.9) * pow(dmg, 0.5)
+	var bid := biome_id if BIOMES.get(biome_id, {}).has("enemies") else "ferron"
+	var ehp := (biome_avg(bid, "hp") + biome_avg(bid, "shield")) * level_hp(1.0, e) * pow(2.0, asc)
+	var dmg := biome_avg(bid, "dmg") * level_dmg(1.0, e) * pow(1.55, asc)
+	var base := (biome_avg("ferron", "hp") + biome_avg("ferron", "shield")) * biome_avg("ferron", "dmg")
+	return 1000.0 * sqrt(ehp * dmg / maxf(1.0, base))
+
+
+## v2: índice de poder del jugador en la misma escala: 1000 x raíz(vida efectiva x DPS) respecto a la
+## Kestrel de serie (105.000 + 2.000 de escudo, 5 L-01), que vale ~1.440 en Ferron 1 (144% del recomendado).
+const POWER_REF := 107000.0 * 312.5
+static func power_index(ehp: float, dps: float) -> float:
+	return 1440.0 * sqrt(maxf(1.0, ehp * dps) / POWER_REF)
 
 
 # --- Naves pesadas y especiales ---------------------------------------------------------------

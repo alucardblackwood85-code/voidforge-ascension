@@ -199,7 +199,7 @@ func _passes(filter: String, sub: String, it: Dictionary, where: String) -> bool
 		"other":
 			return where != ""
 		"up":
-			if int(it.get("level", 16)) >= 16:
+			if int(it.get("level", 99)) >= GameData.max_item_level(filter):
 				return false
 			var cost := GameData.upgrade_cost(int(it["level"]), GameState.item_base_credits(filter, it["id"]))
 			return GameState.can_afford(cost)
@@ -524,6 +524,8 @@ func _item_value(filter: String, it: Dictionary) -> float:
 			return GameState.laser_volley_damage(d, int(it["level"])) * int(d["shots"])
 		"gens":
 			var g: Dictionary = GameData.GENERATORS[it["id"]]
+			if g["type"] == "shield":   # v2: puntos de escudo fijos (ordenar por escudo)
+				return float(g.get("shield_pts", 0)) * GameData.component_mult(int(it["level"]))
 			return float(g["stats"].get(g["type"], 0.0)) * GameData.component_mult(int(it["level"]))
 		"mods":
 			var lines := 0.0

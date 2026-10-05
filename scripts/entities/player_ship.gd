@@ -161,6 +161,10 @@ func _shield(delta: float) -> void:
 			hull = minf(hull_max, hull + hull_max * float(stats["hull_regen"]) * delta)
 	elif regen > 0.0 and since_damage > 1.5:
 		shield = minf(shield_max_now(), shield + shield_max * regen * delta)
+	# v2: robot de reparación (DarkOrbit): con el escudo absorbiendo sólo una parte, el casco se repara solo
+	# tras unos segundos sin recibir daño.
+	if since_damage > GameData.REPAIR_BOT_DELAY and hull < hull_max:
+		hull = minf(hull_max, hull + hull_max * GameData.REPAIR_BOT_RATE * (1.0 + float(stats["repair_bonus"])) * delta)
 
 
 func _warnings(delta: float) -> void:
@@ -331,7 +335,8 @@ func take_damage(amount: float) -> void:
 	sector.dmg_by[sector.cur_src] = float(sector.dmg_by.get(sector.cur_src, 0.0)) + amount
 	sector.cur_src = "?"
 	since_damage = 0.0
-	var s := minf(shield, amount)
+	# v2 (DarkOrbit): el escudo absorbe sólo su porcentaje de cada impacto; el resto va siempre al casco.
+	var s := minf(shield, amount * float(stats.get("absorb", 1.0)))
 	shield -= s
 	var rest := amount - s
 	if s > 0.0 and shield <= 0.0 and has_trait("sg_pulse") and not buffs.has("cd_pulse"):

@@ -155,15 +155,15 @@ func _phase_economy() -> void:
 		var lo := GameState.current_loadout()
 		if int(lo["mods"][0]) == int(greens[0]["uid"]) and int(lo["mods"][1]) == int(greens[1]["uid"]):
 			err("Se pudieron equipar dos módulos verdes en la misma nave")
-	# Mejoras 1-16 de un láser: coste total y tope.
+	# Mejoras de un láser hasta el máximo: coste total y tope.
 	var target_l := GameState.add_laser("l01")
 	var before_up := _amounts()
-	for k in 16:
+	for k in GameData.LASER_MAX_LEVEL:
 		if not GameState.upgrade_item("lasers", int(target_l["uid"])):
 			err("Falló la mejora al nivel %d" % (k + 1))
 	if GameState.upgrade_item("lasers", int(target_l["uid"])):
-		err("Se pudo mejorar por encima del nivel 16")
-	eco["upgrade_l01_to_16_cost"] = _spent(before_up, _amounts())
+		err("Se pudo mejorar por encima del nivel %d" % GameData.LASER_MAX_LEVEL)
+	eco["upgrade_l01_to_max_cost"] = _spent(before_up, _amounts())
 	# Guardado y carga.
 	GameState.save_game()
 	var n_ships: int = GameState.data["ships"].size()
@@ -442,7 +442,7 @@ func _phase_features() -> void:
 func _power() -> float:
 	var st := GameState.ship_stats()
 	var dps := maxf(1.0, GameState.theoretical_dps())
-	return pow(st["hull"], 0.45) * pow(st["speed"], 0.2) * pow(dps, 0.7) * pow(st["shield"], 0.35) / 100.0
+	return GameData.power_index(float(st["hull"]) + float(st["shield"]), dps)
 
 
 var _biome := "ferron"

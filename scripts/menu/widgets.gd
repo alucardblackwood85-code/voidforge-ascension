@@ -34,11 +34,11 @@ static func item_info(list_key: String, it: Dictionary) -> Dictionary:
 			var d: Dictionary = GameData.LASERS[it["id"]]
 			var per := GameState.laser_volley_damage(d, int(it["level"])) * int(d["shots"])
 			return {"name": d["name"], "level": int(it["level"]), "color": GameData.ITEM_RARITY_COLORS[d["rarity"]], "icon": icon("lasers", it["id"]),
-				"tip": "%s  (Nv %d/16)\n%s\nDaño por andanada: %d%s\n+ %s\n- %s" % [d["name"], int(it["level"]), GameData.ITEM_RARITY_NAMES[d["rarity"]], int(per), " (%d rayos)" % d["shots"] if int(d["shots"]) > 1 else "", d["adv"], d["dis"]]}
+				"tip": "%s  (Nv %d/%d)\n%s\nDaño por andanada: %d%s\n+ %s\n- %s" % [d["name"], int(it["level"]), GameData.LASER_MAX_LEVEL, GameData.ITEM_RARITY_NAMES[d["rarity"]], int(per), " (%d rayos)" % d["shots"] if int(d["shots"]) > 1 else "", d["adv"], d["dis"]]}
 		"gens":
 			var g: Dictionary = GameData.GENERATORS[it["id"]]
 			return {"name": g["name"], "level": int(it["level"]), "color": Color("4aa3ff") if g["type"] == "shield" else Color("ffd84a"), "icon": icon("gens", it["id"]),
-				"tip": "%s  (Nv %d/16)\nGenerador de %s\n%s\n%s" % [g["name"], int(it["level"]), "escudo" if g["type"] == "shield" else "velocidad", gen_stats(g["stats"]), g["trait"]]}
+				"tip": "%s  (Nv %d/%d)\nGenerador de %s\n%s\n%s" % [g["name"], int(it["level"]), GameData.GEN_MAX_LEVEL, "escudo" if g["type"] == "shield" else "velocidad", gen_desc(g, int(it["level"])), g["trait"]]}
 		"mods":
 			var fam: Dictionary = GameData.MODULE_FAMILIES[it["family"]]
 			var rar: String = GameData.MODULE_RARITIES[int(it["rarity"])]
@@ -51,6 +51,15 @@ static func item_info(list_key: String, it: Dictionary) -> Dictionary:
 			var dl: Dictionary = GameData.DRONE_LASERS[it["id"]]
 			return {"name": dl["name"], "level": -1, "color": dl["color"], "icon": icon("drone_lasers", it["id"]), "tip": "%s\n%s" % [dl["name"], dl["desc"]]}
 	return {"name": "?", "level": -1, "color": Color.WHITE, "icon": null, "tip": ""}
+
+
+## v2: texto de un generador: los de escudo empiezan por sus puntos y su absorción (DarkOrbit).
+static func gen_desc(g: Dictionary, level: int = 0) -> String:
+	var t := gen_stats(g["stats"])
+	if g["type"] == "shield":
+		var pts := "Escudo %s · absorbe %d%%" % [GameData.format_num(float(g.get("shield_pts", 0)) * GameData.component_mult(level)), int(round(float(g.get("absorb", 0.0)) * 100.0))]
+		return pts if t == "" else "%s, %s" % [pts, t]
+	return t
 
 
 static func gen_stats(stats: Dictionary) -> String:
