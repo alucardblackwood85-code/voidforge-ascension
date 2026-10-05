@@ -178,7 +178,7 @@ const AMMO := {
 	"mk3": {"name": "Carga Mk-III", "short": "x3", "mult": 3.0, "color": Color("4aa3ff"), "recipe": {"credits": 4640, "oro": 3, "titanio": 4, "xenocristal": 1}},
 	"mk4": {"name": "Carga Mk-IV", "short": "x4", "mult": 4.0, "color": Color("b26bff"), "recipe": {"credits": 7710, "platino": 2, "iridio": 2, "polvo_cuantico": 1}},
 	"mk5": {"name": "Carga Mk-V", "short": "x5", "mult": 5.0, "color": Color("ff9a3c"), "recipe": {"credits": 7200, "neutronio": 1, "antimateria": 1, "cronita": 1}},
-	"mk6": {"name": "Carga Mk-VI", "short": "x6", "mult": 6.0, "color": Color("ffd84a"), "recipe": {"credits": 3000, "graviton": 1, "materia_oscura": 1}},
+	"mk6": {"name": "Carga Mk-VI", "short": "x6", "mult": 6.0, "color": Color("ffd84a"), "recipe": {"credits": 11400, "graviton": 1, "materia_oscura": 1}},
 }
 
 # --- Puntos de ascenso (mejoras permanentes de nave y cuenta) -----------------------------------
