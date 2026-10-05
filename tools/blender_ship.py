@@ -15,7 +15,8 @@ mode, src = argv[0], argv[1]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
-glb_path = os.path.join(src, "model.glb")   # modelos de Tripo (API): GLB con o sin materiales PBR
+# Modelos de Tripo (API): GLB con o sin materiales PBR; glbname=archivo elige otra versión (p. ej. model_tex.glb).
+glb_path = os.path.join(src, next((a[8:] for a in argv if a.startswith("glbname=")), "model.glb"))
 keep_mat = False
 if os.path.exists(glb_path):
     bpy.ops.import_scene.gltf(filepath=glb_path)
@@ -297,6 +298,9 @@ def env_reflections():
     wl.new(bg.outputs["Background"], out.inputs["Surface"])
 
 
+fix_mirror_x = False
+
+
 def hy3d_material():
     """Modelos de Hunyuan3D (geometría limpia, sin textura): el sprite original se proyecta desde arriba
     sobre la nave ya orientada (proa +X, arriba +Z), ajustando su silueta (caja del alfa) a la de la malla.
@@ -335,6 +339,8 @@ def hy3d_material():
     for loop in me.loops:
         co = me.vertices[loop.vertex_index].co
         fu = (co.x - mnx) / max(1e-6, mxx - mnx)
+        if fix_mirror_x:
+            fu = 1.0 - fu   # nave reflejada de proa a popa: el sprite también
         fv = (co.y - mny) / max(1e-6, mxy - mny)
         uv.data[loop.index].uv = (u0 + fu * (u1 - u0), v0 + fv * (v1 - v0))
     nt = mat.node_tree
@@ -373,6 +379,13 @@ def export_hangar_glb(path: str, faces: int = 15000, tex_size: int = 512):
     color (sprite con +20% de saturación) y emisión (cabinas y luces, como el perfil hy3d) en texturas de
     `tex_size` px, metal 0,55, rugosidad 0,33 y barniz 0,5."""
     import numpy as np
+    if keep_mat:
+        # Textura propia de Tripo (perfil «tex»): se conserva su material PBR; sólo se reducen las texturas.
+        for im in bpy.data.images:
+            if tex_size > 0 and im.size[0] > tex_size * 2:
+                im.scale(tex_size * 2, tex_size * 2)
+        _decimate_and_export(path, faces)
+        return
     timg = next((n.image for n in mat.node_tree.nodes if n.type == "TEX_IMAGE"), None)
     if timg is None:
         raise SystemExit("export_hangar_glb: falta la textura del sprite")
@@ -408,6 +421,10 @@ def export_hangar_glb(path: str, faces: int = 15000, tex_size: int = 512):
         if name in b.inputs:
             b.inputs[name].default_value = 0.5
     ship.data.materials.clear(); ship.data.materials.append(m2)
+    _decimate_and_export(path, faces)
+
+
+def _decimate_and_export(path: str, faces: int):
     bpy.context.view_layer.objects.active = ship
     n_faces = len(ship.data.polygons)
     if n_faces > faces:
@@ -485,7 +502,7 @@ elif mode == "spin":
     if "metal" in profile:
         normalize()
         metalize()  # superficie dura metálica sin arrugas
-    if "hy3d" in profile:
+    if "hy3d" in profile or "tex" in profile:
         normalize()
         if "cut" in fix:
             # Quita la copia en espejo de debajo: corta a esa altura, conserva lo de arriba y cierra la base.
@@ -496,11 +513,32 @@ elif mode == "spin":
             bpy.ops.mesh.bisect(plane_co=(0, 0, zc), plane_no=(0, 0, 1), clear_inner=True, use_fill=True)
             bpy.ops.object.mode_set(mode="OBJECT")
             normalize()
+        if "mirror" in fix:
+            # Simetría: conserva la mitad indicada (+y / -y = lado izquierdo / derecho de la proa) y la copia
+            # en espejo; arregla modelos de Tripo que salieron asimétricos.
+            bpy.context.view_layer.objects.active = ship
+            bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+            keep_pos = fix["mirror"] == "+y"
+            bpy.ops.mesh.bisect(plane_co=(0, 0, 0), plane_no=(0, 1, 0), clear_inner=keep_pos, clear_outer=not keep_pos)
+            bpy.ops.object.mode_set(mode="OBJECT")
+            mod = ship.modifiers.new("mir", "MIRROR"); mod.use_axis[0] = False; mod.use_axis[1] = True; mod.use_clip = True
+            mod.merge_threshold = 0.002
+            bpy.ops.object.modifier_apply(modifier="mir")
+            normalize()
+        if fix.get("mirror_x"):
+            fix_mirror_x = True
+            # Refleja la nave de proa a popa (p. ej. la Aegis: su sprite trae los cañones apuntando atrás).
+            ship.scale.x = -1.0
+            bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+            bpy.context.view_layer.objects.active = ship
+            bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+            bpy.ops.mesh.flip_normals(); bpy.ops.object.mode_set(mode="OBJECT")
         if "flat" in fix:
             ship.scale.z = float(fix["flat"])
             bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
             normalize()
-        hy3d_material()  # modelo de Hunyuan3D: sprite proyectado desde arriba + metal
+        if "hy3d" in profile:
+            hy3d_material()  # modelo de Hunyuan3D: sprite proyectado desde arriba + metal
     if "tex" in profile:
         normalize()
         env_reflections()  # materiales PBR propios de Tripo: sólo el entorno para los reflejos
@@ -508,7 +546,7 @@ elif mode == "spin":
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=True)
     glb_out = next((a[4:] for a in argv if a.startswith("glb=")), "")
     if glb_out:
-        export_hangar_glb(glb_out, int(next((a[6:] for a in argv if a.startswith("faces=")), "15000")))
+        export_hangar_glb(glb_out, int(next((a[6:] for a in argv if a.startswith("faces=")), "15000")), int(next((a[8:] for a in argv if a.startswith("texsize=")), "512")))
         sys.exit(0)
     # Cámara fija mirando desde el sur de la pantalla (-Y), elevada `elev`.
     look_from(Vector((0, -math.cos(elev), math.sin(elev))))

@@ -58,11 +58,14 @@ def main() -> None:
     if "--balance" in sys.argv:
         print("Saldo:", json.dumps(api("GET", "/account/balance", key)))
         return
-    flags = {"--model", "--faces", "--seed"}
+    flags = {"--model", "--faces", "--seed", "--quality", "--align", "--tag", "--tex-model", "--tex-seed"}
     ids = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in flags]
     src_dir = os.path.join(ROOT, "build", "3d_inputs", "ships")
     if not ids:
         ids = sorted(os.path.splitext(f)[0] for f in os.listdir(src_dir) if f.endswith(".png"))
+    if "--retexture" in sys.argv:
+        retexture(key, ids, src_dir)
+        return
     # Por defecto sólo geometría (como con Hunyuan): el color lo pone Blender proyectando el sprite del juego.
     tex = "--texture" in sys.argv or "--tex-detailed" in sys.argv
     body = {"model": arg("--model", "v3.1-20260211"), "texture": tex, "pbr": tex,
@@ -102,6 +105,54 @@ def main() -> None:
                        "credits": st.get("credits_consumed")}, open(os.path.join(out, "info.json"), "w"), indent=2)
             print(f"OK {sid} ({time.time() - t0:.0f} s, {st.get('credits_consumed')} créditos)", flush=True)
         except Exception as e:   # sigue con la siguiente nave
+            print(f"FALLO {sid}: {e}", flush=True)
+    print("FIN", flush=True)
+
+
+def retexture(key, ids, src_dir):
+    """Vuelve a pintar el modelo ya generado (misma geometría y orientación) con la IA de texturas de Tripo,
+    usando el sprite como referencia: pinta también laterales y panza, que la proyección desde arriba
+    estiraba. Coste: 10 créditos (standard) o 20 (detailed) por nave.
+    Opciones: --quality standard|detailed, --align original_image|geometry, --tex-model v3.5-20260815,
+    --tag nombre (sufijo de los archivos de salida, para comparar pruebas sin pisarlas)."""
+    quality = arg("--quality", "standard")
+    align = arg("--align", "original_image")
+    tex_model = arg("--tex-model", "v3.5-20260815")
+    tag = arg("--tag", "tex")
+    for sid in ids:
+        out = os.path.join(ROOT, "build", "tripo_models", "ships", sid)
+        dest = os.path.join(out, "model_%s.glb" % tag)
+        if os.path.exists(dest) and "--force" not in sys.argv:
+            print(f"YA EXISTE {sid} ({os.path.basename(dest)})", flush=True)
+            continue
+        info = json.load(open(os.path.join(out, "info.json")))
+        sprite = os.path.join(src_dir, sid + ".png")
+        t0 = time.time()
+        try:
+            with open(sprite, "rb") as f:
+                token = api("POST", "/files", key, files={"file": (os.path.basename(sprite), f, "image/png")})["file_token"]
+            body = {"input": info["task_id"], "model": tex_model, "texture_prompt": {"image": token},
+                    "texture_quality": quality, "texture_alignment": align, "pbr": True, "texture_seed": int(arg("--tex-seed", "7"))}
+            if tex_model.startswith("v3.5"):
+                body["delight"] = True    # quita la iluminación pintada en el sprite
+            task = api("POST", "/models/texture", key, json=body)["task_id"]
+            while True:
+                time.sleep(5)
+                st = api("GET", f"/tasks/{task}", key)
+                if st["status"] in ("success", "failed", "cancelled"):
+                    break
+            if st["status"] != "success":
+                print(f"FALLO {sid}: {st['status']} {st.get('error_code', '')} {st.get('error_message', '')}", flush=True)
+                continue
+            o = st["output"]
+            download(o.get("pbr_model_url") or o.get("model_url"), dest)
+            if o.get("rendered_image_url"):
+                download(o["rendered_image_url"], os.path.join(out, "preview_%s.png" % tag))
+            info.setdefault("textures", {})[tag] = {"task_id": task, "request": dict(body, texture_prompt={"image": "sprite"}),
+                                                   "credits": st.get("credits_consumed")}
+            json.dump(info, open(os.path.join(out, "info.json"), "w"), indent=2)
+            print(f"OK {sid} ({time.time() - t0:.0f} s, {st.get('credits_consumed')} créditos)", flush=True)
+        except Exception as e:
             print(f"FALLO {sid}: {e}", flush=True)
     print("FIN", flush=True)
 

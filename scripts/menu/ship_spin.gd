@@ -65,6 +65,10 @@ static func frame_tex(id: String, frame: int) -> Texture2D:
 ## renders del hangar, luz principal desde arriba a la izquierda, relleno y contraluz, y cielo en degradado
 ## sólo para los reflejos del metal.
 func _build_3d() -> void:
+	_build_3d_from(model_path(ship_id))
+
+
+func _build_3d_from(path: String) -> void:
 	var box := SubViewportContainer.new()
 	box.stretch = true
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -108,7 +112,7 @@ func _build_3d() -> void:
 		vp.add_child(d)
 	pivot = Node3D.new()
 	vp.add_child(pivot)
-	var scn: PackedScene = load(model_path(ship_id))
+	var scn: PackedScene = load(path)
 	if scn:
 		var inst := scn.instantiate()
 		pivot.add_child(inst)
@@ -121,12 +125,22 @@ func _tune_materials(n: Node) -> void:
 		var mi := n as MeshInstance3D
 		for i in mi.mesh.get_surface_count():
 			var m := mi.mesh.surface_get_material(i)
-			if m is StandardMaterial3D:
-				var sm: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
+			if not (m is StandardMaterial3D):
+				continue
+			var sm: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
+			if sm.metallic_texture != null:
+				# Textura PBR de Tripo: su mapa de metal llega a 1 en zonas blancas, que sin reflejos claros se
+				# ven oscuras (Vanguard azul marino, Mule beige). El escalar multiplica el mapa: metal al 45%.
+				# Metal satinado: el mapa de metal tal cual y la rugosidad del mapa al 55% (con 1,0 quedaba mate,
+				# «de plastilina»), sin llegar a espejo.
+				sm.metallic = 0.85
+				sm.roughness = 0.55
+				sm.metallic_specular = 0.6
+			else:
 				sm.metallic = 0.35
 				sm.roughness = 0.4
 				sm.emission_energy_multiplier = 1.6
-				mi.set_surface_override_material(i, sm)
+			mi.set_surface_override_material(i, sm)
 	for c in n.get_children():
 		_tune_materials(c)
 
