@@ -58,9 +58,9 @@ def main() -> None:
     if "--balance" in sys.argv:
         print("Saldo:", json.dumps(api("GET", "/account/balance", key)))
         return
-    flags = {"--model", "--faces", "--seed", "--quality", "--align", "--tag", "--tex-model", "--tex-seed"}
+    flags = {"--model", "--faces", "--seed", "--quality", "--align", "--tag", "--tex-model", "--tex-seed", "--src"}
     ids = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in flags]
-    src_dir = os.path.join(ROOT, "build", "3d_inputs", "ships")
+    src_dir = arg("--src", os.path.join(ROOT, "build", "3d_inputs", "ships"))   # --src: carpeta de sprites (p. ej. build/sprites_v2)
     if not ids:
         ids = sorted(os.path.splitext(f)[0] for f in os.listdir(src_dir) if f.endswith(".png"))
     if "--retexture" in sys.argv:

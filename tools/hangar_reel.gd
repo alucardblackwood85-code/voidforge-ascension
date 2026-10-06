@@ -14,6 +14,9 @@ var title: Label
 
 func _ready() -> void:
 	ids = GameData.SHIPS.keys()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--only="):
+			ids = a.get_slice("=", 1).split(",")
 	var bg := TextureRect.new()
 	bg.texture = load("res://assets/backgrounds/hangar.png")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
