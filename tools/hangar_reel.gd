@@ -37,9 +37,12 @@ func _next() -> void:
 	if spin:
 		spin.queue_free()
 	var id: String = ids[idx]
-	spin = ShipSpin.make(id, Vector2(1100, 640), 0.9)
-	spin.position = Vector2(90, 60)
-	spin.size = Vector2(1100, 640)
+	# Centrado según el tamaño real de la ventana (la resolución base del juego no es la del vídeo).
+	var vs := get_viewport_rect().size
+	var sz := Vector2(vs.x * 0.86, vs.y * 0.86)
+	spin = ShipSpin.make(id, sz, 0.9)
+	spin.position = (vs - sz) * 0.5 + Vector2(0, vs.y * 0.04)
+	spin.size = sz
 	spin.idle = 10.0
 	add_child(spin)
 	title.text = "%d/%d  %s" % [idx + 1, ids.size(), GameData.SHIPS[id]["name"]]

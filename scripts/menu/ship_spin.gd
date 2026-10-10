@@ -20,6 +20,9 @@ var dragging := false
 var idle := 0.0
 var show_floor := true
 var zoom := 1.0
+## Acabado por nave para los modelos con textura de Tripo: [metal, rugosidad, especular]. Por defecto metal
+## satinado; las naves militares (pintura verde u ocre) van más mate para que no se pierda su color.
+const FINISH := {"bulwark_t1": [0.4, 0.82, 0.35]}
 var pivot: Node3D = null             # modelo 3D (si existe): se gira en _process
 
 
@@ -133,9 +136,10 @@ func _tune_materials(n: Node) -> void:
 				# ven oscuras (Vanguard azul marino, Mule beige). El escalar multiplica el mapa: metal al 45%.
 				# Metal satinado: el mapa de metal tal cual y la rugosidad del mapa al 55% (con 1,0 quedaba mate,
 				# «de plastilina»), sin llegar a espejo.
-				sm.metallic = 0.85
-				sm.roughness = 0.55
-				sm.metallic_specular = 0.6
+				var fin: Array = FINISH.get(ship_id, [0.85, 0.55, 0.6])
+				sm.metallic = fin[0]
+				sm.roughness = fin[1]
+				sm.metallic_specular = fin[2]
 			else:
 				sm.metallic = 0.35
 				sm.roughness = 0.4
