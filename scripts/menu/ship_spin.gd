@@ -22,7 +22,7 @@ var show_floor := true
 var zoom := 1.0
 ## Acabado por nave para los modelos con textura de Tripo: [metal, rugosidad, especular]. Por defecto metal
 ## satinado; las naves militares (pintura verde u ocre) van más mate para que no se pierda su color.
-const FINISH := {"bulwark_t1": [0.4, 0.82, 0.35]}
+const FINISH := {"bulwark_t1": [0.4, 0.82, 0.35], "event_horizon": [0.3, 0.85, 0.25]}
 var pivot: Node3D = null             # modelo 3D (si existe): se gira en _process
 
 
