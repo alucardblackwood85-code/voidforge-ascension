@@ -85,6 +85,13 @@ var stat_refined := 0
 var right_held := false
 var map_w := 4
 var map_h := 3
+## Zonas de aliens colocadas al generar (sin reapariciones): {pos, r, kind ("aliens" | "boss"), members}.
+var zones: Array = []
+## Navegación: rejilla A* que esquiva obstáculos y ruta activa del piloto automático (clic en el minimapa).
+const NAV_CELL := 160.0
+var nav: AStarGrid2D
+var nav_path: PackedVector2Array = PackedVector2Array()
+const MAP_SCALE := 2.83          # lado x2,83 = superficie x8 respecto a la v1
 var bounds := Rect2()
 var run_xp := 0
 var kills_by: Dictionary = {}
@@ -176,6 +183,7 @@ func _ready() -> void:
 	add_child(camera)
 
 	_generate()
+	_build_nav()
 	ground.build()
 
 	player = PlayerShip.new()
@@ -208,6 +216,9 @@ func _ready() -> void:
 		get_tree().create_timer(3.0).timeout.connect(func(): hud.toggle_pause())
 	hud.toast("%s — Nivel %d" % [biome["name"], level], 3.0)
 	hud.toast(_objective_text(), 4.0)
+	# Depuración: --navtest manda la nave a la zona del jefe a los 2 s (como un clic en el minimapa).
+	if OS.get_cmdline_user_args().has("--navtest"):
+		get_tree().create_timer(2.0).timeout.connect(func(): navigate_to(zones[0]["pos"]))
 	if OS.get_cmdline_user_args().has("--showinv"):
 		hud.inventory.visible = true
 	if aimtest:
@@ -219,8 +230,8 @@ func _ready() -> void:
 # --- Generación procedural ------------------------------------------------------------
 func _generate() -> void:
 	# Mapa siempre rectangular (más espacio libre); crece con el nivel de amenaza.
-	map_w = clampi(4 + level / 6, 4, 8)
-	map_h = clampi(3 + level / 8, 3, 6)
+	map_w = int(round(clampi(4 + level / 6, 4, 8) * MAP_SCALE))
+	map_h = int(round(clampi(3 + level / 8, 3, 6) * MAP_SCALE))
 	for x in map_w:
 		for y in map_h:
 			cells[Vector2i(x, y)] = {"visited": false}
@@ -252,7 +263,8 @@ func _generate() -> void:
 				nest.set_meta("nest", true)
 		"baliza":
 			objective_target = 3
-			var picks := far_cells.slice(0, mini(far_cells.size(), 6))
+			# Con el mapa x8, las balizas van a media distancia (entre el 35% y el 65% de las celdas más lejanas).
+			var picks := far_cells.slice(far_cells.size() * 35 / 100, maxi(far_cells.size() * 65 / 100, far_cells.size() * 35 / 100 + 3))
 			picks.shuffle()
 			for i in objective_target:
 				_add_point("baliza", _free_point_in(picks[i % picks.size()], 0.5))
@@ -262,7 +274,7 @@ func _generate() -> void:
 		"escolta":
 			objective_target = 1
 			var cv := _add_point("convoy", gate_pos + Vector2(420, -280))
-			var c_end: Vector2i = far_cells[0]
+			var c_end: Vector2i = far_cells[far_cells.size() * 2 / 3]
 			var mid := Vector2i((start_cell.x + c_end.x) / 2, (start_cell.y + c_end.y + 1) / 2)
 			cv.route = [cell_center(Vector2i(1, start_cell.y)), cell_center(mid), _free_point_in(c_end, 0.3)]
 		"comandante":
@@ -274,10 +286,14 @@ func _generate() -> void:
 	# Élite del sector: nodriza en la celda más lejana.
 	# M6: desde el nivel 4 es un jefe con tres fases y barra propia.
 	var elite_id: String = biome["elites"][0]
-	var el := spawn_enemy(elite_id, _free_point_in(far_cells[0], 0.4), level, "base")
+	var boss_pos := _free_point_in(far_cells[0], 0.4)
+	var el := spawn_enemy(elite_id, boss_pos, level, "base")
 	if level >= 4:
 		el.make_boss()
 		boss = el
+	# Zona roja del jefe en el minimapa y zonas de aliens (todo colocado desde el principio).
+	zones.append({"pos": boss_pos, "r": 750.0, "kind": "boss", "members": [el]})
+	_place_zones(far_cells)
 
 	if objective == "comandante":
 		var cid: String = biome["elites"][1] if biome["elites"].size() > 1 else elite_id
@@ -294,7 +310,7 @@ func _generate() -> void:
 	var pool: Array = cells.keys()
 	pool.erase(start_cell)
 	pool.shuffle()
-	var n_poi := clampi(2 + map_w * map_h / 5, 3, 8)
+	var n_poi := clampi(2 + map_w * map_h / 12, 3, 16)
 	for i in mini(n_poi, pool.size()):
 		var kind: String = ["cofre", "pecio", "veta"][rng.randi() % 3]
 		var pos := _free_point_in(pool[i], 0.7)
@@ -326,7 +342,8 @@ func _free_point_in(c: Vector2i, spread: float) -> Vector2:
 
 func _populate_cell(c: Vector2i, is_start: bool) -> void:
 	asteroids_by_cell[c] = []
-	var count := rng.randi_range(9, 16)
+	# Pocos obstáculos (antes 9-16 por celda): el espacio abierto se recorre sin estorbos.
+	var count := rng.randi_range(1, 3)
 	for i in count:
 		var p := cell_center(c) + Vector2(rng.randf_range(-0.47, 0.47), rng.randf_range(-0.47, 0.47)) * CHUNK
 		var r := rng.randf_range(28.0, 95.0)
@@ -336,7 +353,7 @@ func _populate_cell(c: Vector2i, is_start: bool) -> void:
 			continue
 		_add_asteroid(c, p, r, "")
 	# Nodos de recursos
-	for i in rng.randi_range(2, 4):
+	for i in rng.randi_range(0, 1):
 		var p := _free_point_in(c, 0.85)
 		if is_start and p.distance_to(gate_pos) < 300.0:
 			continue
@@ -346,12 +363,120 @@ func _populate_cell(c: Vector2i, is_start: bool) -> void:
 		var weak: Array = biome["enemies"].keys().slice(0, 2)
 		spawn_group_at(gate_pos + Vector2(750, 300), 2, level, true, weak)
 		return
-	# Densidad acotada: más grupos y algo mayores con el nivel, pero con tope (el mapa también crece).
-	var groups := rng.randi_range(1, 2) if level < 6 else rng.randi_range(2, 3)
-	if rng.randf() < float(mod.get("spawn", 1.0)) - 1.0:
-		groups += 1
-	for g in groups:
-		spawn_group_at(_free_point_in(c, 0.8), rng.randi_range(2, 3) + mini(level / 15, 2), level, true)
+	# Los aliens ya no se reparten por celdas: van agrupados en zonas (_place_zones).
+
+
+## Zonas de aliens: 8-14 por mapa, repartidas lejos unas de otras y de la entrada. Todo lo que hay que
+## limpiar está aquí desde el principio (sin reapariciones) y se ve en el minimapa.
+func _place_zones(far_cells: Array) -> void:
+	var n := clampi(8 + level / 5, 8, 14)
+	var cands: Array = cells.keys().filter(func(c): return Vector2(c - start_cell).length() >= 2.0 and c != far_cells[0])
+	var picked: Array = []
+	for i in n:
+		if cands.is_empty():
+			break
+		var best: Vector2i = cands[rng.randi() % cands.size()]
+		if not picked.is_empty():
+			var bd := -1.0
+			for c in cands:
+				var md := INF
+				for q in picked + [far_cells[0], start_cell]:
+					md = minf(md, Vector2(c - q).length())
+				if md > bd:
+					bd = md
+					best = c
+		picked.append(best)
+		cands.erase(best)
+	for c in picked:
+		var center := _free_point_in(c, 0.4)
+		var before := enemies.size()
+		var groups := 3 + mini(level / 10, 2)
+		if rng.randf() < float(mod.get("spawn", 1.0)) - 1.0:
+			groups += 1
+		for g in groups:
+			var gp := center + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(100.0, 650.0)
+			if is_blocked(gp, 60.0):
+				gp = center
+			spawn_group_at(gp, rng.randi_range(2, 3) + mini(level / 15, 2), level, true)
+		zones.append({"pos": center, "r": 900.0, "kind": "aliens", "members": enemies.slice(before)})
+
+
+## Rejilla de navegación: celdas bloqueadas por obstáculos (con margen para la nave).
+func _build_nav() -> void:
+	nav = AStarGrid2D.new()
+	nav.region = Rect2i(0, 0, int(ceil(bounds.size.x / NAV_CELL)), int(ceil(bounds.size.y / NAV_CELL)))
+	nav.cell_size = Vector2(NAV_CELL, NAV_CELL)
+	nav.offset = Vector2(NAV_CELL, NAV_CELL) * 0.5
+	nav.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	nav.update()
+	for list in asteroids_by_cell.values():
+		for a in list:
+			var rr: float = a.radius * 0.8 + 70.0
+			var c0 := Vector2i(floori((a.plane_pos.x - rr) / NAV_CELL), floori((a.plane_pos.y - rr) / NAV_CELL))
+			var c1 := Vector2i(floori((a.plane_pos.x + rr) / NAV_CELL), floori((a.plane_pos.y + rr) / NAV_CELL))
+			for x in range(c0.x, c1.x + 1):
+				for y in range(c0.y, c1.y + 1):
+					var cc := Vector2i(x, y)
+					if nav.is_in_boundsv(cc) and (Vector2(cc) * NAV_CELL + nav.offset).distance_to(a.plane_pos) < rr + NAV_CELL * 0.5:
+						nav.set_point_solid(cc, true)
+
+
+func _nav_cell(p: Vector2) -> Vector2i:
+	var c := Vector2i(clampi(floori(p.x / NAV_CELL), 0, nav.region.size.x - 1), clampi(floori(p.y / NAV_CELL), 0, nav.region.size.y - 1))
+	if not nav.is_point_solid(c):
+		return c
+	for r in range(1, 6):
+		for dx in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				var q := c + Vector2i(dx, dy)
+				if nav.is_in_boundsv(q) and not nav.is_point_solid(q):
+					return q
+	return c
+
+
+## Piloto automático: ruta esquivando obstáculos hasta `target` (clic en el minimapa).
+func navigate_to(target: Vector2) -> void:
+	target = Vector2(clampf(target.x, 80.0, bounds.size.x - 80.0), clampf(target.y, 80.0, bounds.size.y - 80.0))
+	var raw := nav.get_point_path(_nav_cell(player.plane_pos), _nav_cell(target))
+	if raw.is_empty():
+		return
+	if not is_blocked(target, 40.0):
+		raw[raw.size() - 1] = target
+	# Atajos: se salta los puntos intermedios con línea libre hasta el siguiente.
+	var out := PackedVector2Array()
+	var cur := player.plane_pos
+	var i := 0
+	while i < raw.size():
+		var j := raw.size() - 1
+		while j > i and not _line_free(cur, raw[j]):
+			j -= 1
+		out.append(raw[j])
+		cur = raw[j]
+		i = j + 1
+	nav_path = out
+	collect_target = null
+	fx_ring(target, 40.0, Color(0.4, 1.0, 0.8, 0.8))
+	Sfx.play("ui_select", null, -8.0)
+
+
+func _line_free(a: Vector2, b: Vector2) -> bool:
+	var d := a.distance_to(b)
+	var steps := int(d / 70.0) + 1
+	for k in range(1, steps + 1):
+		if is_blocked(a.lerp(b, float(k) / steps), 55.0):
+			return false
+	return true
+
+
+func _follow_nav() -> void:
+	if nav_path.is_empty():
+		return
+	if player.plane_pos.distance_to(nav_path[0]) < (40.0 if nav_path.size() == 1 else 150.0):
+		nav_path.remove_at(0)
+		if nav_path.is_empty():
+			return
+	player.move_target = nav_path[0]
+	player.has_move_target = true
 
 
 func _add_asteroid(c: Vector2i, p: Vector2, r: float, ore: String) -> void:
@@ -448,6 +573,7 @@ func _process(delta: float) -> void:
 		engage_t = 0.25
 		_update_engagement()
 	_update_mines()
+	_follow_nav()
 	var c := cell_of(player.plane_pos)
 	if cells.has(c) and not cells[c]["visited"]:
 		cells[c]["visited"] = true
@@ -496,6 +622,8 @@ func _update_engagement() -> void:
 
 
 func _update_alert(delta: float) -> void:
+	# v2: sin alerta ni refuerzos periódicos (todos los aliens están colocados desde el principio).
+	return
 	if showcase:
 		return
 	var before := floorf(alert)
@@ -674,6 +802,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Clic izquierdo: fija objetivo (enemigo o depósito). En pantallas táctiles también mueve.
 func _left_click() -> void:
+	var mm: Vector2 = hud.minimap_plane_at_mouse()
+	if mm != Vector2.INF:
+		navigate_to(mm)
+		return
 	if placing != "":
 		_place(placing, mouse_plane())
 		return
@@ -698,6 +830,11 @@ func _left_click() -> void:
 
 ## Clic derecho: mover la nave (mantener pulsado para guiarla).
 func _right_click() -> void:
+	var mm: Vector2 = hud.minimap_plane_at_mouse()
+	if mm != Vector2.INF:
+		navigate_to(mm)
+		return
+	nav_path.clear()
 	collect_target = null
 	if _near_gate_click():
 		return
@@ -713,6 +850,7 @@ func _near_gate_click() -> bool:
 
 
 func _move_to(p: Vector2) -> void:
+	nav_path.clear()
 	player.move_target = p
 	player.has_move_target = true
 	fx_ring(p, 26.0, Color(0.4, 1.0, 0.8, 0.6))

@@ -63,8 +63,8 @@ func _ready() -> void:
 	inv_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	inv_btn.offset_left = -236
 	inv_btn.offset_right = -16
-	inv_btn.offset_top = 310
-	inv_btn.offset_bottom = 342
+	inv_btn.offset_top = 262
+	inv_btn.offset_bottom = 294
 	root.add_child(inv_btn)
 
 	if Controls.is_touch:
@@ -206,7 +206,7 @@ func _draw_canvas() -> void:
 	canvas.draw_rect(Rect2(cx - aw * 0.5, 38, aw * al / 5.0, 8), UiTheme.WARN.lerp(UiTheme.BAD, al / 5.0))
 	for i in 5:
 		canvas.draw_line(Vector2(cx - aw * 0.5 + aw * i / 5.0, 38), Vector2(cx - aw * 0.5 + aw * i / 5.0, 46), Color.BLACK, 1.0)
-	_text(Vector2(cx - 150, 64), "Alerta %d   %s" % [int(floorf(al)), _time(sector.elapsed)], 14, UiTheme.MUTED, HORIZONTAL_ALIGNMENT_CENTER, 300)
+	_text(Vector2(cx - 150, 64), _time(sector.elapsed), 14, UiTheme.MUTED, HORIZONTAL_ALIGNMENT_CENTER, 300)
 
 	# Objetivo seleccionado
 	if p.target_valid():
@@ -246,13 +246,15 @@ func _draw_canvas() -> void:
 			canvas.draw_rect(Rect2(cx - bw * 0.5, by + 16, bw * boss.shield / boss.shield_max, 4), Color("4ab8ff"))
 
 	# Botín y bodega
-	var rx := vs.x - 236.0
-	_minimap(Rect2(rx, 16, 220, 220))
-	_text(Vector2(rx, 258), "Créditos  " + GameData.format_num(sector.loot.get("credits", 0)), 15, GameData.mat_color("credits"))
-	_text(Vector2(rx, 278), "Bodega  %d / %d" % [sector.cargo_used, sector.cargo_capacity()], 15, UiTheme.WARN if sector.cargo_used >= sector.cargo_capacity() else UiTheme.TEXT)
+	# Minimapa 2:1 (el mapa en proyección iso siempre tiene esa proporción).
+	var rx := vs.x - 336.0
+	_minimap(Rect2(rx, 16, 320, 170))
+	rx = vs.x - 236.0
+	_text(Vector2(rx, 208), "Créditos  " + GameData.format_num(sector.loot.get("credits", 0)), 15, GameData.mat_color("credits"))
+	_text(Vector2(rx, 228), "Bodega  %d / %d" % [sector.cargo_used, sector.cargo_capacity()], 15, UiTheme.WARN if sector.cargo_used >= sector.cargo_capacity() else UiTheme.TEXT)
 	if sector.loot.get("nexo", 0) > 0:
-		_text(Vector2(rx, 298), "Cristales Nexo  %d" % sector.loot["nexo"], 15, GameData.mat_color("nexo"))
-	var py := 365.0
+		_text(Vector2(rx, 248), "Cristales Nexo  %d" % sector.loot["nexo"], 15, GameData.mat_color("nexo"))
+	var py := 320.0
 	for pk in pickups:
 		var a := clampf(pk["t"], 0.0, 1.0)
 		_text(Vector2(rx, py), "+%s %s" % [GameData.format_num(pk["amount"]), GameData.mat_name(pk["item"])], 14, Color(GameData.mat_color(pk["item"]), a))
@@ -293,10 +295,11 @@ func _draw_canvas() -> void:
 		canvas.draw_rect(Rect2(vs.x - 30, 0, 30, vs.y), c)
 
 	if map_open:
-		var m := minf(vs.x, vs.y) * 0.8
+		var mw := minf(vs.x * 0.88, vs.y * 0.8 * 2.0)
+		var mh := mw * 0.5
 		canvas.draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.6))
-		_minimap(Rect2((vs.x - m) * 0.5, (vs.y - m) * 0.5, m, m), true)
-		_text(Vector2(cx - 300, (vs.y - m) * 0.5 - 12), "MAPA TÁCTICO — %s" % sector.objective_text(), 20, UiTheme.ACCENT, HORIZONTAL_ALIGNMENT_CENTER, 600)
+		_minimap(Rect2((vs.x - mw) * 0.5, (vs.y - mh) * 0.5, mw, mh), true)
+		_text(Vector2(cx - 300, (vs.y - mh) * 0.5 - 12), "MAPA TÁCTICO — %s" % sector.objective_text(), 20, UiTheme.ACCENT, HORIZONTAL_ALIGNMENT_CENTER, 600)
 
 
 func _ability(pos: Vector2, key: String, name: String, cd: float, max_cd: float) -> void:
@@ -312,48 +315,145 @@ func _time(t: float) -> String:
 	return "%02d:%02d" % [int(t) / 60, int(t) % 60]
 
 
-## Minimapa / mapa táctico en proyección iso, con chunks descubiertos, portal, nidos y enemigos.
+## Minimapa / mapa táctico en proyección iso: la imagen del bioma en miniatura, obstáculos, zonas de aliens
+## (roja la del jefe), portal, objetivos, enemigos cercanos y la nave. Clic en él = piloto automático.
+var _mm_tex: Texture2D = null
+var _mm_rect := Rect2()
+var _mm_sc := 1.0
+var _mm_off := Vector2.ZERO
+
+
+func _mm_texture() -> Texture2D:
+	if _mm_tex == null:
+		var path := "res://assets/backgrounds/%s.png" % sector.biome_id
+		if not ResourceLoader.exists(path):
+			path = "res://assets/backgrounds/%s.png" % sector.theme_id
+		if ResourceLoader.exists(path):
+			_mm_tex = load(path)
+	return _mm_tex
+
+
+## Punto del plano bajo el ratón si está sobre el minimapa (o el mapa táctico abierto); si no, INF.
+func minimap_plane_at_mouse() -> Vector2:
+	var m := canvas.get_local_mouse_position()
+	if _mm_rect.size == Vector2.ZERO or not _mm_rect.has_point(m):
+		return Vector2.INF
+	var p := Iso.to_plane((m - _mm_off) / _mm_sc)
+	var b: Rect2 = sector.bounds
+	if p.x < -200.0 or p.y < -200.0 or p.x > b.size.x + 200.0 or p.y > b.size.y + 200.0:
+		return Vector2.INF
+	return p
+
+
 func _minimap(r: Rect2, full: bool = false) -> void:
-	canvas.draw_rect(r, Color(0.02, 0.03, 0.06, 0.85))
-	canvas.draw_rect(r, UiTheme.BORDER, false, 1.0)
+	# Con el mapa táctico abierto, los clics van a él (el minimapa pequeño queda tapado).
+	if full or not map_open:
+		_mm_rect = r
+	var b: Rect2 = sector.bounds
+	var corners := [Vector2.ZERO, Vector2(b.size.x, 0), b.size, Vector2(0, b.size.y)]
 	var mn := Vector2(INF, INF)
 	var mx := Vector2(-INF, -INF)
-	for c in sector.cells.keys():
-		for corner in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
-			var s := Iso.to_screen((Vector2(c) + corner) * Sector.CHUNK)
-			mn = mn.min(s)
-			mx = mx.max(s)
+	for c in corners:
+		var s := Iso.to_screen(c)
+		mn = mn.min(s)
+		mx = mx.max(s)
 	var span := mx - mn
-	var sc := minf((r.size.x - 16) / span.x, (r.size.y - 16) / span.y)
+	var sc := minf((r.size.x - 12) / span.x, (r.size.y - 12) / span.y)
 	var off := r.position + (r.size - span * sc) * 0.5 - mn * sc
+	if full or not map_open:
+		_mm_sc = sc
+		_mm_off = off
 	var tf := func(p: Vector2) -> Vector2: return Iso.to_screen(p) * sc + off
-	for c in sector.cells.keys():
-		var o := Vector2(c) * Sector.CHUNK
-		var pts := PackedVector2Array([tf.call(o), tf.call(o + Vector2(Sector.CHUNK, 0)), tf.call(o + Vector2(Sector.CHUNK, Sector.CHUNK)), tf.call(o + Vector2(0, Sector.CHUNK))])
-		var visited: bool = sector.cells[c]["visited"]
-		canvas.draw_colored_polygon(pts, Color(0.2, 0.3, 0.45, 0.5) if visited else Color(0.12, 0.14, 0.2, 0.5))
-		pts.append(pts[0])
-		canvas.draw_polyline(pts, Color(0.3, 0.4, 0.6, 0.6), 1.0)
-	canvas.draw_circle(tf.call(sector.gate_pos), 5.0 if not full else 9.0, UiTheme.GOOD if sector.objective_done else UiTheme.ACCENT)
-	for e in sector.enemies:
-		if not e.alive:
-			continue
-		var visible_e: bool = sector.cells.get(sector.cell_of(e.plane_pos), {}).get("visited", false) or e.plane_pos.distance_to(sector.player.plane_pos) < 900.0
-		if e.is_nest and visible_e:
-			canvas.draw_circle(tf.call(e.plane_pos), 4.0 if not full else 7.0, Color("ff7a2a"))
-		elif e.is_elite and visible_e:
-			canvas.draw_circle(tf.call(e.plane_pos), 3.5 if not full else 6.0, Color("ffb84a"))
-		elif e.plane_pos.distance_to(sector.player.plane_pos) < 900.0:
-			canvas.draw_circle(tf.call(e.plane_pos), 2.0 if not full else 3.0, Color("ff4a4a"))
+	canvas.draw_rect(r, Color(0.01, 0.02, 0.04, 0.88))
+	# Fondo: la imagen del bioma en miniatura, recortada al rombo del mapa.
+	var pts := PackedVector2Array()
+	for c in corners:
+		pts.append(tf.call(c))
+	var tex := _mm_texture()
+	if tex:
+		canvas.draw_polygon(pts, PackedColorArray([Color(1.6, 1.6, 1.7, 1.0)]), PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]), tex)
+	else:
+		canvas.draw_colored_polygon(pts, Color(0.1, 0.13, 0.2, 0.8))
+	var outline := pts.duplicate()
+	outline.append(pts[0])
+	canvas.draw_polyline(outline, Color(sector.biome.get("border", UiTheme.ACCENT), 0.8), 1.5, true)
+	# Obstáculos (rocas y depósitos) a escala: la ruta automática los esquiva.
+	for list in sector.asteroids_by_cell.values():
+		for a in list:
+			if is_instance_valid(a) and a.alive:
+				canvas.draw_circle(tf.call(a.plane_pos), maxf(1.2, a.radius * sc * 1.3), Color(0.62, 0.6, 0.58, 0.85) if a.ore == "" else Color(0.95, 0.75, 0.35, 0.9))
+	# Zonas: naranja las de aliens (con los que quedan), roja y latiendo la del jefe.
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.005)
+	for z in sector.zones:
+		var left := 0
+		for e in z["members"]:
+			if is_instance_valid(e) and e.alive:
+				left += 1
+		var zc: Vector2 = tf.call(z["pos"])
+		var zr: float = z["r"] * sc * 1.15
+		if z["kind"] == "boss":
+			if left == 0:
+				continue
+			canvas.draw_circle(zc, zr, Color(1.0, 0.15, 0.15, 0.16 + 0.12 * pulse))
+			canvas.draw_arc(zc, zr, 0, TAU, 40, Color(1.0, 0.3, 0.3, 0.9), 2.0, true)
+			_text(zc + Vector2(-30, 4), "JEFE", 11 if not full else 15, Color(1, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 60)
+		elif left > 0:
+			canvas.draw_circle(zc, zr, Color(1.0, 0.55, 0.15, 0.12))
+			canvas.draw_arc(zc, zr, 0, TAU, 32, Color(1.0, 0.6, 0.2, 0.75), 1.4, true)
+			if full:
+				_text(zc + Vector2(-30, 5), str(left), 14, Color(1, 0.9, 0.75), HORIZONTAL_ALIGNMENT_CENTER, 60)
+		else:
+			canvas.draw_arc(zc, zr, 0, TAU, 32, Color(0.4, 1.0, 0.5, 0.35), 1.0, true)
+	# Portal de extracción.
+	var gc: Vector2 = tf.call(sector.gate_pos)
+	var gr := 5.0 if not full else 9.0
+	canvas.draw_arc(gc, gr, 0, TAU, 24, UiTheme.GOOD if sector.objective_done else UiTheme.ACCENT, 2.0, true)
+	canvas.draw_circle(gc, gr * 0.4, UiTheme.GOOD if sector.objective_done else UiTheme.ACCENT)
+	# Objetivos y puntos de interés (rombos).
 	for pt in sector.points:
 		if not is_instance_valid(pt) or (pt.done and pt.kind != "convoy"):
 			continue
-		var known: bool = pt.is_objective() or sector.cells.get(sector.cell_of(pt.plane_pos), {}).get("visited", false)
-		if known:
-			var pc: Vector2 = tf.call(pt.plane_pos)
-			var s := 4.0 if not full else 7.0
-			canvas.draw_rect(Rect2(pc - Vector2(s, s), Vector2(s, s) * 2.0), ObjPoint.COLORS[pt.kind], pt.kind in ["cofre", "pecio", "veta"])
-	canvas.draw_circle(tf.call(sector.player.plane_pos), 4.0 if not full else 7.0, Color.WHITE)
+		var pc: Vector2 = tf.call(pt.plane_pos)
+		var ps := 4.0 if not full else 7.0
+		var dia := PackedVector2Array([pc + Vector2(0, -ps), pc + Vector2(ps, 0), pc + Vector2(0, ps), pc + Vector2(-ps, 0)])
+		var col: Color = ObjPoint.COLORS[pt.kind]
+		if pt.is_objective():
+			canvas.draw_colored_polygon(dia, col)
+		dia.append(dia[0])
+		canvas.draw_polyline(dia, col, 1.5, true)
+	# Enemigos cercanos: puntos con borde oscuro (dorado los élite, naranja los nidos).
+	for e in sector.enemies:
+		if not e.alive or e.plane_pos.distance_to(sector.player.plane_pos) > 2200.0:
+			continue
+		var ec: Vector2 = tf.call(e.plane_pos)
+		var er := 2.2 if not full else 3.5
+		var col := Color("ff4a4a")
+		if e.is_nest:
+			col = Color("ff7a2a")
+			er *= 1.6
+		elif e.is_elite or e.is_boss:
+			col = Color("ffc24a")
+			er *= 1.4
+		canvas.draw_circle(ec, er + 1.0, Color(0, 0, 0, 0.8))
+		canvas.draw_circle(ec, er, col)
+	# Ruta del piloto automático.
+	var path: PackedVector2Array = sector.nav_path
+	if not path.is_empty():
+		var line := PackedVector2Array([tf.call(sector.player.plane_pos)])
+		for q in path:
+			line.append(tf.call(q))
+		canvas.draw_polyline(line, Color(0.4, 1.0, 0.85, 0.85), 1.5, true)
+		canvas.draw_circle(line[line.size() - 1], 3.0 if not full else 5.0, Color(0.4, 1.0, 0.85))
+	# Nave: flecha blanca orientada según su rumbo.
+	var pp: Vector2 = tf.call(sector.player.plane_pos)
+	var dir := Iso.to_screen(Vector2.from_angle(sector.player.heading)).normalized()
+	var side := dir.orthogonal()
+	var L := 7.0 if not full else 11.0
+	var tri := PackedVector2Array([pp + dir * L, pp - dir * L * 0.6 + side * L * 0.6, pp - dir * L * 0.3, pp - dir * L * 0.6 - side * L * 0.6])
+	canvas.draw_colored_polygon(tri, Color.WHITE)
+	tri.append(tri[0])
+	canvas.draw_polyline(tri, Color(0, 0, 0, 0.9), 1.2, true)
+	canvas.draw_rect(r, UiTheme.BORDER, false, 1.0)
 
 
 # --- Pausa y resultados -----------------------------------------------------------------
